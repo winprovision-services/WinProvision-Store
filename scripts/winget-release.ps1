@@ -28,8 +28,6 @@ MinimumOSVersion: 10.0.17763.0
 InstallerType: inno
 Scope: user
 InstallerSwitches:
-  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
-  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART /SP-
   Custom: /MERGETASKS="clipath"
 UpgradeBehavior: install
 ProductCode: '{71B03A9D-2C64-4E81-BF6D-3A90257F1C49}_is1'

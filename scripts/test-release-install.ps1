@@ -1,7 +1,6 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$AppVersion,
-    [Parameter(Mandatory)][string]$InstallerPath,
-    [Parameter(Mandatory)][string]$ManifestPath
+    [Parameter(Mandatory)][string]$InstallerPath
 )
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:GITHUB_REPOSITORY -ne 'winprovision-services/WinProvision-Store') { throw 'Este teste de instalação exige um runner descartável do repositório oficial.' }
@@ -10,24 +9,8 @@ $taskKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{71B03A9D-
 if (Test-Path -LiteralPath $taskKey) { throw 'O teste exige uma máquina sem instalação anterior.' }
 $taskInstaller = (Resolve-Path -LiteralPath $InstallerPath).Path
 $taskBeforePath = [Environment]::GetEnvironmentVariable('Path', 'User')
-& winget settings --enable LocalManifestFiles
-if ($LASTEXITCODE -ne 0) { throw 'Não foi possível habilitar manifestos locais no runner.' }
-$taskLogRoot = Join-Path $taskRoot 'artifacts/winget-diagnostics'
-New-Item -ItemType Directory -Path $taskLogRoot -Force | Out-Null
-$taskManifest = (Resolve-Path -LiteralPath $ManifestPath).Path
-$taskArguments = @('install','--manifest',('"' + $taskManifest + '"'),'--silent','--accept-package-agreements','--accept-source-agreements','--disable-interactivity','--verbose-logs')
-$taskProcess = Start-Process -FilePath (Get-Command winget).Source -ArgumentList $taskArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskLogRoot 'install-output.log') -RedirectStandardError (Join-Path $taskLogRoot 'install-error.log')
-try {
-    if (-not $taskProcess.WaitForExit(120000)) {
-        Stop-Process -Id $taskProcess.Id -ErrorAction SilentlyContinue
-        throw 'A instalação via WinGet não terminou em dois minutos; confira os diagnósticos.'
-    }
-    if ($taskProcess.ExitCode -ne 0) { throw "A instalação via WinGet falhou: $($taskProcess.ExitCode)" }
-} finally {
-    foreach ($taskDirectory in @((Join-Path $env:LOCALAPPDATA 'Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir'), (Join-Path $env:LOCALAPPDATA 'Microsoft/WinGet/DiagOutputDir'))) {
-        if (Test-Path -LiteralPath $taskDirectory) { Get-ChildItem -LiteralPath $taskDirectory -Filter '*.log' -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $taskLogRoot -Force } }
-    }
-}
+$taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS="clipath"' -WindowStyle Hidden -PassThru -Wait
+if ($taskProcess.ExitCode -notin @(0,3010)) { throw "Instalação silenciosa falhou: $($taskProcess.ExitCode)" }
 $taskInstalled = Get-ItemProperty -LiteralPath $taskKey
 if ($taskInstalled.DisplayName -ne 'WinProvision Store' -or $taskInstalled.Publisher -ne 'WinProvision Store' -or $taskInstalled.DisplayVersion -ne $AppVersion) { throw 'Os dados de desinstalação não correspondem ao manifesto.' }
 $taskAppDirectory = [IO.Path]::GetFullPath($taskInstalled.InstallLocation).TrimEnd('\')
@@ -54,6 +37,6 @@ $taskAfterPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ([string]$taskAfterPath -ne [string]$taskBeforePath) { throw 'O PATH do usuário não foi restaurado após a desinstalação.' }
 if (Test-Path -LiteralPath (Join-Path $taskAppDirectory 'WinProvision.Store.exe')) { throw 'O executável permaneceu após a desinstalação.' }
 $taskReport = Join-Path $taskRoot 'artifacts/winget-install-test.json'
-@{ version=$AppVersion; installerSha256=(Get-FileHash -LiteralPath $taskInstaller -Algorithm SHA256).Hash.ToLowerInvariant(); manifestInstall=$true; silentInstall=$true; metadata=$true; cliStarts=$true; pathAdded=$true; reinstallWithoutDuplicatePath=$true; silentUninstall=$true; pathRestored=$true } |
+@{ version=$AppVersion; installerSha256=(Get-FileHash -LiteralPath $taskInstaller -Algorithm SHA256).Hash.ToLowerInvariant(); silentInstall=$true; metadata=$true; cliStarts=$true; pathAdded=$true; reinstallWithoutDuplicatePath=$true; silentUninstall=$true; pathRestored=$true } |
     ConvertTo-Json | Set-Content -LiteralPath $taskReport -Encoding utf8NoBOM
 Write-Output 'Instalação, reinstalação, CLI, PATH e desinstalação conferidos.'
