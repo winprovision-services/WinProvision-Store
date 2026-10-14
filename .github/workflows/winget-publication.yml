@@ -11,6 +11,10 @@ on:
         description: Enviar ao WinGet após os testes (exige o secret do WinGet Create)
         type: boolean
         default: false
+      diagnose:
+        description: Diagnosticar acionamento pelo WinGet, sem enviar PR
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -46,18 +50,24 @@ jobs:
       - name: Gerar e validar manifestos
         run: .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe
       - name: Testar instalação silenciosa, CLI, PATH e remoção
+        if: '!inputs.diagnose'
         run: .\scripts\test-release-install.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe
+      - name: Diagnosticar processos da instalação pelo WinGet
+        if: inputs.diagnose
+        run: .\scripts\diagnose-winget-install.ps1 -ManifestPath "artifacts/winget/WinProvision.Store/$env:RELEASE_VERSION"
       - name: Preservar manifestos e relatório
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: winget-publication-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             artifacts/winget/
             artifacts/winget-install-test.json
+            artifacts/winget-diagnostics/
           if-no-files-found: error
           retention-days: 14
       - name: Enviar manifestos com WinGet Create
-        if: inputs.submit
+        if: inputs.submit && !inputs.diagnose
         env:
           WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
         run: .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe -Submit
