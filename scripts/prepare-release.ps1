@@ -16,7 +16,8 @@ if (Test-Path (Join-Path $taskPublished 'validation-harness.flag')) { throw 'Um 
 $taskExpectedVersion = ($AppVersion -split '-')[0] + '.0'
 foreach ($taskBinary in @($taskExe,(Join-Path $taskPublished 'cli\winprovision.exe'),$taskInstaller)) {
     $taskInfo = (Get-Item -LiteralPath $taskBinary).VersionInfo
-    if ($taskInfo.ProductName -ne 'WinProvision Store' -or $taskInfo.ProductVersion -ne $taskExpectedVersion) {
+    # Inno Setup pads version resource strings with trailing spaces.
+    if ($taskInfo.ProductName.TrimEnd() -ne 'WinProvision Store' -or $taskInfo.ProductVersion.TrimEnd() -ne $taskExpectedVersion) {
         throw "Metadados divergentes em '$taskBinary': produto='$($taskInfo.ProductName)', versão='$($taskInfo.ProductVersion)'; esperado 'WinProvision Store' / '$taskExpectedVersion'."
     }
 }
