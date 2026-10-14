@@ -1,0 +1,150 @@
+name: build-releases
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versão do aplicativo (exemplo 0.1.0 ou 0.2.0-beta.1)
+        required: true
+        type: string
+        default: 0.1.0
+      mode:
+        description: Validar os arquivos ou publicar uma release no GitHub
+        type: choice
+        options: [Somente validar, Publicar release]
+        default: Somente validar
+      submit_winget:
+        description: Enviar ao WinGet com WinGet Create (somente release estável publicada)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: build-releases
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: pwsh
+jobs:
+  build:
+    name: Compilar, testar e empacotar
+    if: github.repository == 'winprovision-services/WinProvision-Store' && github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_MODE: ${{ inputs.mode }}
+      SUBMIT_WINGET: ${{ inputs.submit_winget }}
+    steps:
+      - name: Obter código
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Conferir opções e versão disponível
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINGET_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$') { throw 'Informe uma versão válida.' }
+          foreach ($part in (($env:RELEASE_VERSION -split '-')[0] -split '\.')) { if ([long]$part -gt 65535) { throw 'Cada componente da versão deve ser menor que 65536.' } }
+          if ($env:RELEASE_MODE -notin @('Somente validar','Publicar release')) { throw 'Modo inválido.' }
+          if ($env:SUBMIT_WINGET -eq 'true') {
+            if ($env:RELEASE_MODE -ne 'Publicar release' -or $env:RELEASE_VERSION.Contains('-')) { throw 'WinGet exige Publicar release e uma versão estável.' }
+            if (-not $env:WINGET_TOKEN) { throw 'Cadastre o secret WINGET_CREATE_GITHUB_TOKEN antes de solicitar o envio ao WinGet.' }
+          }
+          if ($env:RELEASE_MODE -eq 'Publicar release') {
+            $tags = & git tag --list "v$env:RELEASE_VERSION"
+            if ($tags) { throw 'A tag já existe. Utilize uma nova versão.' }
+            $releases = & gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Não foi possível consultar releases.' }
+            if (@($releases | ForEach-Object { $_ } | Where-Object tag_name -eq "v$env:RELEASE_VERSION").Count) { throw 'A release já existe.' }
+          }
+      - name: Preparar SDK fixado
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Conferir repositório e restaurar dependências
+        run: |
+          .\scripts\check-repository.ps1
+          dotnet restore WinProvision.Store.sln --locked-mode
+          if ($LASTEXITCODE -ne 0) { throw 'Restore falhou.' }
+      - name: Testar Core
+        run: |
+          dotnet test tests\WinProvision.Core.Tests\WinProvision.Core.Tests.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Os testes falharam.' }
+      - name: Validar interface Native AOT
+        run: |
+          .\scripts\publish.ps1 -Validation -AppVersion $env:RELEASE_VERSION -SourceRevisionId $env:GITHUB_SHA
+          .\scripts\smoke-test.ps1 -PublishedDirectory .\artifacts\validation\publish\win-x64
+      - name: Produzir instalador e versão portátil
+        run: |
+          .\scripts\prepare-release.ps1 -AppVersion $env:RELEASE_VERSION
+          & .\artifacts\publish\win-x64\cli\winprovision.exe --help
+          if ($LASTEXITCODE -ne 0) { throw 'A CLI não iniciou.' }
+          .\scripts\stage-release.ps1 -AppVersion $env:RELEASE_VERSION
+          .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath .\artifacts\release\WinProvision.Store-Setup.exe
+      - name: Preservar arquivos da release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/release/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preservar manifestos WinGet
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: winget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/winget/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preservar diagnóstico visual
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/validation/smoke-published/
+          retention-days: 7
+  release:
+    name: Publicar release verificada
+    needs: build
+    if: inputs.mode == 'Publicar release'
+    permissions:
+      contents: write
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Obter automação da mesma revisão
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Obter arquivos validados
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/release
+      - name: Conferir hashes e publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: .\scripts\publish-github-release.ps1 -AppVersion $env:RELEASE_VERSION
+  winget:
+    name: Enviar ao WinGet com WinGet Create
+    needs: release
+    if: inputs.submit_winget
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Obter automação da mesma revisão
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Obter instalador validado
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/release
+      - name: Conferir instalador público e abrir PR
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+        run: .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath .\artifacts\release\WinProvision.Store-Setup.exe -Submit

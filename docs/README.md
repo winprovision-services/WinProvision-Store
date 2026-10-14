@@ -14,6 +14,7 @@
 - [Padrão visual](VISUAL-DESIGN.md) e [diretrizes de apresentação](../DESIGN.md).
 - [Movimento e acessibilidade](MOTION.md).
 - [Native AOT](NATIVE-AOT.md).
+- [Publicação de versões](RELEASES.md): build manual, releases e envio opcional ao WinGet.
 - [Memória e ciclo de vida](PERFORMANCE.md).
 - [Comunicação de rede do cliente](NETWORK-LIMITS.md).
 
