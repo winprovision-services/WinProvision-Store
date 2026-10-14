@@ -2,6 +2,8 @@
 
 Aplicativo para Windows que reúne pesquisa de aplicativos, instalações, atualizações, programas instalados, coleções, configuração do Office e uma interface de linha de comando.
 
+O WinProvision Store foi desenvolvido com auxílio de inteligência artificial e pode conter erros. Se encontrar algum problema, relate-o nas [issues do projeto](https://github.com/winprovision-services/WinProvision-Store/issues).
+
 ![Tela inicial do WinProvision Store no tema escuro](docs/screenshots/inicio-escuro.png)
 
 Interface capturada com dados de teste. Veja mais telas na [galeria de capturas](docs/SCREENSHOTS.md).
