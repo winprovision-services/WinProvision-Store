@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/__pycache__/
+.vs/
+artifacts/
+*.user
+*.suo
+
+# Local credentials and diagnostic output
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*-token.dat
+*.log

@@ -1,0 +1,64 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:WinProvision.Store.Controls">
+    <CornerRadius x:Key="InstalledCardCornerRadius">12</CornerRadius>
+    <SolidColorBrush x:Key="InstalledAccentSoftBrush" Color="{ThemeResource SystemAccentColor}" Opacity="0.23" />
+    <Style x:Key="InstalledToolbarButtonStyle" TargetType="Button">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="InstalledToolbarToggleStyle" TargetType="ToggleButton">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+            <Border CornerRadius="{TemplateBinding CornerRadius}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                <ContentPresenter Content="{TemplateBinding Content}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+            </Border>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="InstalledSourceSelectionButtonStyle" TargetType="Button">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="InstalledAccentButtonStyle" TargetType="Button" BasedOn="{StaticResource InstalledToolbarButtonStyle}">
+        <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style x:Key="InstalledCardSurfaceStyle" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource InstalledCardCornerRadius}" />
+        <Setter Property="controls:InstalledSelection.Surface" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="controls:InstalledSelection.Stroke" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="controls:InstalledSelection.Hover" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+        <Setter Property="controls:InstalledSelection.SelectedSurface" Value="{StaticResource InstalledAccentSoftBrush}" />
+        <Setter Property="controls:InstalledSelection.SelectedStroke" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+    </Style>
+    <Style x:Key="InstalledTableRowStyle" TargetType="Border" BasedOn="{StaticResource InstalledCardSurfaceStyle}">
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="controls:InstalledSelection.Surface" Value="Transparent" />
+        <Setter Property="controls:InstalledSelection.Stroke" Value="Transparent" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+    <Style x:Key="InstalledViewModeStyle" TargetType="ToggleButton" BasedOn="{StaticResource UpdatesViewModeToggleStyle}">
+        <Setter Property="CornerRadius" Value="{StaticResource UpdatesViewModeCornerRadius}" />
+    </Style>
+</ResourceDictionary>

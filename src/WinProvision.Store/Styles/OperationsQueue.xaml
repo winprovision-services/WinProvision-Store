@@ -1,0 +1,66 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:WinProvision.Store.Controls">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="QueueSurfaceBrush" Color="{ThemeResource SolidBackgroundFillColorBase}" Opacity="0.75"/>
+            <SolidColorBrush x:Key="QueueCardBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/>
+            <SolidColorBrush x:Key="QueueCardBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="QueueSubtleBorderBrush" Color="{ThemeResource DividerStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="#FF176B37"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="#FFE9F7EF"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="#FFB42318"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#FFFFEFED"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FF526274"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#FFF0F3F6"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#FFD7E0E8"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="QueueSurfaceBrush" Color="{ThemeResource SolidBackgroundFillColorBase}" Opacity="0.75"/>
+            <SolidColorBrush x:Key="QueueCardBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/>
+            <SolidColorBrush x:Key="QueueCardBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="QueueSubtleBorderBrush" Color="{ThemeResource DividerStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="#FF79D99A"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="#2679D99A"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="#FFFF8585"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#26FF8585"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FFC6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#18C6D1E0"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#24FFFFFF"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="QueueSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="QueueCardBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/>
+            <SolidColorBrush x:Key="QueueCardBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="QueueSubtleBorderBrush" Color="{ThemeResource DividerStrokeColorDefault}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+    <SolidColorBrush x:Key="AppOperationComBrush" Color="#FFB991FF"/>
+    <SolidColorBrush x:Key="AppOperationApiBrush" Color="#FFFF9A3D"/>
+    <SolidColorBrush x:Key="AppOperationWingetBrush" Color="#FF0078D4"/>
+    <SolidColorBrush x:Key="AppOperationDefaultBrush" Color="#FF0078D4"/>
+    <Style TargetType="controls:OperationStatusBadge">
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="controls:OperationStatusBadge">
+            <Grid>
+                <VisualStateManager.VisualStateGroups><VisualStateGroup x:Name="FinishedStates">
+                    <VisualState x:Name="Completed"/>
+                    <VisualState x:Name="Failed"><VisualState.Setters><Setter Target="StatusSurface.Background" Value="{ThemeResource AppOperationFailureSurfaceBrush}"/><Setter Target="StatusText.Foreground" Value="{ThemeResource AppOperationFailureBrush}"/></VisualState.Setters></VisualState>
+                    <VisualState x:Name="Canceled"><VisualState.Setters><Setter Target="StatusSurface.Background" Value="{ThemeResource AppOperationCanceledSurfaceBrush}"/><Setter Target="StatusText.Foreground" Value="{ThemeResource AppOperationCanceledBrush}"/></VisualState.Setters></VisualState>
+                </VisualStateGroup></VisualStateManager.VisualStateGroups>
+                <Border x:Name="StatusSurface" Padding="8,2" CornerRadius="6" Background="{ThemeResource AppOperationSuccessSurfaceBrush}" BorderBrush="{ThemeResource QueueSubtleBorderBrush}" BorderThickness="1">
+                    <TextBlock x:Name="StatusText" Text="{TemplateBinding Text}" FontSize="10.5" FontWeight="SemiBold" Foreground="{ThemeResource AppOperationSuccessBrush}"/>
+                </Border>
+            </Grid>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="QueueProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Height" Value="3"/><Setter Property="MinHeight" Value="3"/>
+        <Setter Property="Background" Value="{ThemeResource AppProgressTrackBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+</ResourceDictionary>

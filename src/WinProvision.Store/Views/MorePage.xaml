@@ -1,0 +1,423 @@
+<Page
+    x:Class="WinProvision.Store.Views.MorePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:WinProvision.Store.Controls"
+    x:Name="MorePageRoot"
+    Loaded="MorePage_Loaded"
+    Unloaded="MorePage_Unloaded"
+    Background="Transparent"
+    FontFamily="{StaticResource StoreFontFamily}"
+    FontSize="13">
+    <Page.Resources>
+        <Style x:Key="MoreToolCardButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="340" />
+            <Setter Property="Height" Value="205" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource StoreCardCornerRadius}" />
+            <Setter Property="FontFamily" Value="{StaticResource StoreFontFamily}" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="{StaticResource PageContentMaxWidth}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="{StaticResource PageHeaderMargin}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource PageHeaderIconTileStyle}">
+                <FontIcon
+                    Glyph="&#xE712;"
+                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                    Style="{StaticResource PageHeaderSymbolIconStyle}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Mais" Style="{StaticResource FluentPageTitleStyle}" />
+                <TextBlock
+                    Text="Status da Store, informações do projeto, histórico e registros de diagnóstico."
+                    Style="{StaticResource FluentPageSubtitleStyle}"
+                    Margin="0,4,0,0"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <controls:WrapPanel>
+                    <Button
+                        x:Name="StatusCard" AutomationProperties.AutomationId="StatusCard"
+                        Style="{StaticResource MoreToolCardButtonStyle}"
+                        Command="{Binding CheckStatusCommand}"
+                        ToolTipService.ToolTip="Verificar o estado do WinGet e dos catálogos">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="40" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <FontIcon
+                                Glyph="&#xE946;"
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="18"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Margin="0,16,0,12">
+                                <TextBlock Text="WinProvision Store Status" Style="{StaticResource FluentCardTitleStyle}" />
+                                <TextBlock
+                                    Text="Consulte o WinGet e a disponibilidade dos catálogos."
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,6,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                <TextBlock Text="Ver status" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE72A;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Margin="8,0,0,0" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+
+                    <Button
+                        x:Name="AboutCard" AutomationProperties.AutomationId="AboutCard"
+                        Style="{StaticResource MoreToolCardButtonStyle}"
+                        Command="{Binding OpenAboutCommand}"
+                        ToolTipService.ToolTip="Abrir o Sobre e o GitHub Pages do projeto">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="40" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <FontIcon Glyph="&#xE774;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Margin="0,16,0,12">
+                                <TextBlock Text="Sobre o WinProvision" Style="{StaticResource FluentCardTitleStyle}" />
+                                <TextBlock
+                                    Text="Conheça o projeto no GitHub Pages dentro do aplicativo."
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,6,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                <TextBlock Text="Abrir Sobre" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE72A;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Margin="8,0,0,0" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+
+                    <Button
+                        x:Name="HistoryCard" AutomationProperties.AutomationId="HistoryCard"
+                        Style="{StaticResource MoreToolCardButtonStyle}"
+                        Command="{Binding OpenHistoryCommand}"
+                        ToolTipService.ToolTip="Abrir o histórico de operações">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="40" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <FontIcon Glyph="&#xE81C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Margin="0,16,0,12">
+                                <TextBlock Text="Histórico de operações" Style="{StaticResource FluentCardTitleStyle}" />
+                                <TextBlock
+                                    Text="Consulte instalações, atualizações e remoções concluídas."
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,6,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                <TextBlock Text="Abrir histórico" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE72A;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Margin="8,0,0,0" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+
+                    <Button
+                        x:Name="LogCard" AutomationProperties.AutomationId="LogCard"
+                        Style="{StaticResource MoreToolCardButtonStyle}"
+                        Command="{Binding OpenLogCommand}"
+                        ToolTipService.ToolTip="Abrir o log de diagnóstico">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="40" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <FontIcon Glyph="&#xE8A5;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="18" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Margin="0,16,0,12">
+                                <TextBlock Text="Log de diagnóstico" Style="{StaticResource FluentCardTitleStyle}" />
+                                <TextBlock
+                                    Text="Leia as mensagens recentes do WinProvision e do WinGet."
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Margin="0,6,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                <TextBlock Text="Visualizar log" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE72A;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" Margin="8,0,0,0" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+                </controls:WrapPanel>
+
+                <InfoBar
+                    x:Name="MoreStatusInfoBar"
+                    IsOpen="{Binding HasStatusMessage}"
+                    Message="{Binding StatusMessage}"
+                    Severity="Warning"
+                    IsClosable="True"
+                    Margin="0,4,12,12" />
+
+                <Border
+                    x:Name="AboutPanel"
+                    Visibility="{Binding IsAboutVisible, Converter={StaticResource BoolVisibility}}"
+                    Style="{StaticResource StoreCardSurfaceStyle}">
+                    <Grid MinHeight="480">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Text="Sobre o WinProvision Store"
+                                Style="{StaticResource FluentCardTitleStyle}"
+                                VerticalAlignment="Center" />
+                            <Button
+                                Grid.Column="1"
+                                Content="Fechar"
+                                Command="{Binding CloseAboutCommand}"
+                                Style="{StaticResource StoreActionButtonStyle}" />
+                        </Grid>
+                        <Grid Grid.Row="1" MinHeight="420">
+                            <Grid x:Name="ProjectBrowserHost" />
+                            <Border
+                                x:Name="BrowserStatusPanel"
+                                Visibility="{Binding IsBrowserStatusVisible, Converter={StaticResource BoolVisibility}}"
+                                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                Opacity="0.96"
+                                CornerRadius="{StaticResource StoreCardCornerRadius}">
+                                <StackPanel
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    MaxWidth="560"
+                                    Margin="24"
+                                    Spacing="8">
+                                    <FontIcon
+                                        Glyph="&#xE774;"
+                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                        FontSize="40"
+                                        HorizontalAlignment="Center"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock
+                                        Text="Não foi possível carregar o GitHub Pages."
+                                        FontSize="18"
+                                        FontWeight="SemiBold"
+                                        HorizontalAlignment="Center"
+                                        TextAlignment="Center"
+                                        TextWrapping="Wrap"
+                                        Margin="0,8,0,0" />
+                                    <TextBlock
+                                        Text="{Binding BrowserStatus}"
+                                        TextWrapping="Wrap"
+                                        TextAlignment="Center"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <Button
+                                        Content="Tentar novamente"
+                                        Command="{Binding RetryAboutCommand}"
+                                        HorizontalAlignment="Center"
+                                        Margin="0,12,0,0"
+                                        Style="{StaticResource StoreActionButtonStyle}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border
+                    x:Name="StoreStatusPanel"
+                    Visibility="{Binding IsStatusVisible, Converter={StaticResource BoolVisibility}}"
+                    Style="{StaticResource StoreCardSurfaceStyle}">
+                    <StackPanel Spacing="10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Status da Store" Style="{StaticResource FluentCardTitleStyle}" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button
+                                    Content="Cancelar"
+                                    Command="{Binding CancelStatusCommand}"
+                                    Visibility="{Binding IsCheckingStatus, Converter={StaticResource BoolVisibility}}"
+                                    Style="{StaticResource StoreActionButtonStyle}" />
+                                <Button
+                                    Content="Copiar diagnóstico"
+                                    Command="{Binding CopyDiagnosticCommand}"
+                                    IsEnabled="{Binding CanCopyDiagnostic}"
+                                    Style="{StaticResource StoreActionButtonStyle}" />
+                                <Button
+                                    Content="Verificar novamente"
+                                    Command="{Binding CheckStatusCommand}"
+                                    Style="{StaticResource StoreActionButtonStyle}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding LastChecked}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="WinGet" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding WingetStatus}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding WingetVersion}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding WingetSources}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding WingetDetail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="Catálogo WinGet" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding WingetCatalogStatus}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding WingetCatalogDetails}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="Catálogo Microsoft Store" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding StoreCatalogStatus}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding StoreCatalogDetails}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    x:Name="HistoryPanel"
+                    Visibility="{Binding IsHistoryVisible, Converter={StaticResource BoolVisibility}}"
+                    Style="{StaticResource StoreCardSurfaceStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Histórico de operações" Style="{StaticResource FluentCardTitleStyle}" VerticalAlignment="Center" />
+                            <Button
+                                Grid.Column="1"
+                                Content="Limpar histórico"
+                                Command="{Binding ClearHistoryCommand}"
+                                Style="{StaticResource StoreActionButtonStyle}" />
+                        </Grid>
+                        <Grid Grid.Row="1">
+                            <TextBlock
+                                x:Name="HistoryEmptyState"
+                                Text="As operações concluídas aparecerão aqui."
+                                Visibility="{Binding HasHistory, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextAlignment="Center"
+                                Margin="16,24" />
+                            <ListView controls:FluentMotion.Kind="Items"
+                                x:Name="HistoryList" AutomationProperties.AutomationId="HistoryList"
+                                ItemsSource="{Binding HistoryEntries}"
+                                Visibility="{Binding HasHistory, Converter={StaticResource BoolVisibility}}"
+                                SelectionMode="None"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="0">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border
+                                            Padding="14,12"
+                                            Margin="0,0,0,8"
+                                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource ControlCornerRadius}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Margin="0,0,12,0">
+                                                    <TextBlock FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap">
+                                                        <Run Text="{Binding KindLabel}" />
+                                                        <Run Text=" · " />
+                                                        <Run Text="{Binding AppName}" />
+                                                    </TextBlock>
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        TextWrapping="Wrap"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        Margin="0,4,0,0">
+                                                        <Run Text="{Binding FinishedAtLocal}" />
+                                                        <Run Text=" · " />
+                                                        <Run Text="{Binding MethodLabel}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <Border
+                                                    Grid.Column="1"
+                                                    Padding="9,4"
+                                                    CornerRadius="{StaticResource CompactCornerRadius}"
+                                                    VerticalAlignment="Center"
+                                                    Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                                    <TextBlock Text="{Binding StateLabel}" FontSize="11" FontWeight="SemiBold" />
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border
+                    x:Name="LogPanel"
+                    Visibility="{Binding IsLogVisible, Converter={StaticResource BoolVisibility}}"
+                    Style="{StaticResource StoreCardSurfaceStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Log de diagnóstico" Style="{StaticResource FluentCardTitleStyle}" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Content="Atualizar" Command="{Binding RefreshLogCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                                <Button Content="Abrir arquivo" Command="{Binding OpenLogFileCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                                <Button Content="Fechar" Command="{Binding CloseLogCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Grid.Row="1" Text="{Binding LogStatus}" Margin="0,0,0,8" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <ScrollViewer
+                            x:Name="LogScrollViewer"
+                            Grid.Row="2"
+                            MinHeight="260"
+                            MaxHeight="560"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Auto">
+                            <TextBlock
+                                x:Name="LogContents"
+                                Text="{Binding LogText}"
+                                FontFamily="Consolas"
+                                FontSize="12"
+                                TextWrapping="NoWrap"
+                                IsTextSelectionEnabled="True"
+                                AutomationProperties.Name="Conteúdo do log de diagnóstico" />
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

@@ -1,0 +1,22 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <BitmapImage x:Key="AppIconImage" UriSource="ms-appx:///Assets/app_icon_256.png" DecodePixelWidth="256" DecodePixelHeight="256"/>
+ <SolidColorBrush x:Key="InstallActionBrush" Color="{ThemeResource SystemAccentColor}"/>
+ <SolidColorBrush x:Key="InstallActionHoverBrush" Color="{ThemeResource SystemAccentColor}" Opacity="0.9"/>
+ <SolidColorBrush x:Key="InstallActionPressedBrush" Color="{ThemeResource SystemAccentColor}" Opacity="0.8"/>
+ <SolidColorBrush x:Key="AppSurfaceElevatedBrush" Color="{ThemeResource LayerFillColorAlt}"/>
+ <SolidColorBrush x:Key="AppCardBackgroundBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/>
+ <SolidColorBrush x:Key="AppBorderSubtleBrush" Color="{ThemeResource CardStrokeColorDefault}"/>
+ <SolidColorBrush x:Key="FluentPanelBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/>
+ <SolidColorBrush x:Key="PageHeaderIconBrush" Color="{ThemeResource TextFillColorPrimary}"/>
+ <SolidColorBrush x:Key="SystemAccentColorPrimaryBrush" Color="{ThemeResource SystemAccentColor}"/>
+ <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="{ThemeResource SystemFillColorSuccess}"/>
+ <Style x:Key="ShellNavigationItemStyle" TargetType="NavigationViewItem"><Setter Property="Height" Value="40"/><Setter Property="Margin" Value="4,2"/><Setter Property="FontSize" Value="14"/><Setter Property="CornerRadius" Value="8"/></Style>
+ <x:Double x:Key="ShellIconSize">20</x:Double>
+ <Style x:Key="ShellNavigationIconStyle" TargetType="SymbolIcon">
+  <Setter Property="Width" Value="{StaticResource ShellIconSize}"/>
+  <Setter Property="Height" Value="{StaticResource ShellIconSize}"/>
+  <Setter Property="HorizontalAlignment" Value="Center"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
+ </Style>
+ <Style x:Key="ShellTitleActionIconStyle" TargetType="SymbolIcon" BasedOn="{StaticResource ShellNavigationIconStyle}"/>
+</ResourceDictionary>

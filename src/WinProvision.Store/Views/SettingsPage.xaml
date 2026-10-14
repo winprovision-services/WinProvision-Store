@@ -1,0 +1,267 @@
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.SettingsPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="14">
+  <Page.Resources>
+    <services:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+  </Page.Resources>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="{StaticResource PageContentMaxWidth}" HorizontalAlignment="Stretch">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Grid Grid.Row="0" Margin="{StaticResource PageHeaderMargin}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Border Grid.Column="0" Style="{StaticResource PageHeaderIconTileStyle}">
+        <FontIcon Style="{StaticResource PageHeaderSymbolIconStyle}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+      </Border>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+        <TextBlock x:Name="SettingsTitleTextBlock" Text="Configurações" Style="{StaticResource FluentPageTitleStyle}" />
+        <TextBlock Text="Controle as preferências do aplicativo, da interface e das operações." Style="{StaticResource FluentPageSubtitleStyle}" Margin="0,4,0,0" />
+      </StackPanel>
+    </Grid>
+    <Grid Grid.Row="1" Margin="0,0,0,16">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <Button x:Name="BackButton" AutomationProperties.AutomationId="BackButton" Grid.Row="0" Grid.Column="0" Visibility="Collapsed" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Click="BackButton_Click" ToolTipService.ToolTip="Voltar às categorias de configurações">
+        <StackPanel Orientation="Horizontal">
+          <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          <TextBlock Text="Voltar" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <AutoSuggestBox x:Name="SettingsSearchBox" AutomationProperties.AutomationId="SettingsSearchBox" CornerRadius="18" QueryIcon="Find" Grid.Row="0" Grid.Column="2" PlaceholderText="Pesquisar configurações" Width="320" MinHeight="36" VerticalAlignment="Center" AutomationProperties.Name="Pesquisar configurações" TextChanged="SettingsSearchBox_TextChanged" QuerySubmitted="SettingsSearchBox_QuerySubmitted" />
+      <TextBlock x:Name="SettingsSearchResultText" Text="{Binding SearchResultSummary}" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
+    </Grid>
+    <Grid Grid.Row="2" MaxWidth="760" HorizontalAlignment="Stretch">
+      <ScrollViewer x:Name="HomepageScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,0,8">
+          <StackPanel x:Name="SettingsCategoryListPanel" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+            <TextBlock Text="Categorias" Margin="0,0,0,12" FontSize="18" FontWeight="SemiBold" />
+            <Button x:Name="CardGeneral" AutomationProperties.AutomationId="CardGeneral" AutomationProperties.Name="Preferências gerais" Tag="General" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Preferências gerais" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Método de instalação, atualizador e gerenciamento das configurações." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardInterface" AutomationProperties.AutomationId="CardInterface" AutomationProperties.Name="Interface e inicialização" Tag="Interface" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Interface e inicialização" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Tema do aplicativo e inicialização com o Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardOperations" AutomationProperties.AutomationId="CardOperations" AutomationProperties.Name="Armazenamento e cache" Tag="Operations" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Armazenamento e cache" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Gerencie arquivos temporários das operações de pacotes." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+          </StackPanel>
+          <StackPanel x:Name="SettingsSearchResultsPanel" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="Opções encontradas" Margin="0,0,0,12" FontSize="18" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{Binding SearchResults}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Padding="18" CornerRadius="12" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.Name="{Binding AccessibleName}" AutomationProperties.HelpText="{Binding Description}" Click="SearchResult_Click" ToolTipService.ToolTip="{Binding Description}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <FontIcon FontSize="20" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,3,0,0" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="4" Text="{Binding Category}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Right" VerticalAlignment="Center" MaxWidth="180" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="SettingsSearchEmptyText" Text="Nenhuma configuração corresponde à pesquisa. Tente outro termo." Visibility="{Binding HasNoSearchResults, Converter={StaticResource BoolToVisibilityConverter}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+      <ScrollViewer x:Name="SubCategoryScrollViewer" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,0,8">
+          <StackPanel x:Name="PanelGeneral" Visibility="Collapsed">
+            <TextBlock Text="Método de instalação" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="InstallMethodCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                  <TextBlock Text="Método de instalação preferencial" FontWeight="SemiBold" />
+                  <TextBlock x:Name="InstallMethodDescriptionText" Text="{Binding InstallMethodDescription}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <ComboBox x:Name="InstallMethodComboBox" AutomationProperties.AutomationId="InstallMethodComboBox" Grid.Column="1" Width="240" SelectedValuePath="Tag" SelectedValue="{Binding SelectedMethodName, Mode=TwoWay}">
+                  <ComboBoxItem Content="Automático (recomendado)" Tag="Automatic" />
+                  <ComboBoxItem Content="API COM do WinGet" Tag="ComApi" />
+                  <ComboBoxItem Content="WinProvision API" Tag="WinProvisionApi" />
+                  <ComboBoxItem Content="WinGet CLI" Tag="WingetCli" />
+                </ComboBox>
+              </Grid>
+            </Border>
+            <TextBlock Text="Atualizações do aplicativo" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="AppUpdateCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Text="Verificar atualizações" FontWeight="SemiBold" />
+                    <TextBlock x:Name="UpdateSubtitleText" Text="{Binding UpdateSubtitle}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="Cancelar verificação" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding CheckUpdateCancelCommand}" Visibility="{Binding CheckUpdateCommand.CanBeCanceled, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <Button Content="Cancelar download" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding InstallUpdateCancelCommand}" Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <Button x:Name="CheckUpdateButton" AutomationProperties.AutomationId="CheckUpdateButton" IsEnabled="{Binding CanCheckUpdate}" Visibility="{Binding CheckUpdateCommand.CanBeCanceled, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Content="Verificar agora" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding CheckUpdateCommand}" />
+                    <Button Content="Instalar atualização" IsEnabled="{Binding CanInstallUpdate}" Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding InstallUpdateCommand}" />
+                  </StackPanel>
+                </Grid>
+                <TextBlock
+                    Text="{Binding UpdateAvailableText}"
+                    FontSize="13"
+                    Foreground="{ThemeResource SystemAccentColorPrimaryBrush}"
+                    TextWrapping="Wrap"
+                    Margin="0,8,0,0"
+                    Visibility="{Binding HasPendingUpdate, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <ProgressBar
+                    Value="{Binding UpdateProgress}"
+                    Maximum="1"
+                    Height="4"
+                    Margin="0,8,0,0"
+                    Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVisibilityConverter}}" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="Privacidade e gerenciamento" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="PrivacyCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <controls:WrapPanel>
+                <Button Content="Abrir pasta de logs" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,8" Command="{Binding OpenLogsCommand}">
+                                    </Button>
+                <Button Content="Restaurar padrões" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,0,8" Command="{Binding ResetPreferencesCommand}">
+                                    </Button>
+              </controls:WrapPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel x:Name="PanelInterface" Visibility="Collapsed">
+            <TextBlock Text="Aparência" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="ThemeCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                  <TextBlock Text="Tema do aplicativo" FontWeight="SemiBold" />
+                  <TextBlock Text="Escolha o esquema de cores da interface." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <controls:WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                  <Button x:Name="LightThemeButton" AutomationProperties.AutomationId="LightThemeButton" Content="Claro" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Command="{Binding LightThemeCommand}" />
+                  <Button x:Name="DarkThemeButton" AutomationProperties.AutomationId="DarkThemeButton" Content="Escuro" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Command="{Binding DarkThemeCommand}" />
+                  <Button x:Name="SystemThemeButton" AutomationProperties.AutomationId="SystemThemeButton" Content="Sistema" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding SystemThemeCommand}" />
+                </controls:WrapPanel>
+              </Grid>
+            </Border>
+            <TextBlock Text="Inicialização" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="StartupCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                  <TextBlock Text="Iniciar com o Windows" FontWeight="SemiBold" />
+                  <TextBlock Text="Abre o WinProvision automaticamente ao entrar nesta conta do Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <ToggleSwitch x:Name="LaunchAtStartupSwitch" AutomationProperties.AutomationId="LaunchAtStartupSwitch" IsOn="{Binding LaunchAtStartup, Mode=OneWay}" Grid.Column="1" OnContent="Ativado" OffContent="Desativado" Toggled="LaunchAtStartupSwitch_Toggled" AutomationProperties.Name="Iniciar com o Windows" />
+              </Grid>
+            </Border>
+          </StackPanel>
+          <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
+            <TextBlock Text="Armazenamento e cache" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="CacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                  <TextBlock Text="Caches locais do WinProvision" FontWeight="SemiBold" />
+                  <TextBlock Text="Remove índices de busca, detalhes de pacotes e instaladores guardados. Eles serão baixados novamente quando necessário." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Limpar cache" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding ClearCacheCommand}">
+                                    </Button>
+              </Grid>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+    <Border Grid.Row="3" Style="{StaticResource PageStatusBarStyle}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+          <FontIcon Style="{StaticResource PageStatusIconStyle}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Style="{StaticResource PageStatusTextStyle}" />
+        </StackPanel>
+        <TextBlock x:Name="VersionText" Text="{Binding VersionText}" Grid.Column="1" Margin="16,0,0,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+  </Grid>
+</Page>

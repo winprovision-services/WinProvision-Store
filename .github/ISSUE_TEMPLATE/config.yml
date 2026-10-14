@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Segurança
+    url: https://github.com/winprovision-services/WinProvision-Store/security
+    about: Consulte a política de relatos privados; não publique detalhes exploráveis em issues.

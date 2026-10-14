@@ -1,0 +1,57 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <Deterministic>true</Deterministic>
+    <DebugSymbols>true</DebugSymbols>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <TieredCompilation>true</TieredCompilation>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTGenerateProjection>false</CsWinRTGenerateProjection>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <Optimize>false</Optimize>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+    <TieredCompilationQuickJitForLoops>true</TieredCompilationQuickJitForLoops>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+    <Optimize>true</Optimize>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilationQuickJit>false</TieredCompilationQuickJit>
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+    <DefineConstants>RELEASE;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <!-- Last MS-RL-only DTF release; later packages require the OSMF EULA. No WiX installer tools are shipped. -->
+    <PackageReference Include="WixToolset.Dtf.Compression.Cab" Version="5.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Services/Profile/OfflineInstall.ps1" LogicalName="WinProvision.Core.OfflineInstall.ps1" />
+    <EmbeddedResource Include="Services/Profile/InstallOffice.ps1" LogicalName="WinProvision.Core.InstallOffice.ps1" />
+    <None Update="ThirdParty/WiX-DTF/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

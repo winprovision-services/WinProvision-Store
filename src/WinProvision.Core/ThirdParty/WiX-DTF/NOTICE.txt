@@ -1,0 +1,8 @@
+WiX Deployment Tools Foundation — Compression e Compression.Cab 5.0.2
+Copyright (c) .NET Foundation and contributors. All rights reserved.
+Licença: Microsoft Reciprocal License (MS-RL); texto completo em LICENSE.txt.
+Os fontes originais não modificados estão em Source.zip.
+Origem: https://github.com/wixtoolset/wix/tree/aa65968c419420d32e3e1b647aea0082f5ca5b78/src/dtf
+Commit confirmado nos metadados dos pacotes NuGet: aa65968c419420d32e3e1b647aea0082f5ca5b78.
+Os binários usam a implementação CAB do Windows. Não é distribuído o WiX Toolset/ADK.
+Esta versão usa somente MS-RL; versões posteriores acrescentam OSMF EULA.

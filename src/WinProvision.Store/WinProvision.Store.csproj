@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <!-- These classes live in the App Installer COM server, not in the local WinRT factory. -->
+    <MicrosoftManagementDeployment-FactoryLinkage>none</MicrosoftManagementDeployment-FactoryLinkage>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">ARM64</PlatformTarget>
+    <PlatformTarget Condition="'$(PlatformTarget)' == ''">x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
+    <CsWinRTAotWarningLevel>2</CsWinRTAotWarningLevel>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <AssemblyName>WinProvision.Store</AssemblyName>
+    <RootNamespace>WinProvision.Store</RootNamespace>
+    <Product>WinProvision Store</Product>
+    <Company>WinProvision Store</Company>
+    <Title>WinProvision Store</Title>
+    <AssemblyTitle>WinProvision Store</AssemblyTitle>
+  </PropertyGroup>
+  <PropertyGroup>
+    <EnableValidationHarness Condition="'$(EnableValidationHarness)' == ''">false</EnableValidationHarness>
+    <CopyOutputSymbolsToPublishDirectory Condition="'$(EnableValidationHarness)' != 'true'">false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnableValidationHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);VALIDATION_HARNESS</DefineConstants>
+    <OutputPath>$(MSBuildProjectDirectory)\..\..\artifacts\validation\bin\$(Platform)\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(EnableValidationHarness)' == 'true'">
+    <Compile Include="..\..\tests\WinProvision.Store.Smoke\**\*.cs" Link="Validation\%(Filename)%(Extension)" />
+    <Content Include="..\..\tests\WinProvision.Store.Smoke\validation-harness.flag" Link="validation-harness.flag" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="app.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+  <!-- The unpackaged publish pipeline must carry the application's compiled XAML
+       and PRI alongside the native runtime. Build output already contains them. -->
+  <Target Name="IncludeWinUIResourcesInPublish" AfterTargets="ComputeFilesToPublish">
+    <Error Condition="!Exists('$(OutDir)$(AssemblyName).pri')" Text="The compiled WinUI resource index is missing from the build output." />
+    <ItemGroup>
+      <!-- The universal COM marshaler needs this metadata even when all managed code is AOT. -->
+      <ResolvedFileToPublish Include="$(MicrosoftManagementDeployment-WinMDPath)">
+        <RelativePath>Microsoft.Management.Deployment.winmd</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <_WinUICompiledResource Include="$(OutDir)**\*.xbf" />
+      <ResolvedFileToPublish Include="$(OutDir)$(AssemblyName).pri">
+        <RelativePath>$(AssemblyName).pri</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_WinUICompiledResource)">
+        <RelativePath>%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

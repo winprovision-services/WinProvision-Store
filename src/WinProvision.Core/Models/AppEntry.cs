@@ -1,0 +1,299 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
+using WinProvision.Core.Models.Office;
+
+namespace WinProvision.Core.Models;
+
+/// <summary>
+/// Modelo do aplicativo no catálogo da loja.
+/// Campos vêm do manifesto do winget-pkgs (locale/instalador) e são
+/// enriquecidos pela engine de indexação (Score, RegionTags, GitHubStars).
+/// </summary>
+#if WINDOWS
+[WinRT.GeneratedBindableCustomProperty]
+#endif
+public partial class AppEntry : INotifyPropertyChanged
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Caminho relativo do registro completo, presente no índice de busca v2.</summary>
+    [JsonPropertyName("detailPath")]
+    public string? CatalogDetailPath { get; set; }
+    [JsonPropertyName("recordSha256")]
+    public string? CatalogDetailSha256 { get; set; }
+
+    [JsonIgnore]
+    public string? CatalogDetailBaseUrl { get; set; }
+
+    [JsonIgnore]
+    public string? CatalogDetailCatalogSha256 { get; set; }
+
+    [JsonPropertyName("media")]
+    public CatalogMedia? Media { get; set; }
+
+    /// <summary>
+    /// Origem do pacote para fins de instalação: "winget" (padrão, veio de um manifesto
+    /// do winget-pkgs) ou "msstore" (curadoria manual via MsStoreCatalogService, ver
+    /// config/msstore-curated.json no Indexer — não existe listagem em massa pública da
+    /// Microsoft Store, então esses apps são adicionados um a um). O app cliente usa este
+    /// campo pra decidir o --source correto no fallback de CLI do WingetExecutor; a
+    /// instalação via COM (WinGetService) já resolve por Id sem precisar disso.
+    /// </summary>
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "winget";
+
+    /// <summary>
+    /// URL direta recebida em resultados ao vivo da Microsoft Store. Os registros do
+    /// catálogo V2 usam o caminho em <see cref="Media"/> e montam a URL pelo IconService.
+    /// </summary>
+    [JsonPropertyName("storeIconUrl")]
+    public string? StoreIconUrl { get; set; }
+
+    /// <summary>Arte horizontal da Microsoft Store para banners da Visão Geral.</summary>
+    public string? StoreBannerUrl { get; set; }
+
+    public string? StoreCategory { get; set; }
+
+    public string? StoreSubCategory { get; set; }
+
+    public List<string>? StoreScreenshotUrls { get; set; }
+
+    /// <summary>Capturas de tela fornecidas pelo catálogo para pacotes WinGet.</summary>
+    [JsonPropertyName("screenshotUrls")]
+    public List<string>? ScreenshotUrls { get; set; }
+
+    /// <summary>Nota média do produto na Microsoft Store, quando publicada.</summary>
+    [JsonPropertyName("storeRating")]
+    public double? StoreRating { get; set; }
+
+    /// <summary>Quantidade de avaliações que compõe StoreRating.</summary>
+    [JsonPropertyName("storeRatingCount")]
+    public int? StoreRatingCount { get; set; }
+
+    /// <summary>Contagem editorial de instalações concluídas nos últimos 30 dias.</summary>
+    private int? _featuredInstallCount30d;
+    [JsonIgnore]
+    public int? FeaturedInstallCount30d
+    {
+        get => _featuredInstallCount30d;
+        set
+        {
+            if (_featuredInstallCount30d == value) return;
+            _featuredInstallCount30d = value;
+            OnPropertyChanged();
+        }
+    }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("publisher")]
+    public string Publisher { get; set; } = string.Empty;
+
+    [JsonPropertyName("publisherUrl")]
+    public string? PublisherUrl { get; set; }
+
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = string.Empty;
+
+    [JsonPropertyName("moniker")]
+    public string? Moniker { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    /// <summary>Localidade do manifesto usado para os metadados do pacote, quando conhecida.</summary>
+    [JsonPropertyName("packageLocale")]
+    public string? PackageLocale { get; set; }
+
+    [JsonPropertyName("homepage")]
+    public string? Homepage { get; set; }
+
+    [JsonPropertyName("packageUrl")]
+    public string? PackageUrl { get; set; }
+
+    [JsonPropertyName("license")]
+    public string? License { get; set; }
+
+    [JsonPropertyName("licenseUrl")]
+    public string? LicenseUrl { get; set; }
+
+    [JsonPropertyName("releaseNotesUrl")]
+    public string? ReleaseNotesUrl { get; set; }
+
+    [JsonPropertyName("tags")]
+    public List<string> Tags { get; set; } = [];
+
+    [JsonPropertyName("architectures")]
+    public List<string> Architectures { get; set; } = [];
+
+    /// <summary>Opções MSI, MSIX, EXE, ZIP e outros formatos extraídas do manifesto WinGet.</summary>
+    [JsonPropertyName("installers")]
+    public List<CatalogInstaller> Installers { get; set; } = [];
+
+    /// <summary>
+    /// Score de relevância calculado (0-100). Ver ScoringEngine para a fórmula.
+    /// </summary>
+    [JsonPropertyName("score")]
+    public int Score { get; set; }
+
+    /// <summary>
+    /// Tags de região com apelo identificado (ex.: ["BR"]). Vazio = sem apelo regional detectado.
+    /// </summary>
+    [JsonPropertyName("regionTags")]
+    public List<string> RegionTags { get; set; } = [];
+
+    /// <summary>
+    /// Indica se foi possível localizar um repositório GitHub para enriquecer o score
+    /// com estrelas/forks/atividade.
+    /// </summary>
+    [JsonPropertyName("hasGitHubMetrics")]
+    public bool HasGitHubMetrics { get; set; }
+
+    [JsonPropertyName("gitHubStars")]
+    public int? GitHubStars { get; set; }
+
+    /// <summary>
+    /// Preenchido em tempo de execução pelo IconService. Não vem do apps.json.
+    /// </summary>
+    [JsonIgnore]
+    public string IconUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Presente só quando este item representa um plano de Office (ex.: criado pelo
+    /// botão "Adicionar ao catálogo" da OfficePage), em vez de um pacote winget comum.
+    /// Null = app winget normal, instalado via <see cref="Services.WingetExecutor"/>;
+    /// não-null = a tela de Pacotes/Instalar deve rodar o pipeline do ODT
+    /// (<see cref="Services.Office.OfficeDeploymentToolService"/>) com estes parâmetros
+    /// em vez de chamar o winget. Serializado normalmente no perfil (.json) — é o que
+    /// permite exportar/importar apps winget e planos de Office no mesmo arquivo.
+    /// </summary>
+    [JsonPropertyName("office")]
+    public OfficeInstallOptions? Office { get; set; }
+
+    private long? _installerSizeBytes;
+
+    /// <summary>
+    /// Tamanho estimado do instalador, em bytes. Não existe um campo de tamanho no
+    /// schema oficial do winget-pkgs (não há "InstallerSize" no manifesto) — este
+    /// valor vem de uma checagem HTTP (HEAD/Range) feita pelo Indexer na
+    /// sincronização diária, direto contra a(s) InstallerUrl do manifesto (ver
+    /// InstallerSizeResolver). Nem todo pacote resolve (URL pode bloquear HEAD/Range,
+    /// redirecionar de forma atípica, etc.) — null significa "não foi possível
+    /// estimar", não "instalador vazio". Quando ausente aqui, a tela de Pacotes ainda
+    /// tenta um fallback ao vivo via WingetExecutor.GetPackageInstallerSizeAsync.
+    /// </summary>
+    [JsonPropertyName("installerSizeBytes")]
+    public long? InstallerSizeBytes
+    {
+        get => _installerSizeBytes;
+        set
+        {
+            if (_installerSizeBytes == value) return;
+            _installerSizeBytes = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(InstallerSizeDisplay));
+        }
+    }
+
+    /// <summary>Apresentação do tamanho estimado em MB; o JSON continua guardando bytes.</summary>
+    [JsonIgnore]
+    public string InstallerSizeDisplay => InstallerSizeBytes is > 0
+        ? $"{(InstallerSizeBytes.Value / 1024d / 1024d).ToString("0.0", CultureInfo.CurrentCulture)} MB"
+        : "—";
+
+    private bool _isInstalled;
+
+    /// <summary>
+    /// Preenchido em tempo de execução pelo InstalledAppsService (via "winget export").
+    /// Não vem do apps.json. Notifica mudança para o botão Instalar/Abrir do card e do
+    /// painel de detalhes trocarem automaticamente via binding.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsInstalled
+    {
+        get => _isInstalled;
+        set
+        {
+            if (_isInstalled == value)
+                return;
+
+            _isInstalled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isInstalling;
+
+    /// <summary>
+    /// Ligado enquanto uma instalação está em andamento para este app (ver
+    /// OperationRunner.RunInstallAsync). Usado pelo botão de ação do card/detalhes
+    /// para trocar o rótulo para "Instalando" e bloquear novos cliques sem depender
+    /// de IsEnabled (que mudaria a cor do botão via o estado "disabled" padrão).
+    /// </summary>
+    [JsonIgnore]
+    public bool IsInstalling
+    {
+        get => _isInstalling;
+        set
+        {
+            if (_isInstalling == value)
+                return;
+
+            _isInstalling = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isSelectedForInstall;
+
+    /// <summary>
+    /// Estado do CheckBox de seleção na tela Pacotes (ver PackagesPage). Não vem do
+    /// apps.json nem do perfil (.json) — é só o estado transitório de "marcado pra
+    /// instalar" usado pelo botão geral "Instalar" da barra de ferramentas.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSelectedForInstall
+    {
+        get => _isSelectedForInstall;
+        set
+        {
+            if (_isSelectedForInstall == value)
+                return;
+
+            _isSelectedForInstall = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public sealed class CatalogMedia
+{
+    [JsonPropertyName("icon")]
+    public string? Icon { get; set; }
+
+    [JsonPropertyName("iconSha256")]
+    public string? IconSha256 { get; set; }
+
+    [JsonPropertyName("banner")]
+    public string? Banner { get; set; }
+
+    [JsonPropertyName("bannerSha256")]
+    public string? BannerSha256 { get; set; }
+
+    [JsonPropertyName("screenshots")]
+    public List<string> Screenshots { get; set; } = [];
+
+    [JsonPropertyName("screenshotSha256")]
+    public Dictionary<string, string> ScreenshotSha256 { get; set; } = new(StringComparer.Ordinal);
+}

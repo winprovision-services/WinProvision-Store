@@ -1,0 +1,30 @@
+name: Relatar problema
+description: Falha reproduzível no cliente WinUI 3.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: Para vulnerabilidades, siga SECURITY.md. Não publique tokens, dados pessoais ou executáveis.
+  - type: input
+    id: version
+    attributes:
+      label: Versão ou commit
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Versão do Windows e arquitetura
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Passos, resultado esperado e resultado observado
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnóstico sem dados sensíveis
+      description: Remova usuários, caminhos pessoais, tokens e informações privadas antes de anexar logs.

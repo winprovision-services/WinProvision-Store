@@ -1,0 +1,46 @@
+<Window x:Class="WinProvision.Store.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:WinProvision.Store.Controls" Title="WinProvision Store">
+ <Window.SystemBackdrop><MicaBackdrop Kind="Base"/></Window.SystemBackdrop>
+ <Grid x:Name="Root" Background="Transparent" Loaded="Root_Loaded" SizeChanged="Root_SizeChanged" KeyDown="Root_KeyDown">
+  <Grid x:Name="MainContentLayer" Background="Transparent">
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <TitleBar x:Name="AppTitleBar" Grid.Row="0" Title="WinProvision Store" Height="48" Background="Transparent">
+    <TitleBar.IconSource><ImageIconSource ImageSource="{StaticResource AppIconImage}"/></TitleBar.IconSource>
+
+   </TitleBar>
+   <NavigationView x:Name="RootNavigation" AutomationProperties.Name="Navegação principal" AutomationProperties.AutomationId="RootNavigation" Grid.Row="1" PaneDisplayMode="Left" IsPaneOpen="True" OpenPaneLength="240" CompactPaneLength="64" IsPaneToggleButtonVisible="True" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" Background="Transparent" BorderThickness="0" BorderBrush="Transparent" SelectionChanged="Navigation_SelectionChanged" MenuItemContainerStyle="{StaticResource ShellNavigationItemStyle}">
+    <NavigationView.Resources><StaticResource x:Key="NavigationViewItemOnLeftIconBoxHeight" ResourceKey="ShellIconSize"/></NavigationView.Resources>
+    <NavigationView.MenuItems>
+     <NavigationViewItem Content="Descobrir" Tag="home" AutomationProperties.AutomationId="NavigateHome" ToolTipService.ToolTip="Descobrir aplicativos"><NavigationViewItem.Icon><SymbolIcon Symbol="Home" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Atualizações" Tag="updates" AutomationProperties.AutomationId="NavigateUpdates" ToolTipService.ToolTip="Verificar e instalar atualizações"><NavigationViewItem.Icon><SymbolIcon Symbol="Sync" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Instalados" Tag="installed" AutomationProperties.AutomationId="NavigateInstalled" ToolTipService.ToolTip="Gerenciar aplicativos instalados"><NavigationViewItem.Icon><SymbolIcon Symbol="AllApps" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Coleções" Tag="collections" AutomationProperties.AutomationId="NavigateCollections" ToolTipService.ToolTip="Gerenciar coleções de pacotes"><NavigationViewItem.Icon><SymbolIcon Symbol="Library" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Office" Tag="office" AutomationProperties.AutomationId="NavigateOffice" ToolTipService.ToolTip="Gerenciar Microsoft Office"><NavigationViewItem.Icon><SymbolIcon Symbol="Document" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+    </NavigationView.MenuItems>
+    <NavigationView.FooterMenuItems>
+     <NavigationViewItem Content="Conta &amp; Sincronização" Tag="account" AutomationProperties.AutomationId="NavigateAccountSync" ToolTipService.ToolTip="Conta e sincronização"><NavigationViewItem.Icon><SymbolIcon Symbol="Contact" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Configurações" Tag="settings" AutomationProperties.AutomationId="NavigateSettings" ToolTipService.ToolTip="Configurações do aplicativo"><NavigationViewItem.Icon><SymbolIcon Symbol="Setting" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+     <NavigationViewItem Content="Mais" Tag="more" AutomationProperties.AutomationId="NavigateMore" ToolTipService.ToolTip="Mais ferramentas e informações"><NavigationViewItem.Icon><SymbolIcon Symbol="More" Style="{StaticResource ShellNavigationIconStyle}"/></NavigationViewItem.Icon></NavigationViewItem>
+    </NavigationView.FooterMenuItems>
+    <ContentControl controls:FluentMotion.Kind="Content" x:Name="PageHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+   </NavigationView>
+   <Popup x:Name="QueuePopup" Grid.RowSpan="2" IsOpen="{Binding IsQueueOpen, Mode=TwoWay}" IsLightDismissEnabled="False" Opened="QueuePopup_Opened">
+    <Popup.SystemBackdrop><MicaBackdrop Kind="Base"/></Popup.SystemBackdrop>
+    <controls:OperationsQueuePanel controls:FluentMotion.Kind="Panel" x:Name="QueuePanel" Width="480" MaxHeight="340" SizeChanged="QueuePanel_SizeChanged"/>
+   </Popup>
+   <InfoBar controls:FluentMotion.Kind="Entrance" x:Name="MainSnackbarPresenter" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,20,0" MaxWidth="420" Canvas.ZIndex="20" IsOpen="False"/>
+   <ContentControl x:Name="RootContentDialog" Grid.RowSpan="2" Canvas.ZIndex="30" IsHitTestVisible="False"/>
+   <ContentControl x:Name="DetailsOverlayHost" Grid.RowSpan="2" Canvas.ZIndex="40" IsTabStop="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+  </Grid>
+  <Grid x:Name="StartupSplashOverlay" Canvas.ZIndex="1000" Visibility="Collapsed">
+   <Border Background="#D90A1024" CornerRadius="8"><Viewbox Stretch="Uniform" IsHitTestVisible="False"><Canvas Width="960" Height="540">
+    <Ellipse Width="660" Height="490" Canvas.Left="150" Canvas.Top="15" Opacity="0.82"><Ellipse.Fill><controls:RadialGradientBrush><GradientStop Color="#783C7BFF" Offset="0"/><GradientStop Color="#38315AE8" Offset="0.42"/><GradientStop Color="#00315AE8" Offset="1"/></controls:RadialGradientBrush></Ellipse.Fill></Ellipse>
+    <Ellipse Width="560" Height="420" Canvas.Left="345" Canvas.Top="85" Opacity="0.72"><Ellipse.Fill><controls:RadialGradientBrush><GradientStop Color="#604F36FF" Offset="0"/><GradientStop Color="#302D38D8" Offset="0.46"/><GradientStop Color="#002D38D8" Offset="1"/></controls:RadialGradientBrush></Ellipse.Fill></Ellipse>
+    <Ellipse Width="245" Height="190" Canvas.Left="357" Canvas.Top="105" Opacity="0.72"><Ellipse.Fill><controls:RadialGradientBrush><GradientStop Color="#A81ACBFF" Offset="0"/><GradientStop Color="#4C087BFF" Offset="0.4"/><GradientStop Color="#00087BFF" Offset="1"/></controls:RadialGradientBrush></Ellipse.Fill></Ellipse>
+    <Image x:Name="StartupSplashIcon" Source="{StaticResource AppIconImage}" Width="160" Height="170" Canvas.Left="400" Canvas.Top="128" Stretch="Uniform"/>
+    <TextBlock Text="WinProvision" Width="960" Canvas.Top="288" Foreground="White" FontFamily="Segoe UI Variable Display" FontSize="32" FontWeight="SemiBold" TextAlignment="Center"/>
+    <ProgressRing IsActive="True" Width="40" Height="40" Canvas.Left="460" Canvas.Top="342" Foreground="#FF00A2ED"/>
+    <TextBlock Text="Carregando o catálogo..." Width="960" Canvas.Top="394" Foreground="#FFD3D9F2" FontFamily="Segoe UI Variable Text" FontSize="13" TextAlignment="Center"/>
+   </Canvas></Viewbox></Border>
+  </Grid>
+ </Grid>
+</Window>

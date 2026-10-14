@@ -1,0 +1,64 @@
+name: Release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versão SemVer do candidato (não publica uma release)
+        required: true
+        type: string
+        default: 0.1.0
+permissions:
+  contents: read
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: pwsh
+jobs:
+  candidate:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Conferir estrutura e dependências
+        run: |
+          .\scripts\check-repository.ps1
+          dotnet restore WinProvision.Store.sln --locked-mode
+          if ($LASTEXITCODE -ne 0) { throw 'Restore falhou.' }
+      - name: Testar Core
+        run: dotnet test tests\WinProvision.Core.Tests\WinProvision.Core.Tests.csproj -c Release --no-restore
+      - name: Validar Native AOT
+        run: |
+          .\scripts\publish.ps1 -Validation -AppVersion $env:RELEASE_VERSION -SourceRevisionId $env:GITHUB_SHA
+          .\scripts\smoke-test.ps1 -PublishedDirectory .\artifacts\validation\publish\win-x64
+      - name: Produzir candidato sem assinatura
+        run: .\scripts\prepare-release.ps1 -AppVersion $env:RELEASE_VERSION
+      - name: Conferir entrada da CLI Native AOT
+        run: |
+          & .\artifacts\publish\win-x64\cli\winprovision.exe --help
+          if ($LASTEXITCODE -ne 0) { throw 'A CLI não iniciou.' }
+      - name: Preservar candidato e metadados de origem
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: unsigned-candidate-${{ github.sha }}
+          path: artifacts/release-candidate/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preservar diagnóstico de validação
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: candidate-validation-${{ github.sha }}
+          path: artifacts/validation/smoke-published/
+          if-no-files-found: warn
+          retention-days: 7

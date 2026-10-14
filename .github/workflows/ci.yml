@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: pwsh
+jobs:
+  validate:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Conferir estrutura e políticas
+        run: .\scripts\check-repository.ps1
+      - name: Restaurar dependências fixadas
+        run: dotnet restore WinProvision.Store.sln --locked-mode
+      - name: Testes de regressão do Core
+        run: dotnet test tests\WinProvision.Core.Tests\WinProvision.Core.Tests.csproj --configuration Release
+      - name: Compilar aplicativo
+        shell: pwsh
+        run: .\scripts\build.ps1
+      - name: Publicar validação Native AOT separada
+        shell: pwsh
+        run: .\scripts\publish.ps1 -Validation
+      - name: Validar navegação e bindings
+        shell: pwsh
+        run: .\scripts\smoke-test.ps1 -PublishedDirectory .\artifacts\validation\publish\win-x64
+      - name: Publicar aplicativo sem testes
+        shell: pwsh
+        run: .\scripts\publish.ps1
+      - name: Conferir entrada da CLI Native AOT
+        run: |
+          & .\artifacts\publish\win-x64\cli\winprovision.exe --help
+          if ($LASTEXITCODE -ne 0) { throw 'A CLI não iniciou.' }
+          & .\artifacts\publish\win-x64\cli\winprovision.exe /auto
+          if ($LASTEXITCODE -ne 2) { throw 'A CLI aceitou um comando não suportado.' }
+          $global:LASTEXITCODE = 0
+      - name: Preservar resultado da validação
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: validation
+          path: artifacts/validation/smoke-published
+          retention-days: 7

@@ -1,0 +1,13 @@
+name: Solicitar contato
+description: Pedir um canal reservado, sem expor dados sensíveis.
+body:
+  - type: markdown
+    attributes:
+      value: Este formulário é público. Não inclua dados pessoais, credenciais nem detalhes exploráveis de vulnerabilidades.
+  - type: textarea
+    id: subject
+    attributes:
+      label: Assunto público breve
+      description: Informe somente o tema e peça um canal privado para tratar dos detalhes.
+    validations:
+      required: true
