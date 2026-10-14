@@ -18,6 +18,10 @@ Os anexos incluem o instalador, seu hash, o arquivo portátil, `release.json` co
 
 O identificador do pacote é `WinProvision.Store`. O workflow prepara os manifestos tanto para a primeira inclusão quanto para versões posteriores, confere o hash do instalador na URL pública e usa uma versão fixa do WinGet Create, também verificada por SHA-256.
 
+Os manifestos usam o esquema `1.12` e incluem `/MERGETASKS="clipath"`, para adicionar a CLI ao PATH do usuário durante a instalação pelo WinGet. Abra um novo terminal após a instalação para utilizar o comando.
+
+Para uma versão que já tenha release, use o workflow **Publicar versão existente no WinGet**. Ele baixa o instalador publicado, confere seu hash, gera os manifestos e testa instalação silenciosa, metadados, CLI, inclusão no PATH, reinstalação sem duplicação e desinstalação com restauração do PATH em um runner descartável. Os manifestos e o relatório ficam disponíveis como artefatos. A opção **Enviar ao WinGet** controla o envio após esses testes; desmarcada, ela apenas valida. Esse fluxo preserva a tag e os anexos da release existente.
+
 Cadastre o secret de repositório `WINGET_CREATE_GITHUB_TOKEN` em **Settings → Secrets and variables → Actions**. Use um token pessoal clássico dedicado, com o escopo `public_repo`, conforme as exigências do WinGet Create. Mantenha validade limitada e renove-o quando necessário. Não coloque o valor em arquivos, campos do workflow ou logs. O token padrão do Actions não permite esse envio externo.
 
 O token é passado ao WinGet Create pela variável de ambiente esperada pela ferramenta, sem argumento de linha de comando. O job de envio é separado do build e só roda quando solicitado manualmente após a publicação da release. Sem o secret, o workflow rejeita antecipadamente a opção de envio; as demais modalidades continuam disponíveis.
