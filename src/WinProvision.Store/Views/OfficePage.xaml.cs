@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.ComponentModel;
 using WinProvision.Store.ViewModels;
+using WinRT;
 
 namespace WinProvision.Store.Views;
 
@@ -91,7 +92,7 @@ public sealed partial class OfficePage : Page
         OfficeListViewButton.IsChecked = mode == OfficeAppsViewMode.List;
         OfficeCardsViewButton.IsChecked = mode == OfficeAppsViewMode.Cards;
         OfficeIconsViewButton.IsChecked = mode == OfficeAppsViewMode.Icons;
-        OfficeAppsItemsControl.ItemTemplate = (DataTemplate)Resources[mode == OfficeAppsViewMode.List ? "OfficeListTemplate" : mode == OfficeAppsViewMode.Icons ? "OfficeIconsTemplate" : "OfficeToggleTemplate"];
-        OfficeAppsItemsControl.ItemsPanel = (ItemsPanelTemplate)Resources[mode == OfficeAppsViewMode.List ? "OfficeListPanel" : "OfficeWrapPanel"];
+        OfficeAppsItemsControl.ItemTemplate = Resources[mode == OfficeAppsViewMode.List ? "OfficeListTemplate" : mode == OfficeAppsViewMode.Icons ? "OfficeIconsTemplate" : "OfficeToggleTemplate"].As<DataTemplate>();
+        OfficeAppsItemsControl.ItemsPanel = Resources[mode == OfficeAppsViewMode.List ? "OfficeListPanel" : "OfficeWrapPanel"].As<ItemsPanelTemplate>();
     }
 }

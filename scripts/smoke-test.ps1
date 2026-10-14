@@ -18,9 +18,9 @@ if (-not $taskProcess.HasExited) {
 if ($taskProcess.ExitCode -ne 0) { throw "A aplicação encerrou com falha. ExitCode: $($taskProcess.ExitCode)" }
 if (-not (Test-Path -LiteralPath $taskResultFile)) { throw "A aplicação não gerou resultado. ExitCode: $($taskProcess.ExitCode)" }
 $taskResult = Get-Content -LiteralPath $taskResultFile -Raw | ConvertFrom-Json
-if (-not $taskResult.success) { throw $taskResult.error }
 $taskArtifacts = Join-Path $taskRoot 'artifacts\validation\smoke'
 if ($PublishedDirectory) { $taskArtifacts = Join-Path $taskRoot 'artifacts\validation\smoke-published' }
 New-Item -ItemType Directory -Force -Path $taskArtifacts | Out-Null
 Get-ChildItem -LiteralPath $taskResults -File | Where-Object { $_.Extension -eq '.png' -or $_.Name -eq 'result.json' } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $taskArtifacts }
+if (-not $taskResult.success) { throw $taskResult.error }
 Write-Output "$($taskResult.checks.Count) verificações concluídas. Capturas em $taskArtifacts"
