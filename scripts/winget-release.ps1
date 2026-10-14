@@ -60,6 +60,7 @@ ReleaseNotesUrl: $taskRepository/releases/tag/v$AppVersion
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.locale.pt-BR.yaml") -Encoding utf8NoBOM
+if ($env:GITHUB_ACTIONS -eq 'true') { & (Join-Path $PSScriptRoot 'prepare-winget-validation.ps1') }
 & winget validate --manifest $taskOutput --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'O WinGet rejeitou os manifestos gerados.' }
 if (-not $Submit) { Write-Output "Manifestos preparados: $taskOutput"; return }
