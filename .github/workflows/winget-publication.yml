@@ -46,7 +46,7 @@ jobs:
       - name: Gerar e validar manifestos
         run: .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe
       - name: Testar instalação silenciosa, CLI, PATH e remoção
-        run: .\scripts\test-release-install.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe -ManifestPath "artifacts/winget/WinProvision.Store/$env:RELEASE_VERSION"
+        run: .\scripts\test-release-install.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath artifacts/published-release/WinProvision.Store-Setup.exe
       - name: Preservar manifestos e relatório
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
