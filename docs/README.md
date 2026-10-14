@@ -2,6 +2,7 @@
 
 ## Uso
 
+- [Capturas de tela](SCREENSHOTS.md): interface nos temas claro e escuro e em janela compacta.
 - [CLI](CLI.md): comandos, opções, importação, exportação e Office.
 - [Office online e offline](OFFICE-OFFLINE.md): preparação e utilização de mídia local.
 - [Compatibilidade de dados](DATA-FORMATS.md): preferências, coleções e formatos de arquivos.

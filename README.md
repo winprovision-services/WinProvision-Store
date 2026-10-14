@@ -2,6 +2,10 @@
 
 Aplicativo para Windows que reúne pesquisa de aplicativos, instalações, atualizações, programas instalados, coleções, configuração do Office e uma interface de linha de comando.
 
+![Tela inicial do WinProvision Store no tema escuro](docs/screenshots/inicio-escuro.png)
+
+Interface capturada com dados de teste. Veja mais telas na [galeria de capturas](docs/SCREENSHOTS.md).
+
 ## Recursos
 
 - Pesquise aplicativos por nome e consulte seus detalhes.
