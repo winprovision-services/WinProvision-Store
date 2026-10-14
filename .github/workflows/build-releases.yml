@@ -50,6 +50,11 @@ jobs:
           if ($env:RELEASE_VERSION -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$') { throw 'Informe uma versão válida.' }
           foreach ($part in (($env:RELEASE_VERSION -split '-')[0] -split '\.')) { if ([long]$part -gt 65535) { throw 'Cada componente da versão deve ser menor que 65536.' } }
           if ($env:RELEASE_MODE -notin @('Somente validar','Publicar release')) { throw 'Modo inválido.' }
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            $appInstaller = Get-AppxPackage -Name Microsoft.DesktopAppInstaller | Select-Object -First 1
+            if (-not $appInstaller -or -not (Test-Path (Join-Path $appInstaller.InstallLocation 'winget.exe'))) { throw 'WinGet CLI não está disponível no runner.' }
+            $appInstaller.InstallLocation | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
           if ($env:SUBMIT_WINGET -eq 'true') {
             if ($env:RELEASE_MODE -ne 'Publicar release' -or $env:RELEASE_VERSION.Contains('-')) { throw 'WinGet exige Publicar release e uma versão estável.' }
             if (-not $env:WINGET_TOKEN) { throw 'Cadastre o secret WINGET_CREATE_GITHUB_TOKEN antes de solicitar o envio ao WinGet.' }

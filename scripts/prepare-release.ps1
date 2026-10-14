@@ -17,7 +17,7 @@ $taskExpectedVersion = ($AppVersion -split '-')[0] + '.0'
 foreach ($taskBinary in @($taskExe,(Join-Path $taskPublished 'cli\winprovision.exe'),$taskInstaller)) {
     $taskInfo = (Get-Item -LiteralPath $taskBinary).VersionInfo
     if ($taskInfo.ProductName -ne 'WinProvision Store' -or $taskInfo.ProductVersion -ne $taskExpectedVersion) {
-        throw "Metadados de produto/versão divergentes: $taskBinary"
+        throw "Metadados divergentes em '$taskBinary': produto='$($taskInfo.ProductName)', versão='$($taskInfo.ProductVersion)'; esperado 'WinProvision Store' / '$taskExpectedVersion'."
     }
 }
 $taskDirectory = Join-Path $taskRoot ("artifacts\release-candidate\$AppVersion-" + $taskCommit.Substring(0,12) + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
