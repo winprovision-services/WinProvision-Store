@@ -14,19 +14,21 @@ $taskOutput = Join-Path $taskRoot "artifacts/winget/$taskPackageId/$AppVersion"
 New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
 $taskHeader = "PackageIdentifier: $taskPackageId`nPackageVersion: $AppVersion"
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 $taskHeader
 DefaultLocale: pt-BR
 ManifestType: version
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.yaml") -Encoding utf8NoBOM
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 $taskHeader
 InstallerLocale: pt-BR
 MinimumOSVersion: 10.0.17763.0
 InstallerType: inno
 Scope: user
+InstallerSwitches:
+  Custom: /MERGETASKS="clipath"
 UpgradeBehavior: install
 ProductCode: '{71B03A9D-2C64-4E81-BF6D-3A90257F1C49}_is1'
 AppsAndFeaturesEntries:
@@ -39,10 +41,10 @@ Installers:
   InstallerUrl: $taskInstallerUrl
   InstallerSha256: $taskHash
 ManifestType: installer
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.installer.yaml") -Encoding utf8NoBOM
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 $taskHeader
 PackageLocale: pt-BR
 Publisher: WinProvision Store
@@ -56,7 +58,7 @@ LicenseUrl: $taskRepository/blob/main/LICENSE
 ShortDescription: Gerenciador de aplicativos para Windows com interface gráfica e linha de comando.
 ReleaseNotesUrl: $taskRepository/releases/tag/v$AppVersion
 ManifestType: defaultLocale
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.locale.pt-BR.yaml") -Encoding utf8NoBOM
 & winget validate --manifest $taskOutput --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'O WinGet rejeitou os manifestos gerados.' }
