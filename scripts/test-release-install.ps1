@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$AppVersion,
-    [Parameter(Mandatory)][string]$InstallerPath
+    [Parameter(Mandatory)][string]$InstallerPath,
+    [Parameter(Mandatory)][string]$ManifestPath
 )
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:GITHUB_REPOSITORY -ne 'winprovision-services/WinProvision-Store') { throw 'Este teste de instalação exige um runner descartável do repositório oficial.' }
@@ -9,8 +10,10 @@ $taskKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{71B03A9D-
 if (Test-Path -LiteralPath $taskKey) { throw 'O teste exige uma máquina sem instalação anterior.' }
 $taskInstaller = (Resolve-Path -LiteralPath $InstallerPath).Path
 $taskBeforePath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS="clipath"' -WindowStyle Hidden -PassThru -Wait
-if ($taskProcess.ExitCode -notin @(0,3010)) { throw "Instalação silenciosa falhou: $($taskProcess.ExitCode)" }
+& winget settings --enable LocalManifestFiles
+if ($LASTEXITCODE -ne 0) { throw 'Não foi possível habilitar manifestos locais no runner.' }
+& winget install --manifest $ManifestPath --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+if ($LASTEXITCODE -ne 0) { throw "A instalação pelo manifesto WinGet falhou: $LASTEXITCODE" }
 $taskInstalled = Get-ItemProperty -LiteralPath $taskKey
 if ($taskInstalled.DisplayName -ne 'WinProvision Store' -or $taskInstalled.Publisher -ne 'WinProvision Store' -or $taskInstalled.DisplayVersion -ne $AppVersion) { throw 'Os dados de desinstalação não correspondem ao manifesto.' }
 $taskAppDirectory = [IO.Path]::GetFullPath($taskInstalled.InstallLocation).TrimEnd('\')
@@ -37,6 +40,6 @@ $taskAfterPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ([string]$taskAfterPath -ne [string]$taskBeforePath) { throw 'O PATH do usuário não foi restaurado após a desinstalação.' }
 if (Test-Path -LiteralPath (Join-Path $taskAppDirectory 'WinProvision.Store.exe')) { throw 'O executável permaneceu após a desinstalação.' }
 $taskReport = Join-Path $taskRoot 'artifacts/winget-install-test.json'
-@{ version=$AppVersion; installerSha256=(Get-FileHash -LiteralPath $taskInstaller -Algorithm SHA256).Hash.ToLowerInvariant(); silentInstall=$true; metadata=$true; cliStarts=$true; pathAdded=$true; reinstallWithoutDuplicatePath=$true; silentUninstall=$true; pathRestored=$true } |
+@{ version=$AppVersion; installerSha256=(Get-FileHash -LiteralPath $taskInstaller -Algorithm SHA256).Hash.ToLowerInvariant(); manifestInstall=$true; silentInstall=$true; metadata=$true; cliStarts=$true; pathAdded=$true; reinstallWithoutDuplicatePath=$true; silentUninstall=$true; pathRestored=$true } |
     ConvertTo-Json | Set-Content -LiteralPath $taskReport -Encoding utf8NoBOM
 Write-Output 'Instalação, reinstalação, CLI, PATH e desinstalação conferidos.'
