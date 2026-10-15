@@ -15,10 +15,10 @@ internal static partial class Program
             WinProvision.Core.Services.AotJson.Register(UiJsonContext.Default);
             var arguments = Environment.GetCommandLineArgs();
 #if VALIDATION_HARNESS
-            Services.WinGetFactoryHelper.ConfigureMode(arguments.Contains("--probe-com")
+            WinGetFactoryHelper.ConfigureMode(arguments.Contains("--probe-com")
                 ? arguments.Append("/winget-mode=com").ToArray() : arguments);
 #else
-            Services.WinGetFactoryHelper.ConfigureMode(arguments);
+            WinGetFactoryHelper.ConfigureMode(arguments);
 #endif
             // Native AOT does not initialize COM from STAThreadAttribute.
             System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(CoInitializeEx(0, 2));

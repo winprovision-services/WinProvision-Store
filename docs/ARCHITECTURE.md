@@ -11,6 +11,7 @@ O WinProvision Store utiliza .NET 10, C# 14, WinUI 3 e CommunityToolkit.Mvvm. A 
 | Serviços do aplicativo | Arquivos, notificações, janelas e integração com o Windows |
 | Core | Modelos, coleções, histórico e funcionalidades compartilhadas |
 | CLI | Entrada de comandos, consultas, confirmações e saída de console |
+| PackageManagement | Provisionamento e integração COM compartilhados pelo aplicativo e pela CLI, sem dependência da interface |
 
 A fila organiza operações, evita duplicatas e acompanha cancelamento e conclusão. A interface recebe atualizações de estado pela thread apropriada.
 

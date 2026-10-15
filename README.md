@@ -66,6 +66,7 @@ O smoke verifica navegação, bindings e temas com dados de teste. Testes simula
 | `src/WinProvision.Store` | Interface e integração com o Windows |
 | `src/WinProvision.Core` | Modelos e funcionalidades compartilhadas do cliente |
 | `src/WinProvision.Cli` | Executável de linha de comando |
+| `src/WinProvision.PackageManagement` | Integração de pacotes compartilhada pelo app e pela CLI |
 | `tests` | Testes automatizados e validação da interface |
 | `scripts` | Compilação, execução, publicação e verificações |
 | `docs` | Documentação do projeto |

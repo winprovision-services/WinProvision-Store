@@ -16,6 +16,8 @@ A mídia offline conserva sua versão e seu inventário de integridade. Arquivos
 
 ## Linha de comando
 
+A distribuição da CLI inclui o executável e os metadados `Microsoft.Management.Deployment.winmd` na mesma pasta. A integração de pacotes é compartilhada com o aplicativo; preservar a pasta completa mantém o suporte à API COM em Native AOT.
+
 Os comandos e aliases aceitos estão em [CLI](CLI.md). Mudanças devem preservar os códigos de saída, as confirmações e o significado das opções existentes.
 
 Exportações e importações de listas usam identificadores completos. Entradas inválidas devem ser rejeitadas antes de executar o lote.

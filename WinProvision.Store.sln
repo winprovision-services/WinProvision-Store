@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{16B215AE
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinProvision.Cli", "src\WinProvision.Cli\WinProvision.Cli.csproj", "{3D21F21F-8770-479E-8C5C-B66E67396FDB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinProvision.PackageManagement", "src\WinProvision.PackageManagement\WinProvision.PackageManagement.csproj", "{2964287F-D4BD-45DA-AEAD-9AC9412312CC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -73,6 +75,18 @@ Global
 		{3D21F21F-8770-479E-8C5C-B66E67396FDB}.Release|Any CPU.Build.0 = Release|Any CPU
 		{3D21F21F-8770-479E-8C5C-B66E67396FDB}.Release|x86.ActiveCfg = Release|Any CPU
 		{3D21F21F-8770-479E-8C5C-B66E67396FDB}.Release|x86.Build.0 = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|x64.Build.0 = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Debug|x86.Build.0 = Debug|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|x64.ActiveCfg = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|x64.Build.0 = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|x86.ActiveCfg = Release|Any CPU
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +96,6 @@ Global
 		{C788A89E-A2E0-4384-935A-DA3379CD982D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E2860341-B7F4-43B0-8E4E-88EAA38B713A} = {16B215AE-3553-4CA5-B058-5E47F82F3311}
 		{3D21F21F-8770-479E-8C5C-B66E67396FDB} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{2964287F-D4BD-45DA-AEAD-9AC9412312CC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

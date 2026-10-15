@@ -64,6 +64,7 @@
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
   </ItemGroup>
   <!-- The unpackaged publish pipeline must carry the application's compiled XAML
        and PRI alongside the native runtime. Build output already contains them. -->

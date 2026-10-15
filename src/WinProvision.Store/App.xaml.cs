@@ -56,7 +56,10 @@ public partial class App : Application
         services.AddSingleton<LocalBackupService>();
         services.AddSingleton<GitHubBackupService>();
         services.AddSingleton<IAccountBackupService, AccountBackupService>();
-        services.AddSingleton<WinGetService>();
+        WinProvision.PackageManagement.PackageDiagnostics.Configure(WinProvisionLog.Write, WinProvisionLog.WriteComServerInfo);
+        services.AddSingleton<WinGetService>(p => new WinGetService(
+            p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
+            p.GetRequiredService<WingetBootstrapper>(), () => p.GetRequiredService<InstallationPreferencesService>().PreferredMethod));
         services.AddSingleton<IPackageBackend, PackageBackend>();
         services.AddSingleton<PresentationService>();
         services.AddSingleton<IPresentationService>(provider => provider.GetRequiredService<PresentationService>());

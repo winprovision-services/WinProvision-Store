@@ -7,7 +7,7 @@ using Microsoft.Management.Deployment;
 using WinProvision.Core.Models;
 using WinProvision.Core.Services;
 
-namespace WinProvision.Store.Services;
+namespace WinProvision.PackageManagement;
 
 /// <summary>
 /// Serviço para interação com o WinGet usando a API COM, com fallback para a CLI.
@@ -22,8 +22,8 @@ public sealed partial class WinGetService
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
     private readonly WingetExecutor _wingetExecutor;
     private readonly WinProvisionApiService _apiService;
-    private readonly WingetBootstrapper _bootstrapper;
-    private readonly InstallationPreferencesService _installationPreferences;
+    private readonly Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>> _provision;
+    private readonly Func<PackageInstallMethod> _preferredMethod;
     private int _postProvisionHandled;
 
     /// <summary>
@@ -63,12 +63,13 @@ public sealed partial class WinGetService
         WingetExecutor wingetExecutor,
         WinProvisionApiService apiService,
         WingetBootstrapper bootstrapper,
-        InstallationPreferencesService installationPreferences)
+        Func<PackageInstallMethod>? preferredMethod = null,
+        Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>>? provision = null)
     {
         _wingetExecutor = wingetExecutor;
         _apiService = apiService;
-        _bootstrapper = bootstrapper;
-        _installationPreferences = installationPreferences;
+        _provision = provision ?? ((log, token) => bootstrapper.EnsureOnceAsync(log, token));
+        _preferredMethod = preferredMethod ?? (() => PackageInstallMethod.Automatic);
     }
 
     /// <summary>
@@ -83,7 +84,7 @@ public sealed partial class WinGetService
     {
         try
         {
-            Action<string> logSink = onLogReceived ?? WinProvisionLog.Write;
+            Action<string> logSink = onLogReceived ?? PackageDiagnostics.Write;
             if (!await EnsureWingetProvisionedAsync(logSink, cancellationToken).ConfigureAwait(false))
             {
                 onLogReceived?.Invoke("[WinProvision] O WinGet não ficou disponível; a etapa COM será pulada e a cadeia seguirá pela WinProvision API, com CLI se puder ser provisionado.");
@@ -99,7 +100,7 @@ public sealed partial class WinGetService
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"PREPARE falhou {ex.GetType().Name}: {ex.Message}");
+            PackageDiagnostics.Write($"PREPARE falhou {ex.GetType().Name}: {ex.Message}");
             onLogReceived?.Invoke($"[WinProvision] Aquecimento do WinGet não concluído; a instalação tentará a cadeia normal. Motivo: {ex.Message}");
         }
     }
@@ -114,7 +115,7 @@ public sealed partial class WinGetService
         WingetBootstrapResult result;
         try
         {
-            result = await _bootstrapper.EnsureOnceAsync(onLog, cancellationToken).ConfigureAwait(false);
+            result = await _provision(onLog, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -122,19 +123,19 @@ public sealed partial class WinGetService
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"WINGET PROVISION exceção {ex.GetType().Name}: {ex.Message}");
+            PackageDiagnostics.Write($"WINGET PROVISION exceção {ex.GetType().Name}: {ex.Message}");
             return false;
         }
 
         if (!result.IsUsable)
         {
-            WinProvisionLog.Write($"WINGET PROVISION falhou: {result.ErrorMessage}");
+            PackageDiagnostics.Write($"WINGET PROVISION falhou: {result.ErrorMessage}");
             onLog?.Invoke(
                 "Winget indisponível e não foi possível provisioná-lo; seguindo com a API própria da WinProvision Store.");
             return false;
         }
 
-        WinProvisionLog.Write($"WINGET PROVISION status={result.Status} exe={WingetLocator.ExecutablePath}");
+        PackageDiagnostics.Write($"WINGET PROVISION status={result.Status} exe={WingetLocator.ExecutablePath}");
 
         // Só na PRIMEIRA vez que o winget aparece nesta sessão: falhas de COM anteriores
         // (App Installer ausente) deixam de valer, então a COM ganha uma tentativa limpa.
@@ -157,7 +158,7 @@ public sealed partial class WinGetService
         string query,
         CancellationToken cancellationToken = default)
     {
-        await EnsureWingetProvisionedAsync(WinProvisionLog.Write, cancellationToken).ConfigureAwait(false);
+        await EnsureWingetProvisionedAsync(PackageDiagnostics.Write, cancellationToken).ConfigureAwait(false);
 
         Task<IReadOnlyList<WinGetPackageMatch>> storeSearch =
             WinGetFactoryHelper.CliFallbackAllowed
@@ -167,7 +168,7 @@ public sealed partial class WinGetService
         IReadOnlyList<WinGetPackageMatch> results;
         if (WinGetFactoryHelper.IsComDisabled)
         {
-            WinProvisionLog.Write($"COM DESATIVADO NA SESSÃO: motivo={WinGetFactoryHelper.DisabledReason}");
+            PackageDiagnostics.Write($"COM DESATIVADO NA SESSÃO: motivo={WinGetFactoryHelper.DisabledReason}");
             results = await SearchCliFallbackAsync(query, cancellationToken).ConfigureAwait(false);
         }
         else
@@ -187,14 +188,14 @@ public sealed partial class WinGetService
                 WinGetFactoryHelper.DisableComForSession(ex);
                 if (!WinGetFactoryHelper.CliFallbackAllowed)
                 {
-                    WinProvisionLog.Write($"SEARCH COM-ONLY exception={ex}");
+                    PackageDiagnostics.Write($"SEARCH COM-ONLY exception={ex}");
                     throw;
                 }
 
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"SEARCH FALLBACK exception={ex.GetType().FullName} " +
                     $"hresult=0x{ex.HResult:X8} message=\"{ex.Message}\" stack={ex}");
-                WinProvisionLog.Write("FALLBACK PARA CLI: motivo=COM search exception");
+                PackageDiagnostics.Write("FALLBACK PARA CLI: motivo=COM search exception");
                 Trace.WriteLine($"WinGet COM search failed; falling back to winget.exe: {ex}");
                 results = await SearchCliFallbackAsync(query, cancellationToken).ConfigureAwait(false);
             }
@@ -224,7 +225,7 @@ public sealed partial class WinGetService
         string? installLocation = null,
         Action<InstallProgressUpdate>? onProgress = null,
         string source = "winget")
-        => InstallWithMethodAsync(packageId, _installationPreferences.PreferredMethod, onLogReceived,
+        => InstallWithMethodAsync(packageId, _preferredMethod(), onLogReceived,
             cancellationToken, installLocation, onProgress, source);
 
     public async Task<WingetExecutionResult> InstallWithMethodAsync(
@@ -375,7 +376,7 @@ public sealed partial class WinGetService
 
         if (WinGetFactoryHelper.IsComDisabled)
         {
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"UPDATE DISCOVERY fallback=CLI reason={WinGetFactoryHelper.DisabledReason}");
             onLogReceived?.Invoke("Verificando atualizações pelo WinGet...");
             await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
@@ -428,7 +429,7 @@ public sealed partial class WinGetService
                     var available = package.DefaultInstallVersion;
                     if (installed is null || available is null || string.IsNullOrWhiteSpace(package.Id))
                     {
-                        WinProvisionLog.Write(
+                        PackageDiagnostics.Write(
                             $"UPDATE DISCOVERY COM skip id=\"{package.Id}\" installed={installed is not null} available={available is not null}");
                         continue;
                     }
@@ -449,13 +450,13 @@ public sealed partial class WinGetService
                 {
                     // Un pacote malformado no índice local não deve esconder as atualizações
                     // dos demais; falha global ainda cai para o CLI no bloco externo.
-                    WinProvisionLog.Write(
+                    PackageDiagnostics.Write(
                         $"UPDATE DISCOVERY COM package-skip {ex.GetType().Name}: {ex.Message}");
                 }
             }
 
             WinGetFactoryHelper.ReportComSuccess();
-            WinProvisionLog.Write($"UPDATE DISCOVERY COM success count={packages.Count}");
+            PackageDiagnostics.Write($"UPDATE DISCOVERY COM success count={packages.Count}");
             if (!WinGetFactoryHelper.CliFallbackAllowed)
                 return DeduplicateUpdates(packages);
 
@@ -468,7 +469,7 @@ public sealed partial class WinGetService
                     .GetUpgradablePackagesAsync(null, cancellationToken)
                     .ConfigureAwait(false);
                 var merged = DeduplicateUpdates(packages.Concat(cliPackages));
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"UPDATE DISCOVERY MERGED com={packages.Count} cli={cliPackages.Count} total={merged.Count}");
                 return merged;
             }
@@ -478,7 +479,7 @@ public sealed partial class WinGetService
             }
             catch (Exception ex)
             {
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"UPDATE DISCOVERY CLI merge indisponível; mantendo COM {ex.GetType().Name}: {ex.Message}");
                 return DeduplicateUpdates(packages);
             }
@@ -490,8 +491,8 @@ public sealed partial class WinGetService
         catch (Exception ex)
         {
             WinGetFactoryHelper.DisableComForSession(ex);
-            WinProvisionLog.Error(ex, "WinGet.DiscoverUpdatesCOM");
-            WinProvisionLog.Write(
+            PackageDiagnostics.Error(ex, "WinGet.DiscoverUpdatesCOM");
+            PackageDiagnostics.Write(
                 $"UPDATE DISCOVERY COM failed; falling back to CLI: {ex.GetType().Name}: {ex.Message}");
             if (!WinGetFactoryHelper.CliFallbackAllowed)
                 throw new InvalidOperationException($"A descoberta COM de atualizações falhou: {ex.Message}", ex);
@@ -540,7 +541,7 @@ public sealed partial class WinGetService
         string actionLower = opKind == ComOperationKind.Install ? "instalação" : "atualização";
         bool isSystem = WinProvisionApiService.IsRunningAsSystem();
 
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"{logTag} ENTER packageId=\"{packageId}\" source={source} mode={WinGetFactoryHelper.Mode} " +
             $"identity={(isSystem ? "SYSTEM" : "User")} comDisabled={WinGetFactoryHelper.IsComDisabled} " +
             $"thread={Environment.CurrentManagedThreadId}");
@@ -578,7 +579,7 @@ public sealed partial class WinGetService
         if (WinProvisionElevationState.HasFailedThisSession)
         {
             const string bypassReason = "reelevação-falhou-antes";
-            WinProvisionLog.Write($"{logTag} BYPASS COM: motivo={bypassReason}");
+            PackageDiagnostics.Write($"{logTag} BYPASS COM: motivo={bypassReason}");
             onLogReceived?.Invoke("Pulando API COM do WinGet; usando a API própria da WinProvision Store.");
             return await RunApiThenCliFallbackAsync(
                 opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, bypassReason)
@@ -587,7 +588,7 @@ public sealed partial class WinGetService
 
         if (WinGetFactoryHelper.IsComDisabled)
         {
-            WinProvisionLog.Write($"FALLBACK PARA CLI: motivo={WinGetFactoryHelper.DisabledReason}");
+            PackageDiagnostics.Write($"FALLBACK PARA CLI: motivo={WinGetFactoryHelper.DisabledReason}");
             onLogReceived?.Invoke("API COM indisponível; usando a API própria da WinProvision Store.");
             return await RunApiThenCliFallbackAsync(
                 opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source,
@@ -626,14 +627,14 @@ public sealed partial class WinGetService
                 // próxima estratégia (lower-trust -> empacotado) antes de desistir da COM.
                 if (!state.Started && WinGetFactoryHelper.TryAdvanceStrategy(ex))
                 {
-                    WinProvisionLog.Write(
+                    PackageDiagnostics.Write(
                         $"{logTag} COM repetindo com a estratégia {WinGetFactoryHelper.CurrentStrategy} " +
                         $"(falha anterior 0x{ex.HResult:X8})");
                     continue;
                 }
 
                 WinGetFactoryHelper.DisableComForSession(ex);
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"{logTag} COM FALHOU attempt={attempt}/{MaxPreflightAttempts} started={state.Started} " +
                     $"exception={ex.GetType().FullName} hresult=0x{ex.HResult:X8} " +
                     $"message=\"{ex.Message}\" stack={ex}");
@@ -679,14 +680,14 @@ public sealed partial class WinGetService
                     !WinGetFactoryHelper.IsComDisabled)
                 {
                     var delay = TimeSpan.FromSeconds(attempt * 2);
-                    WinProvisionLog.Write($"{logTag} COM nova tentativa em {delay.TotalSeconds:0}s");
+                    PackageDiagnostics.Write($"{logTag} COM nova tentativa em {delay.TotalSeconds:0}s");
                     await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
                 if (!WinGetFactoryHelper.CliFallbackAllowed)
                 {
-                    WinProvisionLog.Write("MODO COM-ONLY: fallback para winget.exe bloqueado");
+                    PackageDiagnostics.Write("MODO COM-ONLY: fallback para winget.exe bloqueado");
                     return new WingetExecutionResult
                     {
                         Success = false,
@@ -696,7 +697,7 @@ public sealed partial class WinGetService
                     };
                 }
 
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"FALLBACK PARA API PRÓPRIA: motivo=COM {opKind} exception ({ex.GetType().Name} 0x{ex.HResult:X8})");
                 Trace.WriteLine($"WinGet COM {opKind} failed; falling back to WinProvision API: {ex}");
                 onLogReceived?.Invoke("API COM indisponível; usando a API própria da WinProvision Store.");
@@ -749,7 +750,7 @@ public sealed partial class WinGetService
         InstallerPreferences? preferences = null)
     {
         InstallerPreferences? effectivePreferences = ResolveExecutionScope(preferences);
-        WinProvisionLog.Write($"UPDATE API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
+        PackageDiagnostics.Write($"UPDATE API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
 
         WinProvisionInstallResult apiResult;
         try
@@ -775,7 +776,7 @@ public sealed partial class WinGetService
             // A API própria nunca deve derrubar o pipeline: qualquer exceção inesperada (rede
             // fora do ar, R2 indisponível, etc.) é tratada como "não resolveu" e cai pro
             // winget.exe normalmente, igual a um WinProvisionInstallOutcome de falha.
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"UPDATE API-PROPRIA exceção packageId=\"{packageId}\" {ex.GetType().Name}: {ex.Message}");
             apiResult = new WinProvisionInstallResult(
                 WinProvisionInstallOutcome.DownloadFailed, Message: ex.Message);
@@ -783,7 +784,7 @@ public sealed partial class WinGetService
 
         if (apiResult.Outcome == WinProvisionInstallOutcome.Success)
         {
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"UPDATE API-PROPRIA sucesso packageId=\"{packageId}\" exitCode={apiResult.ExitCode}");
             onLogReceived?.Invoke("Atualização concluída via API própria da WinProvision Store.");
             return new WingetExecutionResult
@@ -806,7 +807,7 @@ public sealed partial class WinGetService
             };
         }
 
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"UPDATE API-PROPRIA falhou packageId=\"{packageId}\" outcome={apiResult.Outcome} " +
             $"msg=\"{apiResult.Message}\" — caindo pro winget.exe (nível 3)");
         onLogReceived?.Invoke(
@@ -970,13 +971,13 @@ public sealed partial class WinGetService
             var captured = await readers.ConfigureAwait(false);
             output = captured[0];
             if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(captured[1]))
-                WinProvisionLog.Write($"WinGet search failed: {captured[1]}");
+                PackageDiagnostics.Write($"WinGet search failed: {captured[1]}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
             catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
-            { WinProvisionLog.Error(exception, "StopWingetSearch"); }
+            { PackageDiagnostics.Error(exception, "StopWingetSearch"); }
             await process.WaitForExitAsync().ConfigureAwait(false);
             throw;
         }
@@ -1088,7 +1089,7 @@ public sealed partial class WinGetService
         // durante updates, o que deixava o log de atualização com linhas do tipo
         // "INSTALL COM stage=install-dispatched" (confuso: parecia instalação, era update).
         string comTag = opKind == ComOperationKind.Install ? "INSTALL COM" : "UPDATE COM";
-        WinProvisionLog.Write($"{comTag} stage=begin");
+        PackageDiagnostics.Write($"{comTag} stage=begin");
 
         // Callbacks da UI nunca devem derrubar o pipeline COM (uma exceção aqui viraria "falha da COM").
         var userOnProgress = onProgress;
@@ -1097,7 +1098,7 @@ public sealed partial class WinGetService
             onProgress = update =>
             {
                 try { userOnProgress(update); }
-                catch (Exception ex) { WinProvisionLog.Write($"{comTag} onProgress lançou {ex.GetType().Name}: {ex.Message}"); }
+                catch (Exception ex) { PackageDiagnostics.Write($"{comTag} onProgress lançou {ex.GetType().Name}: {ex.Message}"); }
             };
         }
 
@@ -1107,12 +1108,12 @@ public sealed partial class WinGetService
             onLogReceived = line =>
             {
                 try { userOnLog(line); }
-                catch (Exception ex) { WinProvisionLog.Write($"{comTag} onLog lançou {ex.GetType().Name}: {ex.Message}"); }
+                catch (Exception ex) { PackageDiagnostics.Write($"{comTag} onLog lançou {ex.GetType().Name}: {ex.Message}"); }
             };
         }
         Trace.WriteLine("WinGet COM install: creating resilient PackageManager.");
         var packageManager = WinGetFactoryHelper.CreateResilientPackageManager();
-        WinProvisionLog.Write($"{comTag} stage=packageManager-created elapsed={stopwatch.Elapsed}");
+        PackageDiagnostics.Write($"{comTag} stage=packageManager-created elapsed={stopwatch.Elapsed}");
         Trace.WriteLine($"WinGet COM install: PackageManager created in {stopwatch.Elapsed}.");
         // OpenWindowsCatalog = fonte "winget". Apps da Microsoft Store (source=msstore) ficam no
         // catálogo MicrosoftStore; se não achar lá, ainda tenta o catálogo winget.
@@ -1131,7 +1132,7 @@ public sealed partial class WinGetService
             var connectStarted = stopwatch.Elapsed;
             var connectResult = await packageCatalogReference.ConnectAsync()
                 .AsTask(cancellationToken).ConfigureAwait(false);
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"{comTag} stage=connect-completed catalog={kind} status={connectResult.Status} " +
                 $"elapsed={stopwatch.Elapsed} connect={stopwatch.Elapsed - connectStarted}");
             if (connectResult.Status != ConnectResultStatus.Ok || connectResult.PackageCatalog is null)
@@ -1155,7 +1156,7 @@ public sealed partial class WinGetService
             var findResult = await packageCatalog.FindPackagesAsync(findOptions)
                 .AsTask(cancellationToken).ConfigureAwait(false);
             matchedPackage = IndexedCollectionReader.Read(findResult.Matches, cancellationToken).FirstOrDefault()?.CatalogPackage;
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"{comTag} stage=package-lookup-completed catalog={kind} found={matchedPackage is not null} " +
                 $"elapsed={stopwatch.Elapsed} lookup={stopwatch.Elapsed - findStarted}");
         }
@@ -1229,7 +1230,7 @@ public sealed partial class WinGetService
                 else if (scope == "user")
                     installOptions.PackageInstallScope = PackageInstallScope.User;
 
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"{comTag} installer-metadata scope={scope ?? "default"} arch={architecture ?? "auto"} " +
                     $"elevation={(requiresElevation ? "required" : elevationProhibited ? "prohibited" : "default")}");
                 onLogReceived?.Invoke(requiresElevation
@@ -1251,20 +1252,20 @@ public sealed partial class WinGetService
             }
             else
             {
-                WinProvisionLog.Write($"{comTag} installer-metadata unavailable; WinGet will select scope/architecture");
+                PackageDiagnostics.Write($"{comTag} installer-metadata unavailable; WinGet will select scope/architecture");
             }
         }
         catch (Exception ex)
         {
             // A pré-consulta nunca deve impedir a instalação. Se o metadado COM estiver
             // ausente ou inconsistente, o WinGet escolhe o instalador e seus requisitos.
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"{comTag} installer-metadata unavailable {ex.GetType().Name}: {ex.Message}");
         }
 
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
         attemptState.Started = true;
-        WinProvisionLog.Write($"{comTag} stage=install-dispatched elapsed={stopwatch.Elapsed}");
+        PackageDiagnostics.Write($"{comTag} stage=install-dispatched elapsed={stopwatch.Elapsed}");
         var installOperation = opKind == ComOperationKind.Install
             ? packageManager.InstallPackageAsync(matchedPackage, installOptions)
             : packageManager.UpgradePackageAsync(matchedPackage, installOptions);
@@ -1298,7 +1299,7 @@ public sealed partial class WinGetService
 
             if (Interlocked.Exchange(ref firstProgress, 1) == 0)
             {
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"{comTag} stage=first-progress state={state} " +
                     $"download={downloadProgress} install={installationProgress} " +
                     $"dispatcher=false elapsed={stopwatch.Elapsed}");
@@ -1315,7 +1316,7 @@ public sealed partial class WinGetService
                 (percentForLog >= 0 && percentForLog / 10 > lastLoggedPercent / 10))
             {
                 Interlocked.Exchange(ref lastLoggedPercent, percentForLog);
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"{comTag} progress callback={callbackNumber} state={state} " +
                     $"download={downloadProgress} install={installationProgress} " +
                     $"dispatcher=false elapsed={stopwatch.Elapsed}");
@@ -1396,7 +1397,7 @@ public sealed partial class WinGetService
             () => Stopwatch.GetElapsedTime(Volatile.Read(ref lastProgress)),
             () => Interlocked.Exchange(ref watchdogTimedOut, 1),
             stopwatch);
-        WinProvisionLog.WriteComServerInfo();
+        PackageDiagnostics.WriteComServerInfo();
         var heartbeat = MonitorComHeartbeatAsync(
             comTag,
             heartbeatCts.Token,
@@ -1425,7 +1426,7 @@ public sealed partial class WinGetService
         }
 
         var output = $"Resultado da API COM: {installResult.Status}.";
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"{comTag} stage=result status={installResult.Status} " +
             $"reboot={installResult.RebootRequired} elapsed={stopwatch.Elapsed}");
         Trace.WriteLine($"WinGet COM install result: {installResult.Status}.");
@@ -1439,7 +1440,7 @@ public sealed partial class WinGetService
         {
             int installerErrorCode = unchecked((int)installResult.InstallerErrorCode);
             int extendedErrorCode = installResult.ExtendedErrorCode?.HResult ?? 0;
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"{comTag} failure status={installResult.Status} " +
                 $"installerErrorCode=0x{installerErrorCode:X8} ({installerErrorCode}) " +
                 $"extendedErrorCode=0x{extendedErrorCode:X8} ({extendedErrorCode})");
@@ -1464,7 +1465,7 @@ public sealed partial class WinGetService
                     ? "COM-requer-elevação"
                     : $"COM-status-{installResult.Status}(0x{extendedErrorCode:X8})";
 
-                WinProvisionLog.Write($"FALLBACK PARA API PRÓPRIA: motivo={reason}");
+                PackageDiagnostics.Write($"FALLBACK PARA API PRÓPRIA: motivo={reason}");
                 string actionLower = opKind == ComOperationKind.Install ? "instalação" : "atualização";
                 onLogReceived?.Invoke(requiresElevation
                     ? $"A {actionLower} requer privilégios de administrador; usando a API própria da WinProvision Store."
@@ -1556,7 +1557,7 @@ public sealed partial class WinGetService
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken)
                     .ConfigureAwait(false);
                 var progress = getProgress();
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"{comTag} heartbeat state={progress.State} " +
                     $"download={progress.Download} install={progress.Install} " +
                     $"sinceLastCallback={elapsedSinceProgress()} elapsed={stopwatch.Elapsed}");
@@ -1597,7 +1598,7 @@ public sealed partial class WinGetService
         }
         catch (Exception recoveryException)
         {
-            WinProvision.Store.Services.WinProvisionLog.Warning(recoveryException, "WinGetService.ReadInstallerArchitecture");
+            PackageDiagnostics.Warning(recoveryException, "WinGetService.ReadInstallerArchitecture");
 
             return null;
         }
@@ -1628,7 +1629,7 @@ public sealed partial class WinGetService
         InstallerPreferences? preferences = null)
     {
         InstallerPreferences? effectivePreferences = ResolveExecutionScope(preferences);
-        WinProvisionLog.Write($"INSTALL API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
+        PackageDiagnostics.Write($"INSTALL API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
 
         WinProvisionInstallResult apiResult;
         try
@@ -1653,7 +1654,7 @@ public sealed partial class WinGetService
         {
             // Uma exceção inesperada pode ter ocorrido depois de iniciar o instalador.
             // Como o estado é desconhecido, encerra sem executar o pacote por outro backend.
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"INSTALL API-PROPRIA exceção packageId=\"{packageId}\" {ex.GetType().Name}: {ex.Message}");
             apiResult = new WinProvisionInstallResult(
                 WinProvisionInstallOutcome.InstallProcessFailed,
@@ -1663,7 +1664,7 @@ public sealed partial class WinGetService
 
         if (apiResult.Outcome == WinProvisionInstallOutcome.Success)
         {
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"INSTALL API-PROPRIA sucesso packageId=\"{packageId}\" exitCode={apiResult.ExitCode}");
             onLogReceived?.Invoke("Instalação concluída via API própria da WinProvision Store.");
             return new WingetExecutionResult
@@ -1690,7 +1691,7 @@ public sealed partial class WinGetService
         {
             string message = apiResult.Message
                 ?? "O instalador da WinProvision API foi iniciado e falhou; não será iniciado outro backend automaticamente.";
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"INSTALL API-PROPRIA falhou após iniciar instalador packageId=\"{packageId}\" outcome={apiResult.Outcome} " +
                 $"exitCode={apiResult.ExitCode?.ToString() ?? "indisponível"}; sem fallback para CLI");
             onLogReceived?.Invoke(message);
@@ -1705,7 +1706,7 @@ public sealed partial class WinGetService
             };
         }
 
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"INSTALL API-PROPRIA falhou packageId=\"{packageId}\" outcome={apiResult.Outcome} " +
             $"msg=\"{apiResult.Message}\" — caindo pro winget.exe (nível 3)");
         onLogReceived?.Invoke(

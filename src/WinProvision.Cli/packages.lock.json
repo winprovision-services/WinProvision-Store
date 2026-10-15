@@ -1,7 +1,13 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0-windows7.0": {
+    "net10.0-windows10.0.26100": {
+      "Microsoft.WindowsPackageManager.ComInterop": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "O2KWbqShmCi9KZgmweDo2DxPFDskM8IDtXkhnVt1d/lNL22eBqPAM69YobFLbMUB+cdTQrApQJx+qhQRXkiltw=="
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -59,6 +65,14 @@
           "System.Drawing.Common": "[10.0.12, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
           "WixToolset.Dtf.Compression.Cab": "[5.0.2, )"
+        }
+      },
+      "winprovision.packagemanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Windows.CsWinRT": "[2.3.1, )",
+          "Microsoft.WindowsPackageManager.ComInterop": "[1.29.380, )",
+          "WinProvision.Core": "[1.0.0, )"
         }
       }
     }

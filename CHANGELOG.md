@@ -2,6 +2,8 @@
 
 ## Em desenvolvimento
 
+- CLI com provisionamento do WinGet sob demanda e serviço compartilhado de instalação: COM, API própria e WinGet CLI.
+
 - Navegador da página Sobre com perfil de dados no usuário e opção para abrir o site no navegador padrão.
 
 - Interface WinUI 3 com temas claro e escuro, navegação por teclado e painel de operações.

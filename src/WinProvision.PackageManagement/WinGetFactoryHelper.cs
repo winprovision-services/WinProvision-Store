@@ -5,7 +5,7 @@ using System.Security.Principal;
 using Microsoft.Management.Deployment;
 using WinRT;
 
-namespace WinProvision.Store.Services;
+namespace WinProvision.PackageManagement;
 
 // Ativação resiliente do PackageManager do WinGet, incluindo o caso de
 // processo elevado sem MSIX (RegFree-WinRT), que crasha tanto no
@@ -140,7 +140,7 @@ public static partial class WinGetFactoryHelper
             }
         }
 
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"WINGET MODE={_mode} (auto=COM com fallback CLI, com=só COM, cli=só winget.exe) " +
             $"estratégias-COM={string.Join(">", _strategies)}");
     }
@@ -216,7 +216,7 @@ public static partial class WinGetFactoryHelper
 
             var failed = _strategies[_strategyIndex];
             _strategyIndex++;
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"COM ESTRATÉGIA falhou: {failed} HRESULT=0x{exception.HResult:X8} " +
                 $"tipo={exception.GetType().FullName} mensagem=\"{exception.Message}\"; " +
                 $"tentando {_strategies[_strategyIndex]}");
@@ -259,7 +259,7 @@ public static partial class WinGetFactoryHelper
             ref _breakerOpenUntilTicks,
             Environment.TickCount64 + (long)cooldown.TotalMilliseconds);
         Volatile.Write(ref _disabledReason, reason);
-        WinProvisionLog.Write(
+        PackageDiagnostics.Write(
             $"COM INDISPONÍVEL: motivo={reason} falhas-consecutivas={failures} " +
             $"nova-tentativa-em={cooldown.TotalSeconds:0}s");
     }
@@ -283,7 +283,7 @@ public static partial class WinGetFactoryHelper
             }
         }
 
-        WinProvisionLog.Write($"COM RESET: {reason}");
+        PackageDiagnostics.Write($"COM RESET: {reason}");
     }
 
     /// <summary>Chamado após qualquer ativação/conexão COM bem-sucedida: zera o breaker.</summary>
@@ -294,7 +294,7 @@ public static partial class WinGetFactoryHelper
             if (!_strategyConfirmed)
             {
                 _strategyConfirmed = true;
-                WinProvisionLog.Write($"COM ESTRATÉGIA confirmada: {_strategies[_strategyIndex]}");
+                PackageDiagnostics.Write($"COM ESTRATÉGIA confirmada: {_strategies[_strategyIndex]}");
             }
         }
 
@@ -302,7 +302,7 @@ public static partial class WinGetFactoryHelper
         var wasOpen = Interlocked.Exchange(ref _breakerOpenUntilTicks, 0) != 0;
         if (hadFailures || wasOpen)
         {
-            WinProvisionLog.Write("COM RECUPERADA: ativação bem-sucedida; voltando a usar a API COM");
+            PackageDiagnostics.Write("COM RECUPERADA: ativação bem-sucedida; voltando a usar a API COM");
         }
     }
 
@@ -341,7 +341,7 @@ public static partial class WinGetFactoryHelper
                 timeout.CancelAfter(TimeSpan.FromSeconds(90));
                 var connect = await reference.ConnectAsync().AsTask(timeout.Token).ConfigureAwait(false);
 
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"COM PROBE status={connect.Status} strategy={CurrentStrategy} " +
                     $"elapsed={stopwatch.Elapsed} mode={_mode}");
                 onLogReceived?.Invoke($"[WinProvision] Conexão com catálogo WinGet: {connect.Status} ({stopwatch.Elapsed.TotalSeconds:0.0}s).");
@@ -362,7 +362,7 @@ public static partial class WinGetFactoryHelper
                         storeTimeout.CancelAfter(TimeSpan.FromSeconds(90));
                         var storeConnect = await storeReference.ConnectAsync()
                             .AsTask(storeTimeout.Token).ConfigureAwait(false);
-                        WinProvisionLog.Write(
+                        PackageDiagnostics.Write(
                             $"COM PROBE store-catalog status={storeConnect.Status} elapsed={storeWatch.Elapsed}");
                         onLogReceived?.Invoke(
                             $"[WinProvision] Conexão com catálogo Microsoft Store: {storeConnect.Status} ({storeWatch.Elapsed.TotalSeconds:0.0}s).");
@@ -375,14 +375,14 @@ public static partial class WinGetFactoryHelper
                     {
                         // O catálogo da Store é opcional para pacotes WinGet comuns; uma
                         // falha aqui não invalida a conexão COM principal.
-                        WinProvisionLog.Write(
+                        PackageDiagnostics.Write(
                             $"COM PROBE store-catalog falhou {ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message}");
                         onLogReceived?.Invoke(
                             $"[WinProvision] Catálogo Microsoft Store não aquecido; ele será tentado durante a instalação ({ex.Message}).");
                     }
                 }
 
-                WinProvisionLog.WriteComServerInfo();
+                PackageDiagnostics.WriteComServerInfo();
                 return;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -396,7 +396,7 @@ public static partial class WinGetFactoryHelper
             catch (Exception ex)
             {
                 DisableComForSession(ex);
-                WinProvisionLog.Write(
+                PackageDiagnostics.Write(
                     $"COM PROBE falhou strategy={CurrentStrategy} HRESULT=0x{ex.HResult:X8} " +
                     $"elapsed={stopwatch.Elapsed} mode={_mode} exception={ex}");
                 return;
@@ -453,24 +453,24 @@ public static partial class WinGetFactoryHelper
                 ctx |= CLSCTX.CLSCTX_ALLOW_LOWER_TRUST_REGISTRATION;
             }
 
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"COM ACTIVATION type={typeof(T).Name} strategy={strategy} " +
                 $"CLSID={clsid} IID={iid} CLSCTX=0x{(uint)ctx:X8}");
             int hr = CoCreateInstance(ref clsid, IntPtr.Zero, ctx, ref iid, out pUnknown);
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"COM ACTIVATION type={typeof(T).Name} strategy={strategy} CoCreateInstance " +
                 $"HRESULT=0x{hr:X8} elapsed={stopwatch.Elapsed}");
             Marshal.ThrowExceptionForHR(hr);
 
             var instance = MarshalGeneric<T>.FromAbi(pUnknown);
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"COM ACTIVATION type={typeof(T).Name} strategy={strategy} FromAbi=success " +
                 $"elapsed={stopwatch.Elapsed}");
             return instance;
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write(
+            PackageDiagnostics.Write(
                 $"COM ACTIVATION type={typeof(T).Name} strategy={strategy} failed " +
                 $"HRESULT=0x{ex.HResult:X8} elapsed={stopwatch.Elapsed} exception={ex}");
             throw;
