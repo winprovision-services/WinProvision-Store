@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Seu Windows, do seu jeito. Descubra aplicativos, organize coleções, acompanhe atualizações e configure o Office com o WinProvision Store.">
+  <meta name="theme-color" content="#201e24">
+  <meta property="og:title" content="WinProvision Store — seu Windows, do seu jeito">
+  <meta property="og:description" content="Uma casa para seus aplicativos. Conheça o WinProvision Store para Windows.">
+  <meta property="og:image" content="https://winprovision-services.github.io/WinProvision-Store/assets/screenshots/inicio-escuro.png">
+  <title>WinProvision Store — Seu Windows, do seu jeito</title>
+  <link rel="icon" href="assets/icons/winprovision-symbol-color-256.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+  <div class="windowbar"><span class="window-brand"><img src="assets/icons/winprovision-symbol-color-256.png" alt="" width="22" height="22"> WinProvision Store</span><span class="window-caption">Seu próximo começo no Windows</span><button id="theme" aria-label="Ativar tema claro" title="Alternar tema">◐</button></div>
+  <aside class="sidebar" aria-label="Navegação principal">
+    <a class="brand" href="#inicio" aria-label="WinProvision Store, início"><img class="logo-dark" src="assets/icons/winprovision-horizontal-white-512.png" alt="WinProvision Store"><img class="logo-light" src="assets/icons/winprovision-horizontal-mono-246bd9-512.png" alt="WinProvision Store"></a>
+    <nav>
+      <a href="#inicio" class="active"><span aria-hidden="true">⌂</span>Descobrir</a>
+      <a href="#experiencia"><span aria-hidden="true">▦</span>Por dentro do app</a>
+      <a href="#demonstracao"><span aria-hidden="true">▷</span>Em movimento</a>
+      <a href="#terminal"><span aria-hidden="true">›_</span>Linha de comando</a>
+      <a href="#baixar"><span aria-hidden="true">↓</span>Instalar</a>
+    </nav>
+    <div class="sidebar-bottom"><span class="side-note">Feito para o Windows.<br>Aberto para você.</span><a href="https://github.com/winprovision-services/WinProvision-Store">Código no GitHub <span aria-hidden="true">↗</span></a><a href="#privacidade">Dados e privacidade</a></div>
+  </aside>
+  <main id="conteudo">
+    <section class="hero" id="inicio">
+      <div class="eyebrow"><span class="live-dot"></span> WINPROVISION STORE · PARA WINDOWS</div>
+      <div class="hero-heading"><h1>Seu Windows.<br><span>Do seu jeito.</span></h1><p>Descubra o próximo aplicativo.<br> Cuide dos que já fazem parte do seu dia.<br> Tudo em um lugar que parece sua casa.</p></div>
+      <div class="hero-actions"><a class="button primary" href="https://github.com/winprovision-services/WinProvision-Store/releases/latest/download/WinProvision.Store-Setup.exe">↓ Baixar para Windows</a><a class="button secondary" href="#experiencia">Conhecer o aplicativo <span aria-hidden="true">↘</span></a><span class="platform">Windows 10 / 11 · x64 · Código aberto</span></div>
+      <div class="app-preview"><div class="preview-bar"><span><i></i> UMA JANELA PARA SEUS APLICATIVOS</span><a href="#experiencia">Explore as telas ↗</a></div><img src="assets/screenshots/inicio-escuro.png" alt="Tela Descobrir do WinProvision Store, com destaques e aplicativos do catálogo" width="1919" height="1033" fetchpriority="high"><div class="preview-caption"><span>01 / DESCOBRIR</span><span>O próximo aplicativo começa aqui.</span></div></div>
+      <div class="principles"><div><span>01</span><strong>Descubra</strong><p>Pesquise por nome e conheça os detalhes antes de instalar.</p></div><div><span>02</span><strong>Organize</strong><p>Reúna seus aplicativos em coleções que acompanham sua rotina.</p></div><div><span>03</span><strong>Cuide</strong><p>Veja atualizações, gerencie instalações e acompanhe cada operação.</p></div></div>
+    </section>
+    <section id="experiencia" class="experience">
+      <div class="section-heading"><div><span class="eyebrow">UM LUGAR PARA CADA COISA</span><h2>Familiar desde<br>a primeira janela.</h2></div><p>A linguagem visual do Windows, com espaço para descobrir, escolher e organizar. Selecione uma tela para conhecer.</p></div>
+      <div class="feature-tabs" role="tablist" aria-label="Telas do aplicativo"><button role="tab" id="tab-descobrir" aria-selected="true" aria-controls="screen-panel" data-screen="descobrir">⌂ Descobrir</button><button role="tab" id="tab-atualizacoes" aria-selected="false" tabindex="-1" aria-controls="screen-panel" data-screen="atualizacoes">↻ Atualizações</button><button role="tab" id="tab-instalados" aria-selected="false" tabindex="-1" aria-controls="screen-panel" data-screen="instalados">▤ Instalados</button><button role="tab" id="tab-colecoes" aria-selected="false" tabindex="-1" aria-controls="screen-panel" data-screen="colecoes">▦ Coleções</button><button role="tab" id="tab-office" aria-selected="false" tabindex="-1" aria-controls="screen-panel" data-screen="office">▧ Office</button></div>
+      <div id="screen-panel" role="tabpanel" aria-labelledby="tab-descobrir"><div class="screen-description" aria-live="polite"><h3 id="screen-title">Encontre seu próximo favorito.</h3><p id="screen-copy">Destaques, categorias e pesquisa em uma página feita para explorar aplicativos e consultar seus detalhes.</p><button id="expand-screen" class="text-button">Ampliar captura ↗</button></div><div class="screen-image"><img id="feature-image" src="assets/screenshots/inicio-escuro.png" alt="Tela Descobrir do WinProvision Store" loading="lazy" width="1919" height="1033"></div></div>
+    </section>
+    <section id="demonstracao" class="motion-section"><div class="section-heading"><div><span class="eyebrow">MENOS DISTÂNCIA ENTRE VOCÊ E O QUE PRECISA</span><h2>Veja acontecer.</h2></div><p>Conheça o WinProvision em movimento. Uma demonstração para sentir o ritmo da experiência.</p></div><div class="video-frame"><video controls playsinline preload="none" poster="assets/screenshots/inicio-escuro.png" aria-label="Demonstração do WinProvision Store"><source src="assets/demo.mp4" type="video/mp4">Seu navegador não reproduz este vídeo. <a href="assets/demo.mp4">Baixar demonstração</a>.</video></div><p class="media-note">Vídeo de demonstração. O conteúdo e a aparência podem variar conforme a versão.</p></section>
+    <section id="terminal" class="terminal-section"><div class="terminal-copy"><span class="eyebrow">A MESMA IDEIA. OUTRO CAMINHO.</span><h2>Prefere digitar?<br><span>Está em casa.</span></h2><p>Pesquise, instale e atualize pelo terminal. Exporte sua lista e leve sua seleção para a próxima configuração.</p><a class="text-link" href="https://github.com/winprovision-services/WinProvision-Store/blob/main/docs/CLI.md">Conhecer todos os comandos ↗</a></div><div class="terminal"><div class="terminal-title"><span>›_ &nbsp; PowerShell</span><span>WinProvision CLI</span></div><div class="command-tabs" aria-label="Exemplos de comandos"><button class="selected" data-command="search">Pesquisar</button><button data-command="install">Instalar</button><button data-command="upgrade">Atualizar</button><button data-command="export">Exportar</button></div><div class="command-line"><span aria-hidden="true">PS &gt;</span> <code id="command">winprovision search Chrome</code></div><div class="terminal-bottom"><span id="command-hint">Encontre um aplicativo pelo nome.</span><button id="copy-command" aria-label="Copiar comando">Copiar</button></div><img class="terminal-shot" src="assets/screenshots/Demo-Terminal.png" alt="Captura da linha de comando do WinProvision" loading="lazy"></div></section>
+    <section class="download" id="baixar"><img src="assets/icons/winprovision-symbol-color-256.png" alt="" width="80" height="80" loading="lazy"><span class="eyebrow">SEU PRÓXIMO COMEÇO</span><h2>Uma casa nova<br>para seus aplicativos.</h2><p>Instale o WinProvision Store e comece com o que importa para você.</p><a class="button primary" href="https://github.com/winprovision-services/WinProvision-Store/releases/latest/download/WinProvision.Store-Setup.exe">↓ Baixar para Windows</a><div class="download-links"><a href="https://github.com/winprovision-services/WinProvision-Store/releases/latest">Versões e pacote portátil ↗</a><span>Windows 10 / 11 · x64</span></div><p class="install-note">O instalador inclui os componentes do aplicativo. Alguns programas gerenciados podem solicitar permissão administrativa ou interação adicional.</p></section>
+    <section class="privacy" id="privacidade"><div><span class="eyebrow">CLAREZA TAMBÉM FAZ PARTE</span><h2>Seus dados, com contexto.</h2></div><div><p>O aplicativo armazena preferências, coleções, histórico, logs e caches no computador. Consultas e downloads comunicam dados necessários aos serviços acessados. A conta GitHub e a sincronização de coleções são opcionais.</p><a class="text-link" href="https://github.com/winprovision-services/WinProvision-Store/blob/main/PRIVACY.md">Ler a política de privacidade ↗</a></div></section>
+    <footer><img class="logo-dark" src="assets/icons/winprovision-horizontal-white-512.png" alt="WinProvision Store" width="210"><img class="logo-light" src="assets/icons/winprovision-horizontal-mono-246bd9-512.png" alt="WinProvision Store" width="210"><div><a href="https://github.com/winprovision-services/WinProvision-Store/issues">Suporte</a><a href="https://github.com/winprovision-services/WinProvision-Store/blob/main/LICENSE">Licença MIT</a><a href="https://github.com/winprovision-services/WinProvision-Store">GitHub ↗</a></div><p>Desenvolvido com auxílio de inteligência artificial. Pode conter erros. Encontrou um problema? Conte nas issues do projeto.</p></footer>
+  </main>
+  <dialog id="lightbox" aria-label="Captura ampliada"><button id="close-lightbox" aria-label="Fechar captura ampliada">Fechar ×</button><img id="lightbox-image" alt=""></dialog>
+</body>
+</html>

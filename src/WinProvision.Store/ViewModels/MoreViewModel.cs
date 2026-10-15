@@ -13,7 +13,7 @@ namespace WinProvision.Store.ViewModels;
 [WinRT.GeneratedBindableCustomProperty]
 public sealed partial class MoreViewModel : ObservableObject, IDisposable
 {
-    public static readonly Uri ProjectUri = new("https://gabrielsilvati.github.io/WinProvision-Store/");
+    public static readonly Uri ProjectUri = new("https://winprovision-services.github.io/WinProvision-Store/");
     private const int MaxDisplayedLogLines = 100;
     private readonly WingetBootstrapper _winget;
     private readonly WinProvisionApiService _catalogApi;
