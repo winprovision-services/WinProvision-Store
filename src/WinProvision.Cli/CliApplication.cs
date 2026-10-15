@@ -12,6 +12,10 @@ public interface ICliPackageBackend
     Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token);
     Task<string> DetailsAsync(string id, string source, CancellationToken token);
     Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token);
+    Task<WingetExecutionResult> ExecuteProfileAsync(ProfileAppRef app, Action<string> log, CancellationToken token)
+        => app.OfficeOptions is null && app.PinnedVersion is null ? ExecuteAsync(true, new() { Id = app.Id, Name = app.Name ?? app.Id, Source = app.Source! }, log, token) : throw new NotSupportedException("Este serviço não executa opções de perfil.");
+    Task<WingetExecutionResult> DownloadProfileAsync(ProfileAppRef app, string? directory, Action<string> log, CancellationToken token)
+        => app.OfficeOptions is null && app.PinnedVersion is null ? DownloadAsync(new() { Id = app.Id, Name = app.Name ?? app.Id, Source = app.Source! }, directory, log, token) : throw new NotSupportedException("Este serviço não baixa opções de perfil.");
     Task<WingetExecutionResult> DownloadAsync(UpgradablePackage package, string? directory, Action<string> log, CancellationToken token)
         => throw new NotSupportedException();
     Task<WingetExecutionResult> ExportAsync(string path, Action<string> log, CancellationToken token)
@@ -22,46 +26,6 @@ public interface ICliPackageBackend
         => throw new NotSupportedException();
     Task<WingetExecutionResult> InstallOfficeAsync(Action<string> log, CancellationToken token)
         => throw new NotSupportedException();
-}
-
-public sealed class WingetCliBackend : ICliPackageBackend
-{
-    private readonly WingetExecutor _executor = new();
-    public async Task<WingetExecutionResult> InstallOfficeAsync(Action<string> log, CancellationToken token)
-    {
-        using var service = new WinProvision.Core.Services.Office.OfficeDeploymentToolService(_executor);
-        var result = await service.RunConfigureDetailedAsync(WinProvision.Core.Services.Office.OfficeCliDownloadService.DefaultInstallRequest(), log, token);
-        return new() { Success = result.Success, ExitCode = result.ExitCode, Output = result.Output, InstallerStarted = result.ProcessStarted };
-    }
-    public async Task<string> OfficeAsync(bool offline, Action<string> log, CancellationToken token)
-    {
-        await using var api = new WinProvisionApiService();
-        var service = new WinProvision.Core.Services.Office.OfficeCliDownloadService(new WinProvision.Core.Services.Profile.OfflineOfficeSource(api));
-        return await service.DownloadAsync(offline, WinProvision.Core.Services.Office.OfficeCliDownloadService.GetDownloadsFolder(),
-            new CliOfficeProgress(log), token);
-    }
-    private sealed class CliOfficeProgress(Action<string> log) : IProgress<OfflineCollectionProgress>
-    {
-        public void Report(OfflineCollectionProgress value) => log(value.Message);
-    }
-    public Task<WingetExecutionResult> DownloadAsync(UpgradablePackage package, string? directory, Action<string> log, CancellationToken token)
-        => _executor.DownloadPackageAsync(package.Id, package.Source, directory, log, token);
-    public Task<WingetExecutionResult> ExportAsync(string path, Action<string> log, CancellationToken token)
-        => _executor.ExportPackagesAsync(path, log, token);
-    public Task<WingetExecutionResult> UninstallAsync(string id, string? source, Action<string> log, CancellationToken token)
-        => _executor.UninstallExactPackageAsync(id, source, log, token);
-    public Task<List<UpgradablePackage>> SearchAsync(InteractiveCliRequest request, CancellationToken token)
-        => _executor.SearchPackagesAsync(request.Id ?? request.Query, request.Source ?? "winget",
-            request.Exact || request.Id is not null, request.Id is not null, token);
-    public Task<List<UpgradablePackage>> ListAsync(string? source, CancellationToken token)
-        => _executor.ListInstalledPackagesAsync(token, source);
-    public Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token)
-        => _executor.GetUpgradablePackagesAsync(log, token);
-    public Task<string> DetailsAsync(string id, string source, CancellationToken token)
-        => _executor.GetPackageDetailsAsync(id, source, token);
-    public Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
-        => install ? _executor.InstallAppAsync(package.Id, log, token, source: package.Source)
-            : _executor.UpdateAppAsync(package.Id, log, token, source: package.Source);
 }
 
 public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version)
@@ -240,9 +204,9 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         "update" => "Uso: winprovision upgrade [nome] [--id ID] [--source winget|msstore] [--json|--no-input]\n     winprovision upgrade --all\nSem opções: menu com índices. --all seleciona todas e pede confirmação. Alias: update.",
         "install" => "Uso: winprovision install --id <ID> [--source winget|msstore]\n     winprovision install --office\nConfirmação obrigatória. --office instala Microsoft 365 Família com o XML padrão. Use search para encontrar IDs de pacotes.",
         "show" => "Uso: winprovision show --id <ID> [--source winget|msstore]\nExibe detalhes sem instalar.",
-        "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: Downloads do usuário, definido pelo WinGet.",
+        "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: Downloads do usuário.",
         "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato após confirmação. Use list para encontrar o ID.",
-        "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista após confirmação. --download apenas baixa. -i significa --input. Aceita export WinGet ou array com id e source. Usa versões atuais. Máximo: 2 MiB e 1000 pacotes; URLs diretas, sem redirecionamentos.",
+        "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista após confirmação. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
         "export" => "Uso: winprovision export [--output arquivo.json]\nExporta os pacotes reconhecidos pelo WinGet em formato compatível com import. Padrão: winprovision-apps.json no diretório atual. Não sobrescreve arquivos.",
         _ => """
             WinProvision Store — CLI

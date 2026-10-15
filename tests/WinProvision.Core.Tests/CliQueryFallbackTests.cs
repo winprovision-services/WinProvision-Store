@@ -1,4 +1,4 @@
-using WinProvision.Cli;
+using WinProvision.PackageManagement;
 using Xunit;
 
 namespace WinProvision.Core.Tests;
@@ -9,7 +9,7 @@ public class CliQueryFallbackTests
     public async Task ComFailureUsesOwnCatalogBeforeCli()
     {
         var calls = new List<string>();
-        var result = await CliQueryFallback.RunAsync<int>([
+        var result = await PackageQueryFallback.RunAsync<int>([
             _ => { calls.Add("com"); throw new InvalidOperationException("Sem COM"); },
             _ => { calls.Add("api"); return Task.FromResult(7); },
             _ => { calls.Add("cli"); return Task.FromResult(9); }
@@ -22,7 +22,7 @@ public class CliQueryFallbackTests
     public async Task MissingOwnResultReachesCliAndPreservesEmptyResult()
     {
         var calls = new List<string>();
-        var result = await CliQueryFallback.RunAsync<int>([
+        var result = await PackageQueryFallback.RunAsync<int>([
             _ => { calls.Add("com"); throw new NotSupportedException(); },
             _ => { calls.Add("api"); return Task.FromResult(0); },
             _ => { calls.Add("cli"); return Task.FromResult(0); }
@@ -35,7 +35,7 @@ public class CliQueryFallbackTests
     public async Task IntegrityFailureDoesNotFallBack()
     {
         bool cliCalled = false;
-        await Assert.ThrowsAsync<InvalidDataException>(() => CliQueryFallback.RunAsync<int>([
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageQueryFallback.RunAsync<int>([
             _ => throw new InvalidDataException("Hash divergente"),
             _ => { cliCalled = true; return Task.FromResult(1); }
         ], _ => true, _ => { }, default));
@@ -47,7 +47,7 @@ public class CliQueryFallbackTests
     {
         using var cancellation = new CancellationTokenSource();
         bool cliCalled = false;
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CliQueryFallback.RunAsync<int>([
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => PackageQueryFallback.RunAsync<int>([
             _ => { cancellation.Cancel(); return Task.FromResult(0); },
             _ => { cliCalled = true; return Task.FromResult(1); }
         ], _ => false, _ => { }, cancellation.Token));

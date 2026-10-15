@@ -98,14 +98,19 @@ public sealed partial class PackageItemViewModel : ObservableObject
         ? _install(this)
         : Task.CompletedTask;
 
-    public ProfileAppRef ToReference() => ImportedReference ?? new ProfileAppRef
+    public ProfileAppRef ToReference()
     {
-        Id = App.Id,
-        Name = App.Name,
-        Source = App.Source,
-        Publisher = App.Publisher,
-        IconUrl = App.IconUrl,
-        Description = App.Description,
-        OfficeOptions = App.Office
-    };
+        var reference = ImportedReference ?? new ProfileAppRef
+        {
+            Id = App.Id,
+            Name = App.Name,
+            Source = App.Source,
+            Publisher = App.Publisher,
+            IconUrl = App.IconUrl,
+            Description = App.Description,
+            OfficeOptions = App.Office
+        };
+        if (reference.OfficeOptions is not null) reference.Source = "office";
+        return reference;
+    }
 }

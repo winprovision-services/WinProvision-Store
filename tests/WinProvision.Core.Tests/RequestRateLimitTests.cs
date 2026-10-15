@@ -31,7 +31,7 @@ public sealed class RequestRateLimitTests
     [Fact]
     public async Task CancellationWhileQueuedDoesNotSendOrBlockNextRequest()
     {
-        var policy = new RequestRateLimitPolicy(TimeSpan.FromMilliseconds(150), 64);
+        var policy = new RequestRateLimitPolicy(TimeSpan.FromMilliseconds(500), 64);
         int calls = 0;
         using var client = new HttpClient(new RequestRateLimitHandler(new RecordingHandler(_ =>
         {
@@ -39,8 +39,11 @@ public sealed class RequestRateLimitTests
             return new(HttpStatusCode.OK);
         }), policy));
         using var initial = await client.GetAsync(Endpoint);
-        using var cancellation = new CancellationTokenSource(20);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetAsync(Endpoint, cancellation.Token));
+        using var cancellation = new CancellationTokenSource();
+        var queued = client.GetAsync(Endpoint, cancellation.Token);
+        Assert.False(queued.IsCompleted);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued);
         Assert.Equal(1, calls);
         using var next = await client.GetAsync(Endpoint);
         Assert.Equal(2, calls);

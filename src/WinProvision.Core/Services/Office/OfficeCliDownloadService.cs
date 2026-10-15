@@ -10,7 +10,7 @@ namespace WinProvision.Core.Services.Office;
 [SupportedOSPlatform("windows")]
 public sealed class OfficeCliDownloadService(IOfflineOfficeSource source)
 {
-    public static OfflineCollectionRequest DefaultRequest(bool offline) => new("office.default", "Microsoft 365 Família", "office",
+    public static OfflineCollectionRequest DefaultRequest(bool offline) => new("office.default", "Microsoft 365 FamÃ­lia", "office",
         IsOffice: true, Office: new OfficeInstallOptions
         {
             ProductId = OfficePlan.Family.ProductId, Architecture = 64, LanguageId = "pt-br",
@@ -26,7 +26,11 @@ public sealed class OfficeCliDownloadService(IOfflineOfficeSource source)
     }
 
     public async Task<string> DownloadAsync(bool offline, string downloads, IProgress<OfflineCollectionProgress>? progress, CancellationToken token)
+        => await DownloadAsync(DefaultRequest(offline), downloads, progress, token);
+
+    public async Task<string> DownloadAsync(OfflineCollectionRequest request, string downloads, IProgress<OfflineCollectionProgress>? progress, CancellationToken token)
     {
+        bool offline = request.Office?.DownloadBeforeInstall == true;
         token.ThrowIfCancellationRequested();
         string parent = Path.GetFullPath(downloads);
         Directory.CreateDirectory(parent);
@@ -35,7 +39,7 @@ public sealed class OfficeCliDownloadService(IOfflineOfficeSource source)
         string destination = Path.Combine(parent, name);
         try
         {
-            await OfflineOfficeModuleBuilder.PrepareAsync(staging, [DefaultRequest(offline)], source, progress, token).ConfigureAwait(false);
+            await OfflineOfficeModuleBuilder.PrepareAsync(staging, [request], source, progress, token).ConfigureAwait(false);
             if (offline) await OfficeOfflinePayload.VerifyAsync(Path.Combine(staging, "Office"), token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             Directory.Move(staging, destination);
@@ -55,7 +59,7 @@ public sealed class OfficeCliDownloadService(IOfflineOfficeSource source)
         try
         {
             Marshal.ThrowExceptionForHR(result);
-            return Marshal.PtrToStringUni(path) ?? throw new IOException("A pasta Downloads não foi encontrada.");
+            return Marshal.PtrToStringUni(path) ?? throw new IOException("A pasta Downloads nÃ£o foi encontrada.");
         }
         finally { if (path != IntPtr.Zero) Marshal.FreeCoTaskMem(path); }
     }

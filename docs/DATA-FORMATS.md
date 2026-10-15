@@ -10,7 +10,7 @@ Ao importar um arquivo, valide seu formato antes de modificar dados ou iniciar o
 
 ## Office
 
-Configurações salvas mantêm produto, arquitetura, idiomas, aplicativos selecionados e opções de instalação. Uma configuração sem modo offline explícito mantém o comportamento online.
+Configurações salvas mantêm produto, arquitetura, idiomas, aplicativos selecionados e opções de instalação. Entradas com `officeOptions` válidas usam a origem `office`; perfis já exportados com a origem padrão `winget` são reconhecidos e normalizados. Uma configuração sem modo offline explícito mantém o comportamento online.
 
 A mídia offline conserva sua versão e seu inventário de integridade. Arquivos incompletos não devem iniciar uma instalação.
 
@@ -20,7 +20,7 @@ A distribuição da CLI inclui o executável e os metadados `Microsoft.Managemen
 
 Os comandos e aliases aceitos estão em [CLI](CLI.md). Mudanças devem preservar os códigos de saída, as confirmações e o significado das opções existentes.
 
-Exportações e importações de listas usam identificadores completos. Entradas inválidas devem ser rejeitadas antes de executar o lote.
+Exportações da CLI usam o perfil nativo com `apps`. Importações aceitam esse formato, backups com `tabs`, listas simples e exportações WinGet. O limite é de 16 MiB e 10.000 aplicativos. Opções Office e `pinnedVersion` dos perfis nativos acompanham a execução; duplicatas com opções conflitantes são rejeitadas antes do lote. URLs HTTPS podem seguir até cinco redirecionamentos HTTPS e links de Gist podem apontar ao perfil armazenado na nuvem. Metadados de provisionamento não são aplicados pela importação de aplicativos.
 
 ## Verificação de alterações
 

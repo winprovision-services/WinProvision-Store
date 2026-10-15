@@ -104,6 +104,10 @@ internal static partial class SmokeTest
                     int collectionCount = collections.Items.Count;
                     Check(collections.Items.Last().App.Office?.DownloadBeforeInstall == true,
                         $"Office: modo offline preservado na coleção em {theme}");
+                    var exportedOffice = ProfileDocumentService.CreateExecutionPlan(ProfileDocumentService.Parse(
+                        ProfileDocumentService.Serialize(collections.SelectedProfile!.Snapshot()))).Last();
+                    Check(exportedOffice.Source == "office" && exportedOffice.OfficeOptions?.DownloadBeforeInstall == true,
+                        $"Office: perfil exportado usa o mesmo contrato de execução da CLI em {theme}");
                     offlineToggle.IsOn = false;
                     office.ViewModel.AddToCatalogCommand.Execute(null);
                     Check(collections.Items.Count == collectionCount && collections.Items.Last().App.Office?.DownloadBeforeInstall == false,

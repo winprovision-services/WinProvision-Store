@@ -1,6 +1,6 @@
-namespace WinProvision.Cli;
+namespace WinProvision.PackageManagement;
 
-public static class CliQueryFallback
+public static class PackageQueryFallback
 {
     public static async Task<T> RunAsync<T>(IEnumerable<Func<CancellationToken, Task<T>>> methods,
         Func<T, bool> accept, Action<string> log, CancellationToken token)
@@ -25,7 +25,7 @@ public static class CliQueryFallback
                 or System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception or TimeoutException))
             {
                 last = exception;
-                log($"Método indisponível: {CliApplication.Clean(exception.Message)}");
+                log($"Método indisponível: {exception.Message.Replace("\r", " ").Replace("\n", " ")}");
             }
         }
         if (hasResult) return lastResult!;

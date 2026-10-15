@@ -53,6 +53,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
     private bool _metricsActive;
     private Task _metricsTask = Task.CompletedTask;
     private readonly WingetExecutor? _winget;
+    private readonly WinProvision.PackageManagement.ApplicationEngine? _engine;
     private readonly OfflineCollectionExportService? _offlineExport;
     private readonly PowerShellScriptAnalyzerService? _scriptAnalyzer;
     private readonly IOfficeCollectionInstaller? _officeInstaller;
@@ -179,9 +180,10 @@ public sealed partial class CollectionsViewModel : PageViewModel
         OfflineCollectionExportService? offlineExport = null,
         PowerShellScriptAnalyzerService? scriptAnalyzer = null,
         IOfficeCollectionInstaller? officeInstaller = null, WindowsAppNotificationService? notifications = null,
-        StoreService? store = null, IUiDispatcher? dispatcher = null)
+        StoreService? store = null, IUiDispatcher? dispatcher = null, WinProvision.PackageManagement.ApplicationEngine? engine = null)
     {
         _backend = backend;
+        _engine = engine;
         _presentation = presentation;
         _winget = winget;
         _installOptions = installOptions;
@@ -323,11 +325,8 @@ public sealed partial class CollectionsViewModel : PageViewModel
 
     public int ImportJsonBackup(string json, string fallbackName)
     {
-        IReadOnlyList<ProfileManifest> manifests = ParseProfiles(json, fallbackName);
-        using JsonDocument document = JsonDocument.Parse(json);
-        ProfileBackupSet? importedBackup = document.RootElement.TryGetProperty("tabs", out _)
-            ? WinProvision.Core.Services.AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile)
-            : null;
+        ProfileBackupSet importedBackup = ProfileDocumentService.Parse(json, fallbackName);
+        IReadOnlyList<ProfileManifest> manifests = importedBackup.Tabs;
 
         foreach (ProfileManifest manifest in manifests)
             SelectedProfile = AddProfile(manifest);
@@ -802,43 +801,8 @@ public sealed partial class CollectionsViewModel : PageViewModel
         out OfficeInstallRequest? request,
         out string? error)
     {
-        request = null;
-        OfficePlan? plan = OfficePlanCatalog.ByProductId(options.ProductId);
-        if (plan is null)
-        {
-            error = $"Plano Office desconhecido: {options.ProductId}.";
-            return false;
-        }
-
-        var additional = new List<OfficePlan>();
-        foreach (string productId in options.AdditionalProductIds ?? [])
-        {
-            OfficePlan? product = OfficePlanCatalog.ByProductId(productId);
-            if (product is null)
-            {
-                error = $"Produto Office adicional desconhecido: {productId}.";
-                return false;
-            }
-            additional.Add(product);
-        }
-
-        var candidate = new OfficeInstallRequest(
-            plan,
-            options.Architecture,
-            options.LanguageId,
-            options.ExcludedApps ?? [],
-            DisplayNone: options.Silent,
-            AdditionalLanguageIds: options.AdditionalLanguageIds ?? [],
-            DisplayLevel: options.Silent ? OfficeDisplayLevel.Silent : OfficeDisplayLevel.Visible,
-            ChannelOverride: options.ChannelOverride,
-            AutoUpdatesEnabled: options.AutoUpdatesEnabled,
-            AdditionalProducts: additional, DownloadBeforeInstall: options.DownloadBeforeInstall);
-        error = OfficeConfigXmlBuilder.ValidateRequest(candidate);
-        if (error is not null)
-            return false;
-
-        request = candidate;
-        return true;
+        try { request = OfficeProfileConfiguration.Build(options); error = null; return true; }
+        catch (InvalidDataException exception) { request = null; error = exception.Message; return false; }
     }
 
     private async Task DetailsAsync(PackageItemViewModel item)
@@ -883,7 +847,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
 
     private async Task DownloadAsync(IReadOnlyList<PackageItemViewModel> selected, string folder, CancellationToken token)
     {
-        if (_winget is null)
+        if (_winget is null && _engine is null)
             throw new InvalidOperationException("O serviço de download de instaladores não foi configurado.");
         int downloaded = 0;
         var failures = new List<string>();
@@ -894,7 +858,9 @@ public sealed partial class CollectionsViewModel : PageViewModel
             StatusText = $"Baixando instalador {index + 1} de {selected.Count}: {item.Name}…";
             try
             {
-                WingetExecutionResult result = await _winget.DownloadInstallerAsync(item.Id, folder, item.App.Source, cancellationToken: token);
+                WingetExecutionResult result = _engine is not null
+                    ? await _engine.DownloadProfileAsync(item.ToReference(), folder, _ => { }, token)
+                    : await _winget!.DownloadInstallerAsync(item.Id, folder, item.App.Source, cancellationToken: token);
                 if (result.Success)
                     downloaded++;
                 else
@@ -948,31 +914,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
 
     public static IReadOnlyList<ProfileManifest> ParseProfiles(string json, string fallback)
     {
-        using var document = JsonDocument.Parse(json);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
-            throw new InvalidDataException("O perfil deve ser um objeto JSON.");
-        bool isBackup = document.RootElement.TryGetProperty("tabs", out _);
-        if (!isBackup && !document.RootElement.TryGetProperty("apps", out _))
-            throw new InvalidDataException("O arquivo não contém aplicativos ou coleções.");
-        ProfileBackupSet? backup = isBackup ? WinProvision.Core.Services.AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile) : null;
-        if (backup?.SchemaVersion > 1)
-            throw new InvalidDataException("A versão do backup ainda não é suportada.");
-        List<ProfileManifest>? manifests = isBackup
-            ? backup?.Tabs
-            : [ProfileManifestParser.Parse(json, fallback) ?? throw new InvalidDataException("Perfil inválido.")];
-        if (manifests is null || manifests.Count == 0)
-            throw new InvalidDataException("O arquivo não contém coleções.");
-        foreach (ProfileManifest manifest in manifests)
-        {
-            if (manifest is null || manifest.Apps is null || manifest.SchemaVersion > 1 ||
-                manifest.Apps.Any(app => app is null || string.IsNullOrWhiteSpace(app.Id)))
-                throw new InvalidDataException("Perfil incompatível ou aplicativo sem identificador.");
-            if (manifest.Apps.Any(app => app.Source is not null && app.Source is not ("winget" or "msstore" or "office")))
-                throw new InvalidDataException("O perfil usa uma origem ainda não suportada.");
-            manifest.Name ??= fallback;
-            manifest.Provisioning ??= backup?.Provisioning;
-        }
-        return manifests;
+        return ProfileDocumentService.Parse(json, fallback).Tabs;
     }
 
     private async Task ExportAsync()
@@ -984,7 +926,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             string? path = await _presentation.PickSaveAsync(profile.Title, ".json");
             if (path is null)
                 return;
-            await AtomicFile.WriteAllTextAsync(path, WinProvision.Core.Services.AotJson.Serialize(profile.Snapshot(), WinProvisionJsonOptions.Profile));
+            await AtomicFile.WriteAllTextAsync(path, ProfileDocumentService.Serialize(profile.Snapshot()));
             StatusText = $"Coleção exportada para {Path.GetFileName(path)}.";
             _notifications?.ShowCollectionResult("Coleção atualizada", StatusText);
         }

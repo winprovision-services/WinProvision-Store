@@ -11,7 +11,7 @@ O WinProvision Store utiliza .NET 10, C# 14, WinUI 3 e CommunityToolkit.Mvvm. A 
 | Serviços do aplicativo | Arquivos, notificações, janelas e integração com o Windows |
 | Core | Modelos, coleções, histórico e funcionalidades compartilhadas |
 | CLI | Entrada de comandos, consultas, confirmações e saída de console |
-| PackageManagement | Provisionamento e integração COM compartilhados pelo aplicativo e pela CLI, sem dependência da interface |
+| PackageManagement | Motor compartilhado de consultas e operações, provisionamento e cadeia COM/API própria/CLI, sem dependência de WinUI |
 
 A fila organiza operações, evita duplicatas e acompanha cancelamento e conclusão. A interface recebe atualizações de estado pela thread apropriada.
 
@@ -25,7 +25,7 @@ O encerramento solicita cancelamento e aguarda as tarefas observadas. Processos 
 
 Os formatos de coleções, preferências e opções são compartilhados pelas funções que os utilizam. Mudanças nesses formatos precisam de leitura compatível ou de uma transição documentada em [compatibilidade](DATA-FORMATS.md).
 
-A serialização utilizada na distribuição é preparada para Native AOT.
+A serialização utilizada na distribuição é preparada para Native AOT. `ProfileDocumentService` valida os perfis usados por coleções e pela CLI. `ApplicationEngine` concentra a execução; o adaptador de console delega a ele. A CLI executa sem iniciar o processo da interface.
 
 ## Validação
 

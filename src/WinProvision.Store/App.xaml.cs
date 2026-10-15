@@ -60,6 +60,9 @@ public partial class App : Application
         services.AddSingleton<WinGetService>(p => new WinGetService(
             p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
             p.GetRequiredService<WingetBootstrapper>(), () => p.GetRequiredService<InstallationPreferencesService>().PreferredMethod));
+        services.AddSingleton(p => new WinProvision.PackageManagement.ApplicationEngine(
+            p.GetRequiredService<WinGetService>(), p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
+            p.GetRequiredService<WingetBootstrapper>(), p.GetRequiredService<StoreService>(), WinProvisionLog.Write));
         services.AddSingleton<IPackageBackend, PackageBackend>();
         services.AddSingleton<PresentationService>();
         services.AddSingleton<IPresentationService>(provider => provider.GetRequiredService<PresentationService>());

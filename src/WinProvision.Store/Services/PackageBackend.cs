@@ -28,13 +28,22 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
     private readonly HashSet<Task> _tasks = [];
     private readonly HashSet<string> _packages = new(StringComparer.OrdinalIgnoreCase);
     private bool _stopping;
-    public PackageBackend(OperationsQueueService queue, WingetExecutor executor, WinGetService winGet, InstalledAppsService installed, PackageInstallOptionsService options, UninstallerEngineService uninstaller, WinProvisionApiService api, OfficeDeploymentToolService office)
+    public PackageBackend(OperationsQueueService queue, WingetExecutor executor, WinGetService winGet, InstalledAppsService installed, PackageInstallOptionsService options, UninstallerEngineService uninstaller, WinProvisionApiService api, OfficeDeploymentToolService office, WinProvision.PackageManagement.ApplicationEngine? engine = null)
     {
         _queue = queue; _executor = executor; _winGet = winGet; _installed = installed;
         _uninstaller = uninstaller; _api = api; _office = office;
-        OperationRunner.ConfigureInstallHandler(winGet.InstallPreferredAsync);
-        OperationRunner.ConfigureUpdateHandler(winGet.UpdateAsync);
-        OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => winGet.PrepareAsync(token, includeStore, log));
+        if (engine is null)
+        {
+            OperationRunner.ConfigureInstallHandler(winGet.InstallPreferredAsync);
+            OperationRunner.ConfigureUpdateHandler(winGet.UpdateAsync);
+            OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => winGet.PrepareAsync(token, includeStore, log));
+        }
+        else
+        {
+            OperationRunner.ConfigureInstallHandler(engine.InstallPreferredAsync);
+            OperationRunner.ConfigureUpdateHandler(engine.UpdateAsync);
+            OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => engine.PrepareAsync(token, includeStore, log));
+        }
         OperationRunner.ConfigurePackageInstallOptionsProvider(options.Get);
     }
     public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => TrackAsync($"{app.Source}:{app.Id}", async token =>

@@ -904,10 +904,11 @@ public class WingetExecutor
         return _bootstrapper.EnsureOnceAsync(onLogReceived);
     }
 
-    public Task<WingetExecutionResult> DownloadPackageAsync(string id, string source, string? directory, Action<string>? log, CancellationToken token)
+    public Task<WingetExecutionResult> DownloadPackageAsync(string id, string source, string? directory, Action<string>? log, CancellationToken token, string? version = null)
     {
         var args = new List<string> { "download", "--id", id, "--exact", "--source", source,
             "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity" };
+        if (version is not null) args.AddRange(["--version", version]);
         if (directory is not null) args.AddRange(["--download-directory", Path.GetFullPath(directory)]);
         return ExecuteWingetCommandAsync("", log, token, args);
     }

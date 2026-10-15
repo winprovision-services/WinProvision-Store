@@ -466,6 +466,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         var entry = new AppEntry
         {
             Id = $"office.{string.Join("+", ids)}".ToLowerInvariant(),
+            Source = "office",
             Name = $"Office — {plan.DisplayName}" + (additional.Length == 0 ? "" : $" + {additionalSummary}"),
             Publisher = "Microsoft",
             Version = request.ChannelOverride ?? plan.Channel ?? "-",

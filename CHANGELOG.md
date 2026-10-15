@@ -2,6 +2,9 @@
 
 ## Em desenvolvimento
 
+- CLI utiliza o motor compartilhado sem carregar WinUI 3; importação de perfis e backups do app, inclusive links de nuvem, preserva Office e versões fixadas.
+- Exportação da CLI no formato nativo de coleções, com validação completa antes de executar os lotes.
+
 - CLI com provisionamento do WinGet sob demanda e serviço compartilhado de instalação: COM, API própria e WinGet CLI.
 
 - Navegador da página Sobre com perfil de dados no usuário e opção para abrir o site no navegador padrão.

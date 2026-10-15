@@ -4,11 +4,11 @@ A CLI é o executável `winprovision`. O instalador oferece adicioná-lo ao PATH
 
 Na distribuição portátil, mantenha o conteúdo completo da pasta `cli`, incluindo `Microsoft.Management.Deployment.winmd`, junto do executável. Esse arquivo de suporte é necessário à integração COM na publicação Native AOT.
 
-A CLI verifica o WinGet quando uma operação precisa dele e tenta provisioná-lo se estiver ausente, inclusive em uma sessão nova do Windows. Esse preparo exige conexão e pode levar alguns minutos. Ajuda e versão não iniciam downloads.
+A CLI executa o motor compartilhado do WinProvision em um processo de console, sem iniciar a janela, carregar WinUI 3 ou depender do executável da interface. Ela verifica o WinGet quando uma operação precisa dele e tenta provisioná-lo se estiver ausente, inclusive em uma sessão nova do Windows. Esse preparo exige conexão e pode levar alguns minutos. Ajuda e versão não iniciam downloads.
 
 Instalações e atualizações compartilham o serviço do aplicativo: API COM, API própria e, por último, WinGet CLI. O fallback respeita cancelamento e não reinicia um instalador já iniciado. Se o provisionamento falhar, pacotes compatíveis do catálogo próprio ainda podem ser instalados com verificação de integridade.
 
-Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao executável WinGet. Downloads do catálogo próprio verificam SHA-256. Inventário e descoberta de atualizações usam os recursos locais do WinGet; exportação conserva o formato oficial. Recursos sem alternativa compatível dependem de o provisionamento do WinGet terminar com sucesso.
+Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao executável WinGet. Downloads do catálogo próprio verificam SHA-256. Inventário e descoberta de atualizações usam os recursos locais do WinGet; exportação gera um perfil nativo do WinProvision. Recursos sem alternativa compatível dependem de o provisionamento do WinGet terminar com sucesso.
 
 ## Comandos
 
@@ -82,11 +82,13 @@ A importação aceita uma lista com identificadores completos:
 
 A fonte omitida significa `winget`. Também são aceitos arquivos de exportação com `Sources`, `SourceDetails.Name` e `Packages.PackageIdentifier`.
 
-A lista inteira é validada antes das operações. Duplicatas são removidas. A importação utiliza as versões atuais disponíveis; versões registradas em arquivos externos não são fixadas.
+Também são aceitos perfis nativos com `apps` e backups locais ou de nuvem com `tabs`, exportados pelo próprio aplicativo. `pinnedVersion` e `officeOptions` dos perfis nativos são preservados na execução. Metadados de provisionamento são preservados nas coleções, mas não são executados pela importação de aplicativos.
 
-O limite é de 2 MiB e 1.000 entradas. URLs devem ser HTTPS diretas, sem redirecionamentos. Um arquivo de coleção ou backup não é tratado automaticamente como lista de aplicativos.
+A lista inteira é validada antes das operações. Entradas repetidas com as mesmas opções são executadas uma vez. Opções conflitantes entre coleções interrompem a importação antes de qualquer instalação. Para listas simples e exportações WinGet, são usadas as versões atuais.
 
-A exportação inclui os aplicativos que podem ser identificados nas fontes consultadas. O nome padrão é `winprovision-apps.json`, na pasta atual. Arquivos existentes são preservados; escolha outro destino para uma nova exportação.
+O limite é de 16 MiB e 10.000 aplicativos. URLs devem usar HTTPS; são aceitos até cinco redirecionamentos, sempre em HTTPS. Links de Gist são resolvidos para o arquivo de perfil; se houver vários JSONs sem um perfil identificado, informe a URL raw específica.
+
+A exportação escreve um perfil nativo com `schemaVersion`, `createdAt`, `name` e `apps`, aceito pelas coleções do app e pela CLI. Ela inclui os aplicativos que podem ser identificados nas fontes consultadas. O nome padrão é `winprovision-apps.json`, na pasta atual. Arquivos existentes são preservados; escolha outro destino para uma nova exportação.
 
 ## Office
 
@@ -127,3 +129,7 @@ Os aliases `find`, `info`, `ls` e `update` continuam disponíveis. A CLI também
 As formas `--install`, `--search`, `--import`, `--download`, `--export`, `--upgrade`, `--update`, `--uninstall` e `--office` são aceitas. `-id` equivale a `--id`; `-all`, a `--all`. Em remoção, `-d` identifica o aplicativo; em download, indica a pasta de destino.
 
 Prefira os comandos principais e as opções longas em novos scripts.
+
+## Execução no primeiro logon
+
+A CLI não exige inicialização da interface gráfica. O provisionamento de pacotes depende da rede, das permissões e dos serviços disponíveis na sessão do usuário. Um teste em uma sessão comum ou no Windows Sandbox não comprova funcionamento durante o FirstLogon de uma imagem personalizada. As confirmações de instalação e remoção continuam obrigatórias; scripts sem entrada interativa não confirmam operações automaticamente.
