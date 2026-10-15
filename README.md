@@ -6,7 +6,7 @@ O WinProvision Store foi desenvolvido com auxílio de inteligência artificial e
 
 ![Tela inicial do WinProvision Store no tema escuro](docs/screenshots/inicio-escuro.png)
 
-Interface capturada com dados de teste. Veja mais telas na [galeria de capturas](docs/SCREENSHOTS.md).
+Veja mais telas do aplicativo na [galeria de capturas](docs/SCREENSHOTS.md).
 
 ## Recursos
 

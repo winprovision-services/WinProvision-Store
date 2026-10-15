@@ -1,18 +1,18 @@
 # Capturas de tela
 
-Capturas do WinProvision Store geradas em 14 de outubro de 2026 pelo teste visual automatizado, com dados de teste. Os aplicativos, versões e estados apresentados são exemplos; as imagens não comprovam instalações reais.
+Capturas do WinProvision Store feitas em 14 de outubro de 2026. O catálogo, as versões e os estados dos aplicativos podem variar conforme o computador e a data da consulta.
 
-## Tela inicial — tema escuro
+## Descobrir
 
 ![Tela inicial no tema escuro](screenshots/inicio-escuro.png)
-
-## Tela inicial — tema claro
-
-![Tela inicial no tema claro](screenshots/inicio-claro.png)
 
 ## Atualizações
 
 ![Lista de atualizações no tema escuro](screenshots/atualizacoes-escuro.png)
+
+## Instalados
+
+![Lista de aplicativos instalados no tema escuro](screenshots/instalados-escuro.png)
 
 ## Coleções
 
@@ -20,12 +20,4 @@ Capturas do WinProvision Store geradas em 14 de outubro de 2026 pelo teste visua
 
 ## Office
 
-![Seleção dos aplicativos do Office no tema escuro](screenshots/office-escuro.png)
-
-## Janela compacta
-
-![Tela inicial com navegação compacta no tema claro](screenshots/inicio-compacto.png)
-
-## Atualizar as capturas
-
-Execute `scripts/smoke-test.ps1` na raiz do projeto e confira as imagens geradas em `artifacts/validation/smoke`. Copie somente as capturas revisadas para `docs/screenshots`, mantendo os nomes usados nesta página e no README. As saídas completas do teste permanecem em `artifacts`.
+![Configuração do Microsoft Office no tema escuro](screenshots/office-escuro.png)
