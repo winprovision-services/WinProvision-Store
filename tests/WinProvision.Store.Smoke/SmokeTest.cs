@@ -72,6 +72,23 @@ internal static partial class SmokeTest
                     Check(!home.IsHeroRotationPaused, $"Descobrir: retomada restaura a rotação em {theme}");
                 }
                 await CaptureAsync(window.RootElement, $"{tag}-{theme}.png");
+                if (window.CurrentPage is Views.MorePage more && theme == ElementTheme.Dark
+                    && Environment.GetEnvironmentVariable("WINPROVISION_VALIDATE_BROWSER") == "1")
+                {
+                    more.ViewModel.OpenAboutCommand.Execute(null);
+                    await Task.Delay(250);
+                    ((FrameworkElement)more.FindName("AboutPanel")).StartBringIntoView();
+                    var browserDeadline = DateTime.UtcNow.AddSeconds(30);
+                    while (more.ViewModel.IsBrowserStatusVisible && DateTime.UtcNow < browserDeadline)
+                        await Task.Delay(250);
+                    await CaptureAsync(window.RootElement, "about-browser.png");
+                    Check(!more.ViewModel.IsBrowserStatusVisible,
+                        $"Sobre: site real carregou no WebView2 ({more.ViewModel.BrowserStatus})");
+                    var projectBrowser = ((Grid)more.FindName("ProjectBrowserHost")).Children.OfType<WebView2>().Single();
+                    Check(projectBrowser.CoreWebView2.DocumentTitle.Contains("WinProvision Store", StringComparison.Ordinal),
+                        "Sobre: documento real do WinProvision Store recebido");
+                    more.ViewModel.CloseAboutCommand.Execute(null);
+                }
                 if (window.CurrentPage is Views.OfficePage office)
                 {
                     var selectedApps = office.ViewModel.AppToggleItems.Where(item => item.IsOn).Select(item => item.Id).ToHashSet();

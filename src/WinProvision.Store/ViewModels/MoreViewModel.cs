@@ -105,6 +105,7 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     public IRelayCommand OpenAboutCommand { get; }
     public IRelayCommand RetryAboutCommand { get; }
     public IRelayCommand CloseAboutCommand { get; }
+    public IAsyncRelayCommand OpenProjectWebsiteCommand { get; }
     public IAsyncRelayCommand OpenLogCommand { get; }
     public IAsyncRelayCommand RefreshLogCommand { get; }
     public IRelayCommand CloseLogCommand { get; }
@@ -136,6 +137,7 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
             () => AboutRetryRequested?.Invoke(this, EventArgs.Empty),
             () => IsAboutVisible);
         CloseAboutCommand = new RelayCommand(() => IsAboutVisible = false);
+        OpenProjectWebsiteCommand = new AsyncRelayCommand(OpenProjectWebsiteAsync);
         OpenLogCommand = new AsyncRelayCommand(OpenLogAsync);
         RefreshLogCommand = new AsyncRelayCommand(LoadLogAsync, () => IsLogVisible && !IsLoadingLog);
         CloseLogCommand = new RelayCommand(CloseLog);
@@ -407,6 +409,19 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
         IsLogVisible = false;
         IsAboutVisible = true;
         ShowBrowserConnecting(retry: false);
+    }
+
+    private async Task OpenProjectWebsiteAsync()
+    {
+        try
+        {
+            await _desktop.OpenUriAsync(ProjectUri);
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Warning(exception, "MoreViewModel.OpenProjectWebsite");
+            ShowBrowserError("Não foi possível abrir o site no navegador padrão. Tente novamente.");
+        }
     }
 
     public void ShowBrowserConnecting(bool retry) =>

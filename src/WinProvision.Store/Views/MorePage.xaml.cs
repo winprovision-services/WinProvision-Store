@@ -12,7 +12,7 @@ public sealed partial class MorePage : Page
     private WebView2? _browser;
     private bool _initializationInProgress;
     private bool _navigationStarted;
-    private bool _coreEventsAttached;
+    private Exception? _browserInitializationError;
 
     public MoreViewModel ViewModel { get; }
 
@@ -63,6 +63,9 @@ public sealed partial class MorePage : Page
         if (_initializationInProgress || (!retry && _navigationStarted))
             return;
 
+        if (retry && _browser?.CoreWebView2 is null)
+            ReleaseBrowser();
+
         WebView2? browser = null;
         _initializationInProgress = true;
         ViewModel.ShowBrowserConnecting(retry);
@@ -71,19 +74,28 @@ public sealed partial class MorePage : Page
         {
             browser = _browser ??= CreateBrowser();
             if (browser.CoreWebView2 is null)
-                await browser.EnsureCoreWebView2Async();
+            {
+                _browserInitializationError = null;
+                // An unpackaged app may be installed in Program Files. The browser
+                // profile must remain writable without administrative privileges.
+                string profileDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WinProvisionStoreWinUI3", "WebView2");
+                Directory.CreateDirectory(profileDirectory);
+                WinProvisionLog.Write("WebView2: preparando o perfil do navegador do projeto.");
+                var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, profileDirectory, null);
+                if (!ReferenceEquals(_browser, browser) || !IsLoaded || !ViewModel.IsAboutVisible)
+                    return;
+                await browser.EnsureCoreWebView2Async(environment);
+                WinProvisionLog.Write("WebView2: inicialização do navegador do projeto concluída.");
+            }
 
             if (!ReferenceEquals(_browser, browser) || !IsLoaded || !ViewModel.IsAboutVisible)
                 return;
 
             CoreWebView2 core = browser.CoreWebView2
-                ?? throw new InvalidOperationException("O WebView2 não disponibilizou o navegador interno.");
-
-            if (!_coreEventsAttached)
-            {
-                core.NavigationCompleted += CoreWebView2_NavigationCompleted;
-                _coreEventsAttached = true;
-            }
+                ?? throw _browserInitializationError
+                ?? new InvalidOperationException("O WebView2 não disponibilizou o navegador interno.");
 
             if (retry && _navigationStarted)
             {
@@ -92,6 +104,7 @@ public sealed partial class MorePage : Page
             else
             {
                 _navigationStarted = true;
+                WinProvisionLog.Write("WebView2: carregando o site do projeto.");
                 core.Navigate(MoreViewModel.ProjectUri.AbsoluteUri);
             }
         }
@@ -116,8 +129,16 @@ public sealed partial class MorePage : Page
     private WebView2 CreateBrowser()
     {
         var browser = new WebView2();
+        browser.CoreWebView2Initialized += Browser_CoreWebView2Initialized;
+        browser.NavigationCompleted += Browser_NavigationCompleted;
         ProjectBrowserHost.Children.Add(browser);
         return browser;
+    }
+
+    private void Browser_CoreWebView2Initialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
+    {
+        if (ReferenceEquals(sender, _browser))
+            _browserInitializationError = args.Exception;
     }
 
     private void ReleaseBrowser()
@@ -126,22 +147,21 @@ public sealed partial class MorePage : Page
         _browser = null;
         if (browser is not null)
         {
-            if (browser.CoreWebView2 is { } core && _coreEventsAttached)
-                core.NavigationCompleted -= CoreWebView2_NavigationCompleted;
+            browser.CoreWebView2Initialized -= Browser_CoreWebView2Initialized;
+            browser.NavigationCompleted -= Browser_NavigationCompleted;
             ProjectBrowserHost.Children.Remove(browser);
             browser.Close();
         }
 
-        _coreEventsAttached = false;
         _navigationStarted = false;
         _initializationInProgress = false;
     }
 
-    private void CoreWebView2_NavigationCompleted(
-        object? sender,
+    private void Browser_NavigationCompleted(
+        WebView2 sender,
         CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (!IsLoaded || !ViewModel.IsAboutVisible || !ReferenceEquals(sender, _browser?.CoreWebView2))
+        if (!IsLoaded || !ViewModel.IsAboutVisible || !ReferenceEquals(sender, _browser))
             return;
 
         if (!e.IsSuccess)
@@ -151,6 +171,7 @@ public sealed partial class MorePage : Page
             return;
         }
 
+        WinProvisionLog.Write("WebView2: site do projeto carregado.");
         ViewModel.HideBrowserStatus();
     }
 

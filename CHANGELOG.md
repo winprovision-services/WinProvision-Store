@@ -2,6 +2,8 @@
 
 ## Em desenvolvimento
 
+- Navegador da página Sobre com perfil de dados no usuário e opção para abrir o site no navegador padrão.
+
 - Interface WinUI 3 com temas claro e escuro, navegação por teclado e painel de operações.
 - Pesquisa de aplicativos, detalhes, atualizações, programas instalados e coleções.
 - Configuração do Office e preparação de mídia offline.

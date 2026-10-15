@@ -198,11 +198,10 @@
                                 Text="Sobre o WinProvision Store"
                                 Style="{StaticResource FluentCardTitleStyle}"
                                 VerticalAlignment="Center" />
-                            <Button
-                                Grid.Column="1"
-                                Content="Fechar"
-                                Command="{Binding CloseAboutCommand}"
-                                Style="{StaticResource StoreActionButtonStyle}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Content="Abrir no navegador" Command="{Binding OpenProjectWebsiteCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                                <Button Content="Fechar" Command="{Binding CloseAboutCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                            </StackPanel>
                         </Grid>
                         <Grid Grid.Row="1" MinHeight="420">
                             <Grid x:Name="ProjectBrowserHost" />
@@ -225,7 +224,7 @@
                                         HorizontalAlignment="Center"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     <TextBlock
-                                        Text="Não foi possível carregar o GitHub Pages."
+                                        Text="Site do WinProvision Store"
                                         FontSize="18"
                                         FontWeight="SemiBold"
                                         HorizontalAlignment="Center"
