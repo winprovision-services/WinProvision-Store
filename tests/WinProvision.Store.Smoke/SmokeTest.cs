@@ -56,8 +56,7 @@ internal static partial class SmokeTest
             foreach (string tag in new[] { "home", "updates", "installed", "collections", "office", "account", "settings", "more" })
             {
                 window.Navigate(tag);
-                await Task.Delay(350);
-                Check(window.CurrentPage is { IsLoaded: true, ActualWidth: > 0, ActualHeight: > 0 }, $"Navegação: {tag} renderiza no tema {theme}");
+                await WaitForPageAsync(window, tag, theme);
                 if (window.CurrentPage is Views.HomePage home)
                 {
                     var rotation = (Microsoft.UI.Xaml.Controls.Primitives.ToggleButton)home.FindName("HeroRotationToggleButton");
@@ -270,6 +269,23 @@ internal static partial class SmokeTest
         Check(host.ContentTransitions.Count == 0, "Movimento: transição pode ser desativada");
         Check(BindingErrors.Count == 0, "Bindings: nenhuma falha de resolução");
         WriteResult(true);
+    }
+    private static async Task WaitForPageAsync(MainWindow window, string tag, ElementTheme theme)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        do
+        {
+            window.RootElement.UpdateLayout();
+            if (window.CurrentPage is { IsLoaded: true, ActualWidth: > 0, ActualHeight: > 0 })
+            {
+                Check(true, $"Navegação: {tag} renderiza no tema {theme}");
+                return;
+            }
+            await Task.Delay(100);
+        } while (DateTime.UtcNow < deadline);
+        await CaptureAsync(window.RootElement, "navigation-failure.png");
+        var page = window.CurrentPage;
+        Check(false, $"Navegação: {tag} não renderizou em 10 segundos no tema {theme}; página={page?.GetType().Name}, carregada={page?.IsLoaded}, tamanho={page?.ActualWidth}x{page?.ActualHeight}, raiz={window.RootElement.ActualWidth}x{window.RootElement.ActualHeight}");
     }
     private static CheckBox? FindOfficeSelection(DependencyObject root, string id)
     {
