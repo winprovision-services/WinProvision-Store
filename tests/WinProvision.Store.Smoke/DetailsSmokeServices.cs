@@ -14,6 +14,7 @@ internal sealed partial class SmokePresentationService(PresentationService prese
     public Task<string?> PickFolderAsync() => Task.FromResult<string?>("C:\\Apps\\Exemplo");
     public Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar") => Task.FromResult(ConfirmResult);
     public Task ShowDetailsAsync(AppEntry app, string? currentVersion = null, string? availableVersion = null) => presentation.ShowDetailsAsync(app, currentVersion, availableVersion);
+    public void ShowAppUpdates() => presentation.ShowAppUpdates();
 }
 
 internal sealed partial class SmokeDetailsProvider : IPackageDetailsProvider

@@ -17,6 +17,11 @@ public sealed partial class SettingsViewModel
 
     public IAsyncRelayCommand ClearCacheCommand => _clearCacheCommand ??= new AsyncRelayCommand(ClearCacheAsync);
 
+    private AsyncRelayCommand? _refreshCatalogCommand;
+    public IAsyncRelayCommand RefreshCatalogCommand => _refreshCatalogCommand ??= new AsyncRelayCommand(RefreshCatalogAsync);
+    private AsyncRelayCommand? _openReleaseCommand;
+    public IAsyncRelayCommand OpenReleaseCommand => _openReleaseCommand ??= new AsyncRelayCommand(OpenReleaseAsync);
+
     private RelayCommand? _darkThemeCommand;
 
     public IRelayCommand DarkThemeCommand => _darkThemeCommand ??= new RelayCommand(DarkTheme);

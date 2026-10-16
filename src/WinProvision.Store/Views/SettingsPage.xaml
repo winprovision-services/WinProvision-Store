@@ -168,9 +168,10 @@
                     <Button Content="Cancelar verificação" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding CheckUpdateCancelCommand}" Visibility="{Binding CheckUpdateCommand.CanBeCanceled, Converter={StaticResource BoolToVisibilityConverter}}" />
                     <Button Content="Cancelar download" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding InstallUpdateCancelCommand}" Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVisibilityConverter}}" />
                     <Button x:Name="CheckUpdateButton" AutomationProperties.AutomationId="CheckUpdateButton" IsEnabled="{Binding CanCheckUpdate}" Visibility="{Binding CheckUpdateCommand.CanBeCanceled, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Content="Verificar agora" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding CheckUpdateCommand}" />
-                    <Button Content="Instalar atualização" IsEnabled="{Binding CanInstallUpdate}" Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding InstallUpdateCommand}" />
+                    <Button Content="Baixar atualização" IsEnabled="{Binding CanInstallUpdate}" Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding InstallUpdateCommand}" />
                   </StackPanel>
                 </Grid>
+                <HyperlinkButton Content="Abrir página da release" Command="{Binding OpenReleaseCommand}" Visibility="{Binding HasPendingUpdate, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBlock
                     Text="{Binding UpdateAvailableText}"
                     FontSize="13"
@@ -231,6 +232,18 @@
             </Border>
           </StackPanel>
           <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
+            <TextBlock Text="Catálogo de aplicativos" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="CatalogRefreshCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="Atualizar catálogo" FontWeight="SemiBold" />
+                  <TextBlock Text="Busca os aplicativos e versões mais recentes sem limpar os instaladores e imagens em cache." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <Button x:Name="RefreshCatalogButton" Grid.Column="1" Content="Atualizar catálogo" AutomationProperties.AutomationId="RefreshCatalogButton"
+                        Style="{StaticResource StoreActionButtonStyle}" Command="{Binding RefreshCatalogCommand}" />
+              </Grid>
+            </Border>
             <TextBlock Text="Armazenamento e cache" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="CacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
               <Grid>

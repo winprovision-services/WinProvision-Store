@@ -24,6 +24,8 @@ Exportações da CLI usam o perfil nativo com `apps`. Importações aceitam esse
 
 ## Catálogo remoto
 
+A origem de apresentação distingue WinGet, Microsoft Store e Catálogo WinProvision sem alterar o campo de roteamento `source`. O próprio app é identificado como instalado pela versão do processo em execução e permanece exportável nos Pacotes, mas é ignorado nas instalações locais em lote. A consulta manual do catálogo preserva instaladores e imagens em cache; limpar o cache continua sendo uma ação separada.
+
 Pacotes mantidos pela infraestrutura própria usam `catalogOrigin: "curated"`, preservando `source: "winget"` para compatibilidade de roteamento. `wingetManifestAvailable: false` indica que o link do manifesto não deve ser apresentado. `releaseDate` e `catalogSyncedUtc` são datas ISO 8601 da release e da última publicação dos dados; `author` e `releaseNotes` são opcionais. A tela usa os instaladores do detalhe para tipo, URL e SHA-256 desses pacotes, sem depender de uma consulta ao WinGet. A galeria aceita os caminhos relativos de `media.screenshots` em ambas as origens.
 
 O app e a instalação pela API própria consultam `Store/Catalog/manifest.json`, `Store/Catalog/manifest/search-index.json` e os detalhes por aplicativo indicados por `detailPath` (terminado em `app.json`). A fonte Microsoft Store usa o mesmo contrato sob `Store/Catalog/msstore/`. Não existe consumo direto do snapshot de YAMLs em `Store/Manifests/winget/v1` pelo cliente.

@@ -227,9 +227,38 @@ internal static partial class SmokeTest
             Check(model.DeveloperText == "WinProvision Services" && model.IsManifestNotFoundVisible && !model.IsManifestLinkVisible, "Detalhes: desenvolvedor e manifesto ausente da origem própria");
             Check(model.IsInstallerUrlLinkVisible && model.Sha256Text == new string('A', 64) && model.LastUpdatedText.Contains("2026"), "Detalhes: URL, hash e data vêm do catálogo");
             Check(model.Screenshots.Length == 1, "Detalhes: galeria relativa funciona para pacotes fora da Microsoft Store");
+            Check(model.IsSelfPackage && !model.IsInstallSplitGroupVisible && !model.IsUninstallSplitGroupVisible
+                && !model.IsUpdateButtonVisible && !model.ShowManagementOptions, "Próprio app: somente adicionar aos Pacotes, sem ações de instalação, remoção ou atualização");
+            curated.IsInstalled = false;
+            await model.InstallAsync();
+            Check(!curated.IsInstalled, "Próprio app: chamada direta de instalação não executa o backend");
+            curated.IsInstalled = true;
+            await model.UninstallAsync();
+            Check(curated.IsInstalled, "Próprio app: chamada direta de remoção não executa o backend");
+            model.AddCurrentAppToPackages();
+            var selfItem = collections.Items.Single(item => item.Id == curated.Id);
+            Check(!selfItem.SupportsInstall && selfItem.SupportsDownload, "Próprio app: permanece nos Pacotes para download e exportação, sem instalação local");
+            Check(model.SelfInstalledVersionText.Contains(AppUpdateService.GetCurrentVersion().ToString(3))
+                && selfItem.SourceLabel == "Catálogo WinProvision", "Próprio app: versão em execução e origem identificadas");
             await CaptureAsync(window.RootElement, $"details-curated-{theme}.png");
             details.Close();
             await Task.Delay(250);
+        }
+        foreach (var item in collections.Items.ToArray()) item.IsSelected = item.App.IsSelf;
+        await collections.InstallSelectedWithOptionsAsync(new PackageInstallOptions());
+        Check(collections.StatusText.Contains("ignorado: aplicativo em execução"), "Pacotes: lote informa por que o próprio app foi ignorado");
+        var detailsModel = services.GetRequiredService<AppDetailsViewModel>();
+        detailsModel.OpenAppUpdatesCommand.Execute(null);
+        await Task.Delay(250);
+        Check(window.CurrentPage is Views.SettingsPage, "Próprio app: atualizações abrem as Configurações sem iniciar instalação");
+        foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light })
+        {
+            window.RootElement.RequestedTheme = theme;
+            var settingsPage = (Views.SettingsPage)window.CurrentPage!;
+            settingsPage.NavigateToCategory("Operations");
+            Check(ReferenceEquals(((Button)settingsPage.FindName("RefreshCatalogButton")).Command,
+                settingsPage.ViewModel.RefreshCatalogCommand), "Catálogo: atualização manual separada da limpeza de cache");
+            await CaptureAsync(window.RootElement, $"settings-catalog-{theme}.png");
         }
         var queue = services.GetRequiredService<OperationsQueueService>();
         var queueModel = services.GetRequiredService<OperationsViewModel>();

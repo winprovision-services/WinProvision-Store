@@ -101,6 +101,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool IsUpdateButtonVisible { get; set; }
     [ObservableProperty] public partial bool IsInstallSplitGroupVisible { get; set; }
     [ObservableProperty] public partial bool IsUninstallSplitGroupVisible { get; set; }
+    [ObservableProperty] public partial bool IsSelfPackage { get; set; }
+    [ObservableProperty] public partial string SelfInstalledVersionText { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool ShowManagementOptions { get; set; } = true;
     public AppDetailsViewModel(CollectionsViewModel collections, IPackageBackend backend, PackageInstallOptionsService options, IPresentationService presentation, IUiDispatcher dispatcher, IClipboardService clipboard, IPackageDetailsProvider metadata, IconService icons)
     {
         _collectionService = collections; _installedPackagesViewModel = backend;
@@ -110,15 +113,21 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         UpdateCommand = new AsyncRelayCommand(UpdateAsync);
         UninstallCommand = new AsyncRelayCommand(UninstallAsync);
         SaveOptionsCommand = new RelayCommand(SaveOptions);
+        OpenAppUpdatesCommand = new RelayCommand(_interaction.ShowAppUpdates);
     }
     public IAsyncRelayCommand InstallCommand { get; }
     public IAsyncRelayCommand UpdateCommand { get; }
     public IAsyncRelayCommand UninstallCommand { get; }
     public IRelayCommand SaveOptionsCommand { get; }
+    public IRelayCommand OpenAppUpdatesCommand { get; }
     public void SetApp(AppEntry app, string? currentVersion, string? availableVersion, bool preserveOptions = false)
     {
         if (_app is not null) _app.PropertyChanged -= App_PropertyChanged;
         _app = app;
+        IsSelfPackage = app.IsSelf;
+        SelfInstalledVersionText = app.IsSelf ? $"Instalado — versão {AppUpdateService.GetCurrentVersion().ToString(3)}" : string.Empty;
+        if (app.IsSelf) app.IsInstalled = true;
+        ShowManagementOptions = !app.IsSelf;
         OnPropertyChanged(nameof(App));
         OnPropertyChanged(nameof(IconUrl));
         _availableUpdateVersion = availableVersion;
@@ -129,13 +138,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
 
         AppNameText = app.Name;
 
-        string sourceLabel = string.Equals(app.CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase)
-            ? "WinProvision"
-            : IsMicrosoftStoreSource(app.Source)
-            ? "Microsoft Store"
-            : IsSupportedCollectionSource(app.Source)
-                ? $"WinGet: {app.Source}"
-                : "PC Local";
+        string sourceLabel = app.CatalogSourceLabel;
         PackageSourceText = sourceLabel;
         PackageManagerText = sourceLabel;
 
@@ -254,9 +257,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         if (_app is null) return;
 
         bool isUpdateContext = !string.IsNullOrWhiteSpace(_availableUpdateVersion);
-        IsUpdateButtonVisible = isUpdateContext;
-        IsInstallSplitGroupVisible = !(isUpdateContext || _app.IsInstalled);
-        IsUninstallSplitGroupVisible = !(isUpdateContext || !_app.IsInstalled);
+        IsUpdateButtonVisible = !_app.IsSelf && isUpdateContext;
+        IsInstallSplitGroupVisible = !_app.IsSelf && !(isUpdateContext || _app.IsInstalled);
+        IsUninstallSplitGroupVisible = !_app.IsSelf && !(isUpdateContext || !_app.IsInstalled);
 
     }
     private void SetupManifestUrl(string id, string source, bool? available)
@@ -566,7 +569,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public async Task InstallAsync()
     {
-        if (_app is null) return;
+        if (_app is null || _app.IsSelf) return;
 
         var app = _app;
         InstallButtonIsEnabled = false;
@@ -602,7 +605,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public async Task UpdateAsync()
     {
-        if (_app is null) return;
+        if (_app is null || _app.IsSelf) return;
 
         var app = _app;
         UpdateButtonIsEnabled = false;
@@ -675,7 +678,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         $"'{value.Replace("'", "''", StringComparison.Ordinal)}'";
     public async Task UninstallAsync()
     {
-        if (_app is null) return;
+        if (_app is null || _app.IsSelf) return;
         var app = _app;
         UninstallButtonIsEnabled = false;
         StatusText = $"Aguardando confirmação para desinstalar {app.Name}…";

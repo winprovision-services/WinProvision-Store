@@ -15,23 +15,24 @@ public sealed partial class PackageItemViewModel : ObservableObject
     public string Version => string.IsNullOrWhiteSpace(App.Version) ? "—" : App.Version;
     public string IconUrl => App.IconUrl;
     public string SourceLabel => App.Office is not null || App.Source == "office" ? "Office" :
-        App.Source == "msstore" ? "Microsoft Store" : "WinGet";
+        App.CatalogSourceLabel;
     public string SourceGlyph => SourceLabel switch
     {
         "Microsoft Store" => "\uE719",
         "Office" => "\uECA5",
         _ => "\uE896"
     };
-    public string CompatibilityNote => App.Office is not null
+    public string CompatibilityNote => App.IsSelf ? "Disponível para exportação. Atualize o WinProvision Store pelo instalador externo."
+        : App.Office is not null
         ? "Plano do Office configurado para instalação pelo ODT."
         : App.Source.Equals("office", StringComparison.OrdinalIgnoreCase)
             ? "Este item Office não contém uma configuração de instalação válida."
             : !string.IsNullOrEmpty(ImportedReference?.PinnedVersion)
                 ? $"Versão fixa: {ImportedReference.PinnedVersion}"
                 : string.Empty;
-    public bool SupportsInstall => App.Office is not null
+    public bool SupportsInstall => !App.IsSelf && (App.Office is not null
         || (!App.Source.Equals("office", StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(App.Id));
+            && !string.IsNullOrWhiteSpace(App.Id)));
     public bool SupportsDownload => App.Office is null
         && !App.Source.Equals("office", StringComparison.OrdinalIgnoreCase)
         && string.IsNullOrEmpty(ImportedReference?.PinnedVersion);
@@ -78,6 +79,7 @@ public sealed partial class PackageItemViewModel : ObservableObject
         DownloadCommand = new AsyncRelayCommand(() => _download(this), () => !IsWorking && SupportsDownload);
         AddCommand = new RelayCommand(() => _add(this));
         RemoveCommand = new RelayCommand(() => _remove(this), () => !IsWorking);
+        IsInstalled = app.IsSelf || app.IsInstalled;
     }
 
     partial void OnIsSelectedChanged(bool value) => App.IsSelectedForInstall = value;

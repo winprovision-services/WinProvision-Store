@@ -46,19 +46,21 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         }
         OperationRunner.ConfigurePackageInstallOptionsProvider(options.Get);
     }
-    public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => TrackAsync($"{app.Source}:{app.Id}", async token =>
+    private static Task<WingetExecutionResult> SelfManagementBlocked() => Task.FromResult(new WingetExecutionResult
+        { Success = false, ExitCode = 1, Output = ApplicationPackagePolicy.SelfManagementMessage });
+    public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => app.IsSelf ? SelfManagementBlocked() : TrackAsync($"{app.Source}:{app.Id}", async token =>
     {
         await _serial.WaitAsync(token);
         try { return await OperationRunner.RunInstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, installLocation: options?.InstallLocation, source: app.Source, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null, requiresElevation: options?.RequiresElevation == true, version: options?.Version, customArguments: options?.CustomArguments); }
         finally { _serial.Release(); }
     });
-    public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => TrackAsync($"{package.Source}:{package.Id}", async token =>
+    public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => ApplicationPackagePolicy.IsSelf(package.Id, package.Name) ? SelfManagementBlocked() : TrackAsync($"{package.Source}:{package.Id}", async token =>
     {
         await _serial.WaitAsync(token);
         try { return await OperationRunner.RunUpdateAsync(_queue, _executor, package.Id, package.Name, package.IconUrl, source: package.Source, elevated: options?.RequiresElevation == true, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null); }
         finally { _serial.Release(); }
     });
-    public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => TrackAsync(InstalledPackagesService.IsOffice(app.Id, app.Name) ? "office:removeall" : $"{app.Source}:{app.Id}", async token =>
+    public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => app.IsSelf ? SelfManagementBlocked() : TrackAsync(InstalledPackagesService.IsOffice(app.Id, app.Name) ? "office:removeall" : $"{app.Source}:{app.Id}", async token =>
     {
         await _serial.WaitAsync(token);
         try

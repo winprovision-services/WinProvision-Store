@@ -31,7 +31,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         InstallationPreferencesService installation,
         IDesktopIntegrationService desktop,
         WinProvision.Core.Services.CacheService cache,
-        WinProvision.Core.Services.AppUpdateService updater)
+        WinProvision.Core.Services.AppUpdateService updater,
+        IPresentationService presentation)
     {
         _themeService = themeService;
         _preferences = preferences;
@@ -39,6 +40,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _desktop = desktop;
         _cache = cache;
         _updater = updater;
+        _presentation = presentation;
         _isInstalledFromSetup = updater.IsCurrentProcessInstalled;
         _isInitializing = true;
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);

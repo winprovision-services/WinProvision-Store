@@ -39,6 +39,12 @@ public sealed partial class InstallAction : DependencyObject
         }
         private void Refresh()
         {
+            if (_app.IsSelf)
+            {
+                _button.Visibility = Visibility.Collapsed;
+                _button.IsEnabled = false;
+                return;
+            }
             string text = _app.IsInstalled ? "Instalado" : _app.IsInstalling ? "Instalando..." : "Instalar";
             var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             content.Children.Add(new FontIcon

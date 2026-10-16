@@ -280,7 +280,7 @@ public sealed partial class FeaturedCategoryShelf
     {
         foreach (AppEntry app in apps)
         {
-            app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
+            app.IsInstalled = app.IsSelf || _installedAppsService.IsInstalled(app.Name, app.Id);
         }
     }
 
@@ -1127,6 +1127,7 @@ public sealed partial class FeaturedCategoryShelf
 
     public async Task InstallAsync(AppEntry app)
     {
+        if (app.IsSelf) return;
         if (app.IsInstalled)
         {
             return;

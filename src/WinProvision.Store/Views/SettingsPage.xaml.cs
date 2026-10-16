@@ -13,11 +13,20 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent(); ViewModel = viewModel; DataContext = viewModel;
         _categories = new() { ["General"] = ("Preferências gerais", PanelGeneral), ["Interface"] = ("Interface e inicialização", PanelInterface), ["Operations"] = ("Armazenamento e cache", PanelOperations) };
-        _targets = new() { ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard };
+        _targets = new() { ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
         Loaded += OnLoaded; Unloaded += OnUnloaded;
         SizeChanged += (_, _) => SettingsSearchBox.Width = Math.Min(320, Math.Max(160, ActualWidth - 160));
     }
-    private void OnLoaded(object sender, RoutedEventArgs e) { ViewModel.PropertyChanged += ThemeChanged; RefreshThemeButtons(); }
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        ViewModel.PropertyChanged += ThemeChanged;
+        RefreshThemeButtons();
+        if (!App.IsSmokeTest)
+        {
+            try { await ViewModel.EnsureUpdateCheckAsync(); }
+            catch (Exception exception) { Services.WinProvisionLog.Warning(exception, "Settings.AutomaticUpdateCheck"); }
+        }
+    }
     private void OnUnloaded(object sender, RoutedEventArgs e) => ViewModel.PropertyChanged -= ThemeChanged;
     private void ThemeChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e.PropertyName == nameof(SettingsViewModel.SelectedThemeOption)) RefreshThemeButtons(); }
     private void RefreshThemeButtons()

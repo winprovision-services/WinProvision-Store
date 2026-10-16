@@ -252,7 +252,23 @@
 
                             <StackPanel Margin="{StaticResource AppDetailsSpacing0_0_0_16}">
 
+                                <TextBlock Text="{Binding SelfInstalledVersionText}"
+                                           Style="{StaticResource AppDetailsBodyStrongStyle}"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <HyperlinkButton Content="Atualizações do aplicativo" Command="{Binding OpenAppUpdatesCommand}"
+                                                 Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                 <Grid HorizontalAlignment="Left">
+
+                                    <Button x:Name="AddSelfToPackagesButton" Content="Adicionar aos Pacotes"
+                                            AutomationProperties.AutomationId="AddSelfToPackagesButton"
+                                            Style="{StaticResource AppDetailsPrimaryButtonStyle}"
+                                            Height="{StaticResource AppDetailsSize36}"
+                                            Padding="{StaticResource AppDetailsSpacing24_0}"
+                                            CornerRadius="{StaticResource AppControlCornerRadius}"
+                                            Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Click="AddSelfToPackages_Click" />
 
                                     <Grid x:Name="InstallSplitGroup" Visibility="{Binding IsInstallSplitGroupVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                                         <Grid.ColumnDefinitions>
@@ -327,7 +343,8 @@
                                            TextWrapping="Wrap" />
                             </StackPanel>
 
-                            <Border Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                            <Border Visibility="{Binding ShowManagementOptions, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    Background="{ThemeResource ControlFillColorSecondaryBrush}"
                                     BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                                     BorderThickness="{StaticResource AppDetailsStroke1}"
                                     CornerRadius="{StaticResource AppOverlayCornerRadius}"

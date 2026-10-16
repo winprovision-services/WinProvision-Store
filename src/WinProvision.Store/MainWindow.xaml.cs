@@ -37,6 +37,12 @@ public sealed partial class MainWindow : Window
         _details = services.GetRequiredService<Controls.AppDetailsOverlay>();
         DetailsOverlayHost.Content = _details;
         services.GetRequiredService<PresentationService>().DetailsPresenter = _details.ShowAsync;
+        services.GetRequiredService<PresentationService>().AppUpdatesPresenter = () =>
+        {
+            _details.Close();
+            Navigate("settings");
+            if (CurrentPage is SettingsPage settings) settings.NavigateToCategory("General");
+        };
         _queueAutoClose = DispatcherQueue.CreateTimer(); _queueAutoClose.Interval = TimeSpan.FromSeconds(4);
         _queueAutoClose.Tick += (_, _) => { _queueAutoClose.Stop(); if (!_operations.HasPending) _operations.IsQueueOpen = false; };
         _cacheBudgetTimer = DispatcherQueue.CreateTimer();

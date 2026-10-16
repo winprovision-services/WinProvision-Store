@@ -19,7 +19,7 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
     private bool _loaded;
     public StorefrontViewModel Storefront { get; }
     public ObservableCollection<PackageItemViewModel> Apps { get; } = new();
-    public IReadOnlyList<string> Sources { get; } = (string[])["Todas as origens", "WinGet", "Microsoft Store"];
+    public IReadOnlyList<string> Sources { get; } = (string[])["Todas as origens", "WinGet", "Microsoft Store", "Catálogo WinProvision"];
     [ObservableProperty] public partial string SearchText { get; set; } = "";
     [ObservableProperty] public partial string SelectedSource { get; set; } = "Todas as origens";
     [ObservableProperty] public partial bool HasMore { get; set; }
@@ -62,7 +62,7 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
     private void InstalledChanged() => _dispatcher.Post(RefreshInstalled);
     private void RefreshInstalled()
     {
-        foreach (var item in Apps) item.IsInstalled = _installed.IsInstalled(item.Name, item.Id);
+        foreach (var item in Apps) item.IsInstalled = item.App.IsSelf || _installed.IsInstalled(item.Name, item.Id);
     }
     partial void OnSearchTextChanged(string value) { _limit = 80; ApplyFilter(); }
     partial void OnSelectedSourceChanged(string value) { _limit = 80; ApplyFilter(); }
@@ -70,7 +70,7 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
     private void ApplyFilter()
     {
         IEnumerable<AppEntry> query = string.IsNullOrWhiteSpace(SearchText) ? _catalog.OrderByDescending(app => app.Score).ThenBy(app => app.Name) : _store.GetAll().Count > 0 ? _store.Search(SearchText) : _catalog.Where(app => app.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) || app.Id.Contains(SearchText, StringComparison.OrdinalIgnoreCase) || app.Publisher.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
-        query = query.Where(app => SelectedSource == "Todas as origens" || app.Source == (SelectedSource == "WinGet" ? "winget" : "msstore"));
+        query = query.Where(app => SelectedSource == "Todas as origens" || app.CatalogSourceLabel == SelectedSource);
         var matches = query.Take(_limit + 1).ToArray();
         HasMore = matches.Length > _limit;
         // Keep command state when a catalog refresh arrives during an installation.

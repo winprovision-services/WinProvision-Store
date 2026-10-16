@@ -18,7 +18,8 @@ public sealed partial class SettingsViewModel
         new("reset-preferences", "Restaurar padrões", "Volte às preferências originais do aplicativo.", "Preferências gerais", "General", "restaurar padrões redefinir reset configurações"),
         new("theme", "Tema do aplicativo", "Alterne entre os temas claro, escuro e do sistema.", "Interface e inicialização", "Interface", "tema aparência claro escuro sistema cor"),
         new("startup", "Iniciar com o Windows", "Abra o WinProvision automaticamente ao entrar nesta conta.", "Interface e inicialização", "Interface", "inicialização iniciar login windows automático"),
-        new("clear-cache", "Limpar cache local de instaladores", "Remova os instaladores temporários para liberar espaço em disco.", "Armazenamento e cache", "Operations", "cache armazenamento espaço disco temporários instaladores limpar"),
+        new("clear-cache", "Limpar caches locais", "Remova índices, detalhes, instaladores e imagens em cache.", "Armazenamento e cache", "Operations", "cache armazenamento espaço disco temporários instaladores limpar"),
+        new("refresh-catalog", "Atualizar catálogo", "Busque aplicativos e versões recentes sem apagar o cache de instaladores e imagens.", "Armazenamento e cache", "Operations", "catálogo atualizar sincronizar busca versões índices"),
     ];
 
     public ObservableCollection<SettingSearchResult> SearchResults { get; } = new();

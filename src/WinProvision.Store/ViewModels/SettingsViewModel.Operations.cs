@@ -11,8 +11,11 @@ public sealed partial class SettingsViewModel
     private readonly IDesktopIntegrationService _desktop;
     private readonly CacheService _cache;
     private readonly AppUpdateService _updater;
+    private readonly IPresentationService _presentation;
     private readonly bool _isInstalledFromSetup;
     private AppUpdateCheckResult? _pendingUpdate;
+    private bool _hasCheckedForUpdates;
+    public Task EnsureUpdateCheckAsync() => _hasCheckedForUpdates ? Task.CompletedTask : CheckUpdateCommand.ExecuteAsync(null);
     public string VersionText => $"Versão {AppUpdateService.GetCurrentVersion().ToString(3)}";
     public bool LaunchAtStartup => _preferences.LaunchAtStartup;
     public string SelectedMethodName
@@ -44,6 +47,7 @@ public sealed partial class SettingsViewModel
 
     private async Task CheckUpdateAsync(CancellationToken cancellationToken)
     {
+        _hasCheckedForUpdates = true;
         IsUpdateBusy = true;
         HasPendingUpdate = false;
         _pendingUpdate = null;
@@ -102,6 +106,14 @@ public sealed partial class SettingsViewModel
             setupPath = await _updater.DownloadInstallerAsync(update, progress, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             IsDownloadingUpdate = false;
+            if (!await _presentation.ConfirmAsync("Aplicar atualização?",
+                    "O download foi verificado. O WinProvision Store será fechado; o instalador externo atualizará o aplicativo e o abrirá novamente.",
+                    "Fechar e atualizar", "Agora não"))
+            {
+                UpdateSubtitle = "Atualização não aplicada. Você pode baixar novamente quando estiver pronto.";
+                return;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
             AppUpdateService.ScheduleSilentInstallAndRestart(setupPath, "WinProvision.Store.exe");
             setupPath = null;
             HasPendingUpdate = false;
@@ -136,6 +148,16 @@ public sealed partial class SettingsViewModel
         }
     }
     private void LightTheme() => ApplyTheme(AppThemePreference.Light);
+    private async Task OpenReleaseAsync()
+    {
+        try
+        {
+            if (Uri.TryCreate(_pendingUpdate?.ReleaseUrl, UriKind.Absolute, out var uri)
+                && uri.Scheme == Uri.UriSchemeHttps && uri.Host == "github.com")
+                await _desktop.OpenUriAsync(uri);
+        }
+        catch (Exception ex) { WinProvisionLog.Error(ex, "Settings.OpenRelease"); UpdateSubtitle = "Não foi possível abrir a página da release."; }
+    }
     private void DarkTheme() => ApplyTheme(AppThemePreference.Dark);
     private void SystemTheme() => ApplyTheme(AppThemePreference.System);
     private void ApplyTheme(AppThemePreference theme) => SelectedThemeOption = ThemeOptions.Single(o => o.Preference == theme);
@@ -159,6 +181,17 @@ public sealed partial class SettingsViewModel
         }
         catch (Exception ex) { WinProvisionLog.Error(ex, "Settings.ClearCache"); StatusText = "Não foi possível limpar os caches."; }
     }
+    private async Task RefreshCatalogAsync(CancellationToken token)
+    {
+        StatusText = "Buscando a versão mais recente do catálogo...";
+        try
+        {
+            int count = await _cache.RefreshCatalogAsync(token);
+            StatusText = $"Catálogo atualizado: {count:N0} aplicativos. Instaladores e imagens em cache foram preservados.";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { StatusText = "Atualização do catálogo cancelada."; }
+        catch (Exception ex) { WinProvisionLog.Error(ex, "Settings.RefreshCatalog"); StatusText = "Não foi possível atualizar o catálogo. Os dados anteriores foram mantidos."; }
+    }
     private void OpenLogs() => Run(() =>
     {
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinProvisionStore", "logs");
@@ -172,7 +205,7 @@ public sealed partial class SettingsViewModel
     private void NotifyPreferences() { OnPropertyChanged(nameof(LaunchAtStartup)); OnPropertyChanged(nameof(SelectedMethodName)); OnPropertyChanged(nameof(InstallMethodDescription)); }
     public async Task ShutdownAsync()
     {
-        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand };
+        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand };
         foreach (var command in commands) command.Cancel();
         foreach (var command in commands) if (command.ExecutionTask is { } task) await task;
     }

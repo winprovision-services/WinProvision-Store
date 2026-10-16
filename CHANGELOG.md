@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## 1.0.4 - 16 de outubro de 2026
+
+- O próprio WinProvision Store pode ser adicionado aos Pacotes e exportado, mas é protegido contra instalação, atualização ou remoção pela interface em execução.
+- A versão em execução aparece nos detalhes; instalações em lote informam quando o próprio aplicativo é ignorado.
+- Origem dos aplicativos identificada nas listas e nos Pacotes, incluindo o Catálogo WinProvision.
+- Novo comando para atualizar o catálogo preservando instaladores e imagens em cache.
+- Acesso às atualizações pelos detalhes do próprio app, consulta automática em Configurações e confirmação antes de fechar para instalar uma atualização verificada.
+- Comando curto de instalação silenciosa documentado no README.
+
+Validação: 183 testes do Core e 95 verificações de smoke com dados simulados; instalações reais são verificadas separadamente.
+
 ## 0.1.3 - 16 de outubro de 2026
 
 - Corrigidos os detalhes de aplicativos da infraestrutura própria: desenvolvedor, autor, data da release, tipo do instalador, URL, SHA-256 e galeria vêm do catálogo.
@@ -11,6 +22,12 @@
 Validação: testes automatizados e smoke da interface. O smoke usa dados simulados e não comprova instalações reais.
 
 ## Em desenvolvimento
+
+- Origem do catálogo visível nas listas e Pacotes; o próprio aplicativo mostra a versão em execução e informa quando é ignorado em um lote.
+- Atualização do catálogo sem apagar instaladores e imagens em cache, com acesso em Configurações.
+- Detalhes do próprio app dão acesso às atualizações; o fluxo existente verifica o download e pede confirmação antes de fechar o app para executar o instalador externo.
+
+- O próprio WinProvision Store pode ser adicionado aos Pacotes e exportado, mas não pode ser instalado, atualizado ou desinstalado pela interface em execução.
 
 - Detalhes de aplicativos da infraestrutura própria mostram datas, instalador, URL, SHA-256, galeria e ausência de manifesto WinGet a partir do catálogo; a tag Office isolada não caracteriza uma oferta Microsoft 365.
 

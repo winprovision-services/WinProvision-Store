@@ -360,9 +360,16 @@ public sealed partial class InstalledPackagesPage : Page
 
     internal void UpdateAutoUpdateMenuState(MenuFlyout menu, InstalledPackageRow package)
     {
+        bool self = WinProvision.Core.Services.ApplicationPackagePolicy.IsSelf(package.Id, package.Name);
+        foreach (var item in menu.Items.OfType<MenuFlyoutItem>())
+            if (item.Text.StartsWith("Desinst", StringComparison.OrdinalIgnoreCase))
+                item.Visibility = self ? Visibility.Collapsed : Visibility.Visible;
         var autoUpdateItem = menu.Items.OfType<ToggleMenuFlyoutItem>().FirstOrDefault();
         if (autoUpdateItem is not null)
+        {
             autoUpdateItem.IsChecked = ViewModel.IsAutoUpdateSelected(package);
+            autoUpdateItem.Visibility = self ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     private void ContextAddToCollection_Click(object sender, RoutedEventArgs e)

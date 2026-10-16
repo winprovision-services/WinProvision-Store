@@ -32,7 +32,8 @@ public sealed partial class EmptyVisibilityConverter : IValueConverter
 }
 public sealed partial class SourceLabelConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, string language) => value is "msstore" ? "Origem: Microsoft Store" : "Origem: WinGet";
+    public object Convert(object value, Type targetType, object parameter, string language) => value is WinProvision.Core.Models.AppEntry app
+        ? $"Origem: {app.CatalogSourceLabel}" : value is "msstore" ? "Origem: Microsoft Store" : "Origem: WinGet";
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
 public sealed partial class FormatConverter : IValueConverter

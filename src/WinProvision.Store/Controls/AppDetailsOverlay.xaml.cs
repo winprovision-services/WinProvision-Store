@@ -314,6 +314,7 @@ public sealed partial class AppDetailsOverlay : UserControl
         var item = new MenuFlyoutItem { Text = text, IsEnabled = enabled }; item.Click += (_, _) => action(); return item;
     }
     private MenuFlyoutItem AddCollectionItem() => MenuItem(!_model.CanAddCurrentAppToPackages ? "Disponível apenas para WinGet e Microsoft Store" : _model.AlreadyAdded ? "Já está na coleção" : "Adicionar à Coleção", _model.AddCurrentAppToPackages, _model.CanAddCurrentAppToPackages && !_model.AlreadyAdded);
+    private void AddSelfToPackages_Click(object sender, RoutedEventArgs args) => _model.AddCurrentAppToPackages();
     private void InstallChevronButton_Click(object sender, RoutedEventArgs args)
     {
         var menu = new MenuFlyout();

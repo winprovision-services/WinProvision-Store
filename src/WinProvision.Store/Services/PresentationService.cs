@@ -10,12 +10,15 @@ public interface IPresentationService
     Task<string?> PickFolderAsync();
     Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar");
     Task ShowDetailsAsync(AppEntry app, string? currentVersion = null, string? availableVersion = null);
+    void ShowAppUpdates();
 }
 public sealed partial class PresentationService : IPresentationService
 {
     public XamlRoot? Root { get; set; }
     public nint WindowHandle { get; set; }
     public Func<AppEntry, string?, string?, Task>? DetailsPresenter { get; set; }
+    public Action? AppUpdatesPresenter { get; set; }
+    public void ShowAppUpdates() => AppUpdatesPresenter?.Invoke();
     private readonly SemaphoreSlim _dialogs = new(1, 1);
     private ContentDialog? _activeDialog;
     public void CancelDialogs() => _activeDialog?.Hide();

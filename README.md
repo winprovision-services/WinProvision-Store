@@ -10,6 +10,22 @@ O WinProvision Store foi desenvolvido com auxílio de inteligência artificial e
 
 Veja mais telas do aplicativo na [galeria de capturas](docs/SCREENSHOTS.md).
 
+## Instalação
+
+Enquanto a publicação no WinGet está pendente, instale a versão mais recente para Windows x64 pelo PowerShell:
+
+```powershell
+$p="$env:TEMP\WinProvision-Setup.exe"; curl.exe -fL --retry 3 -o $p https://github.com/winprovision-services/WinProvision-Store/releases/latest/download/WinProvision.Store-Setup.exe; if($LASTEXITCODE -eq 0){Start-Process $p -Wait -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS="clipath,desktopicon"'}
+```
+
+O comando baixa o instalador oficial do GitHub e instala silenciosamente, sem reiniciar o Windows, com atalho na área de trabalho e a CLI no PATH. Esta forma curta não confere o SHA-256. Para baixar manualmente o instalador, a versão portátil ou os hashes, consulte as [releases](https://github.com/winprovision-services/WinProvision-Store/releases/latest).
+
+Após a instalação, abra outro terminal para carregar o PATH atualizado:
+
+```powershell
+winprovision --version
+```
+
 ## Recursos
 
 - Pesquise aplicativos por nome e consulte seus detalhes.

@@ -25,11 +25,7 @@ public sealed class AppUpdateService : IDisposable
     private const string DefaultRepoSlug = "winprovision-services/WinProvision-Store";
     private const string DefaultAssetName = "WinProvision.Store-Setup.exe";
 
-    // O repositório hoje só publica esta release, de tag fixa: rebuild automático a cada
-    // commit na main, sem versão semântica (ver releases/tag/nightly — "Não é a versão
-    // estável, serve para testar antes de criar uma tag vX.Y.Z"). Quando existir uma tag
-    // vX.Y.Z, CheckForUpdateAsync a usa primeiro; o nightly é o fallback (e, por ora, o único
-    // canal publicado).
+    // Releases estáveis têm prioridade; nightly permanece como canal de compatibilidade.
     private const string NightlyTag = "nightly";
 
     // Publicação da release e timestamp de build do .exe local vêm de relógios diferentes
@@ -461,7 +457,7 @@ public sealed class AppUpdateService : IDisposable
             try {
                 $current = Get-Process -Id {{pid}} -ErrorAction SilentlyContinue
                 if ($current -and -not $current.WaitForExit({{maxWaitSeconds}} * 1000)) { exit 1 }
-                $installer = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+                $installer = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -WindowStyle Hidden -Wait -PassThru
                 if ($installer.ExitCode -notin @(0, 3010, 1641)) { exit $installer.ExitCode }
                 Start-Process -FilePath $application
             } finally {

@@ -686,12 +686,12 @@ public sealed partial class InstalledPackageRow : ObservableObject
     public string UninstallString => Package.UninstallString;
     public bool IsSystemComponent => Package.IsSystemComponent;
     public bool IsOffice => InstalledPackagesService.IsOffice(Id, Name);
-    public bool CanSelect => !IsSystemComponent;
-    public bool CanRemove => !IsSystemComponent
+    public bool CanSelect => !IsSystemComponent && !ApplicationPackagePolicy.IsSelf(Id, Name);
+    public bool CanRemove => !IsSystemComponent && !ApplicationPackagePolicy.IsSelf(Id, Name)
         && (IsOffice
             || SourceCategory is "WinGet" or "Microsoft Store"
             || !string.IsNullOrWhiteSpace(UninstallString));
-    public bool CanAddToCollection => SourceCategory is "WinGet" or "Microsoft Store";
+    public bool CanAddToCollection => ApplicationPackagePolicy.IsSelf(Id, Name) || SourceCategory is "WinGet" or "Microsoft Store";
     public string SelectionKey => $"{SourceCategory}|{Id}";
 
     [ObservableProperty] public partial bool IsSelected { get; set; }
@@ -699,11 +699,11 @@ public sealed partial class InstalledPackageRow : ObservableObject
 
     public AppEntry ToAppEntry() => new()
     {
-        Id = Id,
+        Id = ApplicationPackagePolicy.IsSelf(Id, Name) ? "WinProvision.Store" : Id,
         Name = Name,
         Version = Version,
         IconUrl = IconUrl,
-        Source = SourceCategory switch
+        Source = ApplicationPackagePolicy.IsSelf(Id, Name) ? "winget" : SourceCategory switch
         {
             "WinGet" => "winget",
             "Microsoft Store" => "msstore",

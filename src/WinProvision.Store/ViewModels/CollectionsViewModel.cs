@@ -647,13 +647,14 @@ public sealed partial class CollectionsViewModel : PageViewModel
     public async Task InstallSelectedWithOptionsAsync(PackageInstallOptions options, CancellationToken token = default)
     {
         PackageItemViewModel[] selected = SelectedProfile?.Items.Where(item => item.IsSelected).ToArray() ?? [];
+        string skippedSelf = selected.Any(item => item.App.IsSelf) ? " WinProvision Store ignorado: aplicativo em execução." : string.Empty;
         PackageItemViewModel[] installable = selected.Where(item => item.SupportsInstall && !item.IsInstalled).ToArray();
         if (selected.Length == 0 || installable.Length == 0)
         {
             StatusText = selected.Length == 0
                 ? "Selecione aplicativos compatíveis para instalar."
                 : selected.All(item => item.IsInstalled)
-                    ? "Os itens selecionados já estão instalados."
+                    ? "Os itens selecionados já estão instalados." + skippedSelf
                     : "Os itens selecionados não têm uma configuração de instalação compatível.";
             return;
         }
@@ -665,7 +666,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
         try
         {
             failures.AddRange(selected
-                .Where(item => !item.IsInstalled && !item.SupportsInstall)
+                .Where(item => !item.IsInstalled && !item.SupportsInstall && !item.App.IsSelf)
                 .Select(item => $"{item.Name}: configuração de instalação ausente ou incompatível."));
             foreach (PackageItemViewModel item in installable)
             {
@@ -711,6 +712,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             StatusText = failures.Count == 0
                 ? $"{succeeded} aplicativo(s) enviado(s) à fila de operações."
                 : $"{succeeded} instalado(s); {failures.Count} falha(s).";
+        if (!token.IsCancellationRequested) StatusText += skippedSelf;
     }
 
     private static PackageInstallOptions MergeOptions(
@@ -965,7 +967,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
 
     private string BuildInstallScript(CollectionProfile profile)
     {
-        var unsupported = profile.Items.Where(item => !item.SupportsInstall
+        var unsupported = profile.Items.Where(item => (!item.SupportsInstall && !item.App.IsSelf)
             || _installOptions?.Get(item.Id, item.App.Source) is { CustomArguments: not null and not "" }).ToArray();
         if (unsupported.Length > 0)
             throw new InvalidOperationException("Itens incompatíveis com exportação de script: " + string.Join(", ", unsupported.Select(item => item.Name)));

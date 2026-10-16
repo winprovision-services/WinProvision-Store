@@ -19,6 +19,14 @@ public partial class AppEntry : INotifyPropertyChanged
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
+    [JsonIgnore]
+    public bool IsSelf => Services.ApplicationPackagePolicy.IsSelf(Id, Name);
+
+    [JsonIgnore]
+    public string CatalogSourceLabel => IsSelf || string.Equals(CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase)
+        ? "Catálogo WinProvision"
+        : Source.ToLowerInvariant() switch { "msstore" => "Microsoft Store", "office" => "Office", "winget" => "WinGet", _ => "PC Local" };
+
     /// <summary>Caminho relativo do registro completo, presente no índice de busca v2.</summary>
     [JsonPropertyName("detailPath")]
     public string? CatalogDetailPath { get; set; }

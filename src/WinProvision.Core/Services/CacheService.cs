@@ -36,4 +36,10 @@ public sealed class CacheService
         // A UI chama AsyncImage.ClearCache() quando disponível; este serviço permanece
         // no Core para manter independência da interface.
     }
+
+    public async Task<int> RefreshCatalogAsync(CancellationToken token = default)
+    {
+        var apps = await _storeService.LoadCatalogAsync(forceRefresh: true, cancellationToken: token);
+        return apps.Count;
+    }
 }
