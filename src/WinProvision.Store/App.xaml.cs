@@ -232,6 +232,8 @@ public partial class App : Application
         foreach (var command in commands) if (command is not null) { try { await command; } catch (Exception exception) { WinProvisionLog.Warning(exception, "ShutdownCommand"); } }
         await AsyncImage.ShutdownAsync();
         await _services.GetRequiredService<OperationsQueueService>().WaitForIdleAsync();
+        try { await WinProvision.Core.Services.GsudoElevationService.StopCacheAsync(); }
+        catch (Exception ex) { WinProvisionLog.Warning(ex, "ShutdownElevationCache"); }
         await _services.DisposeAsync();
         ShutdownComplete = true;
     }

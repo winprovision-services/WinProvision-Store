@@ -3,7 +3,7 @@ namespace WinProvision.Core.Services;
 public sealed record InteractiveCliRequest(
     string Command, string Query = "", string? Id = null, string? Source = null,
     bool Exact = false, bool Json = false, bool NoInput = false, bool All = false,
-    string? Input = null, string? Output = null, bool Download = false, bool Offline = false, bool InstallOffice = false);
+    string? Input = null, string? Output = null, bool Download = false, bool Offline = false, bool InstallOffice = false, bool Yes = false, bool ElevationCache = false);
 
 /// <summary>Contrato de entrada da CLI, independente do console e da interface.</summary>
 public static class InteractiveCliInput
@@ -39,7 +39,7 @@ public static class InteractiveCliInput
 
         string? id = null, source = null, input = null, output = null;
         bool download = false, offline = false, installOffice = false;
-        bool exact = false, json = false, noInput = false, all = false, positionalOnly = false;
+        bool exact = false, json = false, noInput = false, all = false, positionalOnly = false, yes = false, elevationCache = false;
         var words = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < args.Length; i++)
@@ -50,7 +50,7 @@ public static class InteractiveCliInput
             {
                 int equal = arg.IndexOf('=');
                 var option = equal < 0 ? arg : arg[..equal];
-                option = option switch { "-q" => "--query", "-s" => "--source", "-e" => "--exact", "-id" => "--id", "-d" when command == "uninstall" => "--id", "-all" => "--all", "-i" => "--input", "-o" => "--output", "-d" => "--output", _ => option };
+                option = option switch { "-y" => "--yes", "-q" => "--query", "-s" => "--source", "-e" => "--exact", "-id" => "--id", "-d" when command == "uninstall" => "--id", "-all" => "--all", "-i" => "--input", "-o" => "--output", "-d" => "--output", _ => option };
                 if (!seen.Add(option)) throw Invalid($"Opção repetida: {option}.");
                 bool takesValue = option is "--query" or "--id" or "--source" or "--input" or "--output";
                 string? value = null;
@@ -70,6 +70,8 @@ public static class InteractiveCliInput
                     case "--exact": exact = true; break;
                     case "--json": json = true; break;
                     case "--no-input": noInput = true; break;
+                    case "--elevation-cache": elevationCache = true; break;
+                    case "--yes": yes = true; break;
                     case "--all": all = true; break;
                     case "--input": input = value; break;
                     case "--output": output = value; break;
@@ -84,7 +86,12 @@ public static class InteractiveCliInput
         }
         var query = string.Join(' ', words).Trim();
         if (offline && command != "office") throw Invalid("--offline só é permitido em office.");
-        if (command == "office" && (seen.Any(option => option != "--offline" && option != "--office") || query.Length > 0))
+        if (elevationCache && (command is not ("install" or "update" or "uninstall" or "import") && !installOffice || json || noInput && !yes))
+            throw Invalid("--elevation-cache exige uma operação de instalação, atualização, remoção ou importação.");
+        if (yes && json) throw Invalid("--yes não combina com --json; JSON apenas consulta.");
+        if (yes && command is not ("install" or "update" or "uninstall" or "import") && !installOffice) throw Invalid("--yes exige uma operação de instalação, atualização, remoção ou importação.");
+        if (yes && command == "update" && !all && id is null) throw Invalid("Com --yes, informe --id ou --all para atualizar sem seleção interativa.");
+        if (command == "office" && (seen.Any(option => option != "--offline" && option != "--office" && option != "--yes" && option != "--elevation-cache" && !(option == "--no-input" && yes)) || query.Length > 0))
             throw Invalid("Use office [--offline], sem filtros ou outras opções.");
         if (installOffice && offline) throw Invalid("--offline apenas baixa. Use office --offline ou install --office separadamente.");
         if (command == "import")
@@ -97,7 +104,7 @@ public static class InteractiveCliInput
         if (input is not null && command != "import") throw Invalid("--input só é permitido em import.");
         if (output is not null && command is not ("export" or "download" or "import")) throw Invalid("--output não é permitido neste comando.");
         if (download && command != "import") throw Invalid("--download só é permitido em import.");
-        if (command is "import" or "export" && (id is not null || source is not null || exact || json || noInput || all || query.Length > 0))
+        if (command is "import" or "export" && (id is not null || source is not null || exact || json || (noInput && !yes) || all || query.Length > 0))
             throw Invalid("Import/export não aceita filtros nem opções de consulta.");
         if (command == "import" && output is not null && !download) throw Invalid("--output em import exige --download.");
         if (query.Length > 512) throw Invalid("A consulta deve ter no máximo 512 caracteres.");
@@ -108,13 +115,13 @@ public static class InteractiveCliInput
         if (command is "install" or "show" or "download" or "uninstall")
         {
             if (id is null) throw Invalid($"Use {command} --id <ID do pacote> para identificar o pacote com precisão.");
-            if (all || json || (command != "show" && noInput))
+            if (all || json || (command != "show" && noInput && !yes))
                 throw Invalid($"{command} não aceita --all, --json ou instalação sem confirmação.");
         }
         if (command == "search" && id is null && query.Length == 0) throw Invalid("Informe o nome ou --id para pesquisar.");
-        if (all && (command != "update" || id is not null || query.Length > 0 || json || noInput))
+        if (all && (command != "update" || id is not null || query.Length > 0 || json || (noInput && !yes)))
             throw Invalid("--all só pode ser usado em upgrade/update interativo, sem filtro por pacote.");
-        return new(command, query, id, source, exact, json, noInput, all, input, output, download, offline, installOffice);
+        return new(command, query, id, source, exact, json, noInput, all, input, output, download, offline, installOffice, yes, elevationCache);
     }
 
     private static string CanonicalCommand(string command) => (command.StartsWith("--") ? command[2..] : command).ToLowerInvariant() switch

@@ -31,6 +31,22 @@ public static class ElevatedProcessRunner
 
         try
         {
+            if (GsudoElevationService.IsBundled)
+            {
+                var captured = new System.Text.StringBuilder();
+                int code = await GsudoElevationService.RunElevatedAsync(fileName, arguments, cancellationToken,
+                    onLog: line => { lock (captured) captured.AppendLine(line); }).ConfigureAwait(false);
+                bool ok = useWingetExitCodes ? InstallerExitCodes.IsWingetSuccess(code) : code == 0;
+                string details = captured.ToString();
+                if (code == 999) details = "Elevação não concluída pelo helper. " + details;
+                WingetCliAudit.Result($"{fileName} (gsudo)", code, ok, auditTimer, arguments);
+                return new WingetExecutionResult
+                {
+                    Success = ok, ExitCode = code, Output = details, WasElevated = true, InstallerStarted = true,
+                    FailureReason = code == 999 ? WingetFailureReason.ElevationCanceled
+                        : ok ? WingetFailureReason.Unknown : WingetErrorTranslator.Classify(code, details)
+                };
+            }
             using var process = Process.Start(startInfo);
             if (process is null)
             {

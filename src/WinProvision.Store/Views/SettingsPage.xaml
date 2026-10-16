@@ -152,6 +152,24 @@
                 </ComboBox>
               </Grid>
             </Border>
+            <TextBlock Text="Autorização de administrador" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
+            <Border x:Name="ElevationCacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Reutilizar autorização de administrador" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="Opcional. Reutiliza sua autorização nos instaladores iniciados pelo auxiliar do aplicativo. Algumas operações podem solicitar confirmação própria. A interface continua sem privilégios de administrador." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <ComboBox Header="Expirar após inatividade" SelectedValuePath="Tag" SelectedValue="{Binding ElevationCacheDuration, Mode=TwoWay}" Width="220" HorizontalAlignment="Left" AutomationProperties.Name="Prazo do cache de elevação">
+                  <ComboBoxItem Content="2 minutos" Tag="2" />
+                  <ComboBoxItem Content="5 minutos" Tag="5" />
+                  <ComboBoxItem Content="10 minutos" Tag="10" />
+                  <ComboBoxItem Content="15 minutos" Tag="15" />
+                </ComboBox>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button x:Name="AuthorizeElevationButton" Content="Autorizar nesta sessão" Command="{Binding AuthorizeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="AuthorizeElevationButton" />
+                  <Button Content="Encerrar autorização" Command="{Binding StopElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                </StackPanel>
+                <TextBlock Text="{Binding ElevationCacheMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
             <TextBlock Text="Atualizações do aplicativo" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="AppUpdateCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
               <StackPanel>

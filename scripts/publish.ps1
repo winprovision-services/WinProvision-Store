@@ -49,6 +49,15 @@ dotnet publish (Join-Path $taskRoot 'src\WinProvision.Cli\WinProvision.Cli.cspro
 if ($LASTEXITCODE -ne 0) { throw 'A publicação da CLI falhou.' }
 if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\winprovision.exe'))) { throw 'Executável da CLI ausente.' }
 if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\Microsoft.Management.Deployment.winmd'))) { throw 'Metadados COM do WinGet ausentes na CLI.' }
+$taskElevator = Get-Content (Join-Path $taskRoot 'Tool/gsudo/manifest.json') -Raw | ConvertFrom-Json
+foreach ($taskHostDirectory in @($taskStaging, (Join-Path $taskStaging 'cli'))) {
+    $taskHelperPath = Join-Path $taskHostDirectory 'Tool/gsudo/WinProvision.Elevator.exe'
+    if (-not (Test-Path -LiteralPath $taskHelperPath) -or
+        (Get-FileHash -LiteralPath $taskHelperPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskElevator.sha256 -or
+        -not (Test-Path -LiteralPath (Join-Path $taskHostDirectory 'Tool/gsudo/LICENSE.txt'))) {
+        throw 'Helper de elevação ausente, divergente ou sem a licença MIT.'
+    }
+}
 foreach ($taskResource in @('WinProvision.Store.pri', 'App.xbf', 'MainWindow.xbf', 'Views\HomePage.xbf', 'Views\CollectionsPage.xbf', 'Views\UpdatesPage.xbf', 'Views\InstalledPackagesPage.xbf', 'Styles\InstalledPackages.xbf', 'Views\OfficePage.xbf', 'Views\AccountSyncPage.xbf', 'Views\SettingsPage.xbf', 'Views\MorePage.xbf', 'Controls\OperationsQueuePanel.xbf', 'Styles\OperationsQueue.xbf', 'Controls\AppDetailsOverlay.xbf', 'Styles\AppDetails.xbf', 'Styles\Updates.xbf', 'Styles\Office.xbf')) {
     if (-not (Test-Path -LiteralPath (Join-Path $taskStaging $taskResource))) { throw "Recurso WinUI ausente na publicação: $taskResource" }
 }

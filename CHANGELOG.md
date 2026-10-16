@@ -23,6 +23,17 @@ Validação: testes automatizados e smoke da interface. O smoke usa dados simula
 
 ## Em desenvolvimento
 
+- WinProvision Elevator incorpora o ícone do aplicativo e metadados de identificação próprios.
+- No modo Automático, instaladores com elevação conhecida são encaminhados ao helper antes do despacho pela COM; o requisito acompanha a instalação pela API própria.
+
+- WinProvision Elevator baseado no gsudo, com licença MIT, fonte rastreável, hash fixado e configuração/cache isolados.
+- Cache de elevação opcional por sessão nas Configurações e por execução da CLI com `--elevation-cache`; prazo por inatividade e encerramento explícito.
+- Instaladores da API própria, elevações pelo fallback WinGet e ODT passam a usar o helper distribuído.
+
+- CLI aceita `--yes`/`-y` para instalações, atualizações, remoções e importações sem menus; entrada redirecionada sem confirmação retorna erro de uso.
+- Provisionamento verifica a ativação COM mesmo quando o executável WinGet funciona, tenta registro/reparo do App Installer e preserva o fallback.
+- Remoção pelo fallback da CLI solicita modo silencioso.
+
 - Origem do catálogo visível nas listas e Pacotes; o próprio aplicativo mostra a versão em execução e informa quando é ignorado em um lote.
 - Atualização do catálogo sem apagar instaladores e imagens em cache, com acesso em Configurações.
 - Detalhes do próprio app dão acesso às atualizações; o fluxo existente verifica o download e pede confirmação antes de fechar o app para executar o instalador externo.

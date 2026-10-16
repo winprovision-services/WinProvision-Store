@@ -1,0 +1,1612 @@
+diff --git a/WINPROVISION.md b/WINPROVISION.md
+new file mode 100644
+index 0000000..430d19a
+--- /dev/null
++++ b/WINPROVISION.md
+@@ -0,0 +1,11 @@
++# WinProvision Elevator
++
++Downstream of gerardog/gsudo v2.6.1 (b7376285a6bb7b180f8a28b42797b0ab5c22dd34), under the original MIT license in LICENSE.txt.
++
++Changes: .NET 10 Native AOT; output WinProvision.Elevator.exe; version 2.6.1.1; isolated registry SOFTWARE\WinProvision\Gsudo, named pipes and cache invalidation events. Removed legacy GitVersion/analyzer packages and the pre-build hook that terminates global gsudo processes. The upstream authentication, client verification and explicit-cache defaults remain in place. No Devolutions code, branding, certificates or signature claims are included.
++
++Build: dotnet publish src/gsudo/gsudo.csproj -c Release -r win-x64 --self-contained true -o artifacts/win-x64
++
++Cache access remains scoped to a consenting process and descendants by the host. This build is unsigned; do not confuse its SHA-256 inventory with Authenticode signing.
++
++Version 2.6.1.2 embeds the WinProvision Store icon and WinProvision Elevator display metadata. The icon is covered by icon/winprovision-LICENSE.txt; the upstream gsudo MIT license remains unchanged.
+diff --git a/global.json b/global.json
+new file mode 100644
+index 0000000..09fd189
+--- /dev/null
++++ b/global.json
+@@ -0,0 +1 @@
++{"sdk":{"version":"10.0.401","rollForward":"disable","allowPrerelease":false}}
+diff --git a/src/gsudo/AppSettings/RegistrySetting.cs b/src/gsudo/AppSettings/RegistrySetting.cs
+index a6579ec..bbb2790 100644
+--- a/src/gsudo/AppSettings/RegistrySetting.cs
++++ b/src/gsudo/AppSettings/RegistrySetting.cs
+@@ -1,4 +1,4 @@
+-﻿using Microsoft.Win32;
++using Microsoft.Win32;
+ using System;
+ using System.ComponentModel;
+ using System.Linq;
+@@ -20,7 +20,7 @@ namespace gsudo.AppSettings
+ 
+     abstract class RegistrySetting
+     {
+-        protected const string REGKEY = "SOFTWARE\\gsudo";
++        protected const string REGKEY = "SOFTWARE\\WinProvision\\Gsudo";
+         public RegistrySettingScope Scope { get; protected set; }
+ 
+         public string Name { get; set; }
+diff --git a/src/gsudo/Commands/HelpCommand.cs b/src/gsudo/Commands/HelpCommand.cs
+index cddb795..1424c64 100644
+--- a/src/gsudo/Commands/HelpCommand.cs
++++ b/src/gsudo/Commands/HelpCommand.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Reflection;
+ using System.Text.RegularExpressions;
+ using System.Threading.Tasks;
+@@ -17,7 +17,7 @@ namespace gsudo.Commands
+         {
+             var assembly = Assembly.GetExecutingAssembly();
+             Console.ForegroundColor = ConsoleColor.Yellow;
+-            Console.WriteLine($"{assembly.GetName().Name} v{GitVersionInformation.FullSemVer} ({GitVersionInformation.FullBuildMetaData})");
++            Console.WriteLine($"{assembly.GetName().Name} v{assembly.GetName().Version} (WinProvision fork, upstream gsudo 2.6.1)");
+ 
+             Console.ResetColor();
+             if (verbose) Console.WriteLine("Copyright(c) 2019-2022 Gerardo Grignoli and GitHub contributors");
+diff --git a/src/gsudo/CredentialsCache/CredentialsCacheLifetimeManager.cs b/src/gsudo/CredentialsCache/CredentialsCacheLifetimeManager.cs
+index e9bc451..bba18ee 100644
+--- a/src/gsudo/CredentialsCache/CredentialsCacheLifetimeManager.cs
++++ b/src/gsudo/CredentialsCache/CredentialsCacheLifetimeManager.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Globalization;
+ using System.Security.AccessControl;
+ using System.Security.Principal;
+@@ -6,7 +6,7 @@ using System.Threading;
+ #if NETFRAMEWORK
+ using EventWaitHandleAcl = System.Threading.EventWaitHandle;
+ #endif
+-
++
+ namespace gsudo.CredentialsCache
+ {
+     /// <summary>
+@@ -27,7 +27,7 @@ namespace gsudo.CredentialsCache
+     // user NonAdmin and System, both desired actions.
+     class CredentialsCacheLifetimeManager
+     {
+-        const string GLOBAL_WAIT_HANDLE_NAME = @"Global\gsudo.CredentialsCache";
++        const string GLOBAL_WAIT_HANDLE_NAME = @"Global\WinProvision.gsudo.CredentialsCache";
+ 
+         public delegate void CacheEventHandler();
+         public event CacheEventHandler OnCacheClear;
+diff --git a/src/gsudo/Helpers/ProcessFactory.cs b/src/gsudo/Helpers/ProcessFactory.cs
+index 28923cb..31c1baa 100644
+--- a/src/gsudo/Helpers/ProcessFactory.cs
++++ b/src/gsudo/Helpers/ProcessFactory.cs
+@@ -1,4 +1,4 @@
+-﻿using gsudo.Native;
++using gsudo.Native;
+ using gsudo.Tokens;
+ using Microsoft.Win32.SafeHandles;
+ using System;
+@@ -8,7 +8,7 @@ using System.Diagnostics;
+ using System.IO;
+ using System.Linq;
+ using System.Runtime.InteropServices;
+-using System.Security;
++using System.Security;
+ using static gsudo.Native.ProcessApi;
+ using static gsudo.Native.TokensApi;
+ 
+@@ -33,15 +33,15 @@ namespace gsudo.Helpers
+                 process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+ 
+             try
+-            {
+-                process.Start();
++            {
++                process.Start();
+             }
+-            catch (Win32Exception ex)
+-            {
+-                if (ex.NativeErrorCode == 1223)
+-                    throw new ApplicationException("The operation was canceled by the user.");
+-
+-                throw;
++            catch (Win32Exception ex)
++            {
++                if (ex.NativeErrorCode == 1223)
++                    throw new ApplicationException("The operation was canceled by the user.");
++
++                throw;
+             }
+             return process;
+         }
+@@ -75,9 +75,9 @@ namespace gsudo.Helpers
+                 UseShellExecute = false,
+             };
+ 
+-            if (disableInput)
+-            {
+-                process.StartInfo.RedirectStandardInput = true;
++            if (disableInput)
++            {
++                process.StartInfo.RedirectStandardInput = true;
+             }
+ 
+             process.Start();
+@@ -120,30 +120,30 @@ namespace gsudo.Helpers
+         }
+ 
+         public static Process StartWithCredentials(string filename, string arguments, string user, SecureString password)
+-        {
++        {
+             Logger.Instance.Log($"Starting process as {user}: {filename} {arguments}", LogLevel.Debug);
+-            var usr = InputArguments.UserName.Split('\\');
+-
+-            try
+-            {
+-                return Process.Start(new ProcessStartInfo()
+-                {
+-                    UserName = usr[1],
+-                    Domain = usr[0],
+-                    Password = password,
+-                    Arguments = arguments,
+-                    FileName = filename,
+-                    LoadUserProfile = true,
+-                    UseShellExecute = false,
+-                    CreateNoWindow = !InputArguments.Debug,
++            var usr = InputArguments.UserName.Split('\\');
++
++            try
++            {
++                return Process.Start(new ProcessStartInfo()
++                {
++                    UserName = usr[1],
++                    Domain = usr[0],
++                    Password = password,
++                    Arguments = arguments,
++                    FileName = filename,
++                    LoadUserProfile = true,
++                    UseShellExecute = false,
++                    CreateNoWindow = !InputArguments.Debug,
+                 });
+-            }
+-            catch (Win32Exception ex)
+-            {
+-                if (ex.NativeErrorCode == 1326)
+-                    throw new ApplicationException("The user name or password is incorrect.");
+-
+-                throw;
++            }
++            catch (Win32Exception ex)
++            {
++                if (ex.NativeErrorCode == 1326)
++                    throw new ApplicationException("The user name or password is incorrect.");
++
++                throw;
+             }
+         }
+ 
+@@ -166,45 +166,45 @@ namespace gsudo.Helpers
+                 if (File.Exists(input))
+                 {
+                     return Path.GetFullPath(input);
+-                }
+-
++                }
++
+                 var inputFolder = Path.GetDirectoryName(input);
+-                var inputFileName = Path.GetFileName(input);
+-
+-                var validExtensions = Environment.GetEnvironmentVariable("PATHEXT", EnvironmentVariableTarget.Process)
+-                    .Split(';');
+-
+-                var possibleNames = new List<string>();
+-
+-                if (validExtensions.Contains(Path.GetExtension(inputFileName), StringComparer.OrdinalIgnoreCase))
+-                {
+-                    possibleNames.Add(inputFileName);
+-                }
+-
+-                possibleNames.AddRange(validExtensions.Select((ext) => inputFileName + ext));
+-
+-                var pathsToSearch = new List<string>();
+-
+-                if (!string.IsNullOrEmpty(inputFolder))
+-                {
+-                    pathsToSearch.Add(Path.Combine(Environment.CurrentDirectory, inputFolder));
+-                }
+-                else
+-                {
+-                    pathsToSearch.Add(Environment.CurrentDirectory);
+-                    pathsToSearch.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'));
+-                }
+-
+-                foreach (string pathCandidate in pathsToSearch)
+-                {
+-                    foreach (string fileNameCandidate in possibleNames)
+-                    {
+-                        string path = Path.Combine(pathCandidate, fileNameCandidate);
+-                        if (!String.IsNullOrEmpty(path) && File.Exists(path))
+-                            return Path.GetFullPath(path);
+-                    }
+-                }
+-
++                var inputFileName = Path.GetFileName(input);
++
++                var validExtensions = Environment.GetEnvironmentVariable("PATHEXT", EnvironmentVariableTarget.Process)
++                    .Split(';');
++
++                var possibleNames = new List<string>();
++
++                if (validExtensions.Contains(Path.GetExtension(inputFileName), StringComparer.OrdinalIgnoreCase))
++                {
++                    possibleNames.Add(inputFileName);
++                }
++
++                possibleNames.AddRange(validExtensions.Select((ext) => inputFileName + ext));
++
++                var pathsToSearch = new List<string>();
++
++                if (!string.IsNullOrEmpty(inputFolder))
++                {
++                    pathsToSearch.Add(Path.Combine(Environment.CurrentDirectory, inputFolder));
++                }
++                else
++                {
++                    pathsToSearch.Add(Environment.CurrentDirectory);
++                    pathsToSearch.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'));
++                }
++
++                foreach (string pathCandidate in pathsToSearch)
++                {
++                    foreach (string fileNameCandidate in possibleNames)
++                    {
++                        string path = Path.Combine(pathCandidate, fileNameCandidate);
++                        if (!String.IsNullOrEmpty(path) && File.Exists(path))
++                            return Path.GetFullPath(path);
++                    }
++                }
++
+                 return null;
+             }
+             catch
+@@ -312,8 +312,8 @@ namespace gsudo.Helpers
+ 
+             CloseHandle(pi.hThread);
+             return new SafeProcessHandle(pi.hProcess, true);
+-        }
+-
++        }
++
+         private static SafeProcessHandle CreateProcessWithToken(IntPtr newToken, string appToRun, string args, string startupFolder, bool hidden)
+         {
+             var STARTF_USESHOWWINDOW = 0x00000001;
+@@ -321,7 +321,7 @@ namespace gsudo.Helpers
+ 
+             var startupInfo = new STARTUPINFO()
+             {
+-                cb = (int)Marshal.SizeOf(typeof(STARTUPINFO)),
++                cb = (int)Marshal.SizeOf<STARTUPINFO>(),
+                 dwFlags = STARTF_USESHOWWINDOW,
+                 wShowWindow = (short)(hidden ? 0 : 1),
+             };
+@@ -343,88 +343,88 @@ namespace gsudo.Helpers
+         }
+ 
+         internal static void CreateProcessForTokenReplacement(string lpApplicationName, string args, ProcessApi.CreateProcessFlags dwCreationFlags, out SafeProcessHandle processHandle, out SafeHandle threadHandle, out int processId, bool bDisableInput)
+-        {
++        {
+             var currentProcessHandle = ProcessApi.GetCurrentProcess();
+ 
+             var sInfoEx = new ProcessApi.STARTUPINFOEX();
+-            sInfoEx.StartupInfo.cb = Marshal.SizeOf(sInfoEx);
+-
++            sInfoEx.StartupInfo.cb = Marshal.SizeOf(sInfoEx);
++
+             var pSec = new ProcessApi.SECURITY_ATTRIBUTES();
+             var tSec = new ProcessApi.SECURITY_ATTRIBUTES();
+             pSec.nLength = Marshal.SizeOf(pSec);
+-            tSec.nLength = Marshal.SizeOf(tSec);
+-
+-            if (bDisableInput)
+-            {
+-                dwCreationFlags |= CreateProcessFlags.EXTENDED_STARTUPINFO_PRESENT;
+-                var STARTF_USESTDHANDLES = 0x00000100;
+-                
+-                sInfoEx.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+-
+-                uint DUPLICATE_SAME_ACCESS = 0x00000002;
+-
+-                if (!DuplicateHandle(
+-                    currentProcessHandle,   // Source process handle is the current process
+-                    ConsoleApi.GetStdHandle(ConsoleApi.STD_INPUT_HANDLE),         // The handle to duplicate
+-                    currentProcessHandle,   // Target process handle is also the current process
+-                    out var inputHandle,     // The duplicated handle with desired access rights
+-                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
+-                    true,                  // The handle is not inheritable
+-                    0))                     // dwOptions: auto close pInfo.hProcess.
+-                {
+-                    throw new Win32Exception(Marshal.GetLastWin32Error());
+-                }
+-
+-                if (!DuplicateHandle(
+-                    currentProcessHandle,   // Source process handle is the current process
+-                    ConsoleApi.GetStdHandle(ConsoleApi.STD_OUTPUT_HANDLE),         // The handle to duplicate
+-                    currentProcessHandle,   // Target process handle is also the current process
+-                    out var outputHandle,     // The duplicated handle with desired access rights
+-                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
+-                    true,                  // The handle is not inheritable
+-                    0))                     // dwOptions: auto close pInfo.hProcess.
+-                {
+-                    throw new Win32Exception(Marshal.GetLastWin32Error());
+-                }
+-
+-                if (!DuplicateHandle(
+-                    currentProcessHandle,   // Source process handle is the current process
+-                    ConsoleApi.GetStdHandle(ConsoleApi.STD_ERROR_HANDLE),         // The handle to duplicate
+-                    currentProcessHandle,   // Target process handle is also the current process
+-                    out var errorHandle,     // The duplicated handle with desired access rights
+-                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
+-                    true,                  // The handle is not inheritable
+-                    0))                     // dwOptions: auto close pInfo.hProcess.
+-                {
+-                    throw new Win32Exception(Marshal.GetLastWin32Error());
+-                }
+-
+-                sInfoEx.StartupInfo.hStdInput = IntPtr.Zero;
+-                sInfoEx.StartupInfo.hStdOutput = outputHandle;
+-                sInfoEx.StartupInfo.hStdError = errorHandle;
+-            }
+-
+-            // Set a more restrictive Security Descriptor:
+-            // - This code runs at medium integrity, so we dont have permissions to change the SDACL to High integrity level.
+-            // - We will do that in TokenSwitcher.ReplaceProcessToken.
+-            string sddl = "D:(D;;GAFAWD;;;S-1-1-0)"; // Deny Generic-All, File-All, and Write-Dac to everyone.
+-
+-            IntPtr sd_ptr = new IntPtr();
+-            UIntPtr sd_size_ptr = new UIntPtr();
+-            Native.TokensApi.ConvertStringSecurityDescriptorToSecurityDescriptor(sddl, StringSDRevision: 1, out sd_ptr, out sd_size_ptr);
++            tSec.nLength = Marshal.SizeOf(tSec);
++
++            if (bDisableInput)
++            {
++                dwCreationFlags |= CreateProcessFlags.EXTENDED_STARTUPINFO_PRESENT;
++                var STARTF_USESTDHANDLES = 0x00000100;
++                
++                sInfoEx.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
++
++                uint DUPLICATE_SAME_ACCESS = 0x00000002;
++
++                if (!DuplicateHandle(
++                    currentProcessHandle,   // Source process handle is the current process
++                    ConsoleApi.GetStdHandle(ConsoleApi.STD_INPUT_HANDLE),         // The handle to duplicate
++                    currentProcessHandle,   // Target process handle is also the current process
++                    out var inputHandle,     // The duplicated handle with desired access rights
++                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
++                    true,                  // The handle is not inheritable
++                    0))                     // dwOptions: auto close pInfo.hProcess.
++                {
++                    throw new Win32Exception(Marshal.GetLastWin32Error());
++                }
++
++                if (!DuplicateHandle(
++                    currentProcessHandle,   // Source process handle is the current process
++                    ConsoleApi.GetStdHandle(ConsoleApi.STD_OUTPUT_HANDLE),         // The handle to duplicate
++                    currentProcessHandle,   // Target process handle is also the current process
++                    out var outputHandle,     // The duplicated handle with desired access rights
++                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
++                    true,                  // The handle is not inheritable
++                    0))                     // dwOptions: auto close pInfo.hProcess.
++                {
++                    throw new Win32Exception(Marshal.GetLastWin32Error());
++                }
++
++                if (!DuplicateHandle(
++                    currentProcessHandle,   // Source process handle is the current process
++                    ConsoleApi.GetStdHandle(ConsoleApi.STD_ERROR_HANDLE),         // The handle to duplicate
++                    currentProcessHandle,   // Target process handle is also the current process
++                    out var errorHandle,     // The duplicated handle with desired access rights
++                    DUPLICATE_SAME_ACCESS,       // Desired access: PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE
++                    true,                  // The handle is not inheritable
++                    0))                     // dwOptions: auto close pInfo.hProcess.
++                {
++                    throw new Win32Exception(Marshal.GetLastWin32Error());
++                }
++
++                sInfoEx.StartupInfo.hStdInput = IntPtr.Zero;
++                sInfoEx.StartupInfo.hStdOutput = outputHandle;
++                sInfoEx.StartupInfo.hStdError = errorHandle;
++            }
++
++            // Set a more restrictive Security Descriptor:
++            // - This code runs at medium integrity, so we dont have permissions to change the SDACL to High integrity level.
++            // - We will do that in TokenSwitcher.ReplaceProcessToken.
++            string sddl = "D:(D;;GAFAWD;;;S-1-1-0)"; // Deny Generic-All, File-All, and Write-Dac to everyone.
++
++            IntPtr sd_ptr = new IntPtr();
++            UIntPtr sd_size_ptr = new UIntPtr();
++            Native.TokensApi.ConvertStringSecurityDescriptorToSecurityDescriptor(sddl, StringSDRevision: 1, out sd_ptr, out sd_size_ptr);
+ 
+             pSec.lpSecurityDescriptor = sd_ptr;
+             tSec.lpSecurityDescriptor = sd_ptr;
+ 
+-            var command = $"{lpApplicationName} {args}";
+-
++            var command = $"{lpApplicationName} {args}";
++
+             PROCESS_INFORMATION pInfo;
+             Logger.Instance.Log($"Creating target process: {lpApplicationName} {args}", LogLevel.Debug);
+             if (!ProcessApi.CreateProcess(null, command, ref pSec, ref tSec, true, dwCreationFlags, IntPtr.Zero, null, ref sInfoEx, out pInfo))
+             {
+-                throw new Win32Exception((int)ConsoleApi.GetLastError());
+-            }
+-
++                throw new Win32Exception((int)ConsoleApi.GetLastError());
++            }
++
+             if (!DuplicateHandle(
+                 currentProcessHandle,   // Source process handle is the current process
+                 pInfo.hProcess,         // The handle to duplicate
+@@ -450,8 +450,8 @@ namespace gsudo.Helpers
+             }
+ 
+             processHandle = new SafeProcessHandle(restrictedProcessHandle, true);
+-            threadHandle = new Native.SafeThreadHandle(restrictedThreadHandle);
+-
++            threadHandle = new Native.SafeThreadHandle(restrictedThreadHandle);
++
+             processId = pInfo.dwProcessId;
+         }
+     }
+diff --git a/src/gsudo/Helpers/ProcessHelper.cs b/src/gsudo/Helpers/ProcessHelper.cs
+index f6bdf08..3003660 100644
+--- a/src/gsudo/Helpers/ProcessHelper.cs
++++ b/src/gsudo/Helpers/ProcessHelper.cs
+@@ -1,4 +1,4 @@
+-﻿using static gsudo.Native.ProcessApi;
++using static gsudo.Native.ProcessApi;
+ using Microsoft.Win32.SafeHandles;
+ using System;
+ using System.ComponentModel;
+@@ -93,31 +93,31 @@ namespace gsudo.Helpers
+                 { }
+ 
+                 return parentId;
+-            }
++            }
+ 
+             int pid = process.Id;
+             Process p = null;
+ 
+-            while (p == null && pid > 0)
+-            {
+-                pid = GetParentProcessId(pid);
+-                try
+-                {
+-                    p = Process.GetProcessById(pid);
++            while (p == null && pid > 0)
++            {
++                pid = GetParentProcessId(pid);
++                try
++                {
++                    p = Process.GetProcessById(pid);
+                 }
+-                catch
+-                { }
+-
+-                if (p != null)
+-                {
+-                    string filename = null;
+-                    try { filename = p.MainModule.FileName; } catch { }
+-
+-                    if (filename != null && !IsShim(filename))
+-                        break;
+-                }
+-                p = null;
+-            }
++                catch
++                { }
++
++                if (p != null)
++                {
++                    string filename = null;
++                    try { filename = p.MainModule.FileName; } catch { }
++
++                    if (filename != null && !IsShim(filename))
++                        break;
++                }
++                p = null;
++            }
+         
+             return pid;
+         }
+@@ -158,7 +158,7 @@ namespace gsudo.Helpers
+             return parentId;
+         }
+ 
+-        // This function is special because it can get the parent process of a process that no longer exists.
++        // This function is special because it can get the parent process of a process that no longer exists.
+         public static int GetParentProcessId(int pid)
+         {
+             IntPtr hProcess = ProcessApi.OpenProcess(ProcessApi.PROCESS_QUERY_INFORMATION, true, (uint)pid);
+@@ -305,8 +305,7 @@ namespace gsudo.Helpers
+                 }
+ 
+                 // Marshal the TOKEN_MANDATORY_LABEL struct from native to .NET object.
+-                TokensApi.TOKEN_MANDATORY_LABEL tokenIL = (TokensApi.TOKEN_MANDATORY_LABEL)
+-                    Marshal.PtrToStructure(pTokenIL, typeof(TokensApi.TOKEN_MANDATORY_LABEL));
++                TokensApi.TOKEN_MANDATORY_LABEL tokenIL = Marshal.PtrToStructure<TokensApi.TOKEN_MANDATORY_LABEL>(pTokenIL);
+ 
+                 IntPtr pIL = TokensApi.GetSidSubAuthority(tokenIL.Label.Sid, 0);
+                 IL = Marshal.ReadInt32(pIL);
+@@ -347,7 +346,7 @@ namespace gsudo.Helpers
+                 if (!fileName.Equals(ProcessHelper.GetOwnExeName(), StringComparison.OrdinalIgnoreCase)
+                     && (fileName.EndsWith("\\SUDO.EXE", StringComparison.OrdinalIgnoreCase) ||
+                         fileName.EndsWith("\\GSUDO.EXE", StringComparison.OrdinalIgnoreCase)
+-                        ))
++                        ))
+                     return true;
+             }
+             catch { } // fails to get parent.MainModule if our parent process is elevated and we are not.
+diff --git a/src/gsudo/Rpc/NamedPipeNameFactory.cs b/src/gsudo/Rpc/NamedPipeNameFactory.cs
+index 24417ea..4812b18 100644
+--- a/src/gsudo/Rpc/NamedPipeNameFactory.cs
++++ b/src/gsudo/Rpc/NamedPipeNameFactory.cs
+@@ -1,7 +1,7 @@
+-﻿using gsudo.Helpers;
+-using System;
++using gsudo.Helpers;
++using System;
+ using System.Globalization;
+-using System.Security.Principal;
++using System.Security.Principal;
+ using System.Text;
+ 
+ namespace gsudo.Rpc
+@@ -14,7 +14,7 @@ namespace gsudo.Rpc
+ 
+             var ti = InputArguments.TrustedInstaller ? "_TI" : string.Empty;
+             var s = InputArguments.RunAsSystem ? "_S" : string.Empty;
+-            var admin = !isAdmin ? "_NonAdmin" : string.Empty;
++            var admin = !isAdmin ? "_NonAdmin" : string.Empty;
+ 
+             var ownExe = GetHash(ProcessHelper.GetOwnExeName());
+             var data = $"allowedSid-{allowedSid}_targetSid-{targetSid}{allowedPid}{s}{ti}{admin}_{ownExe}";
+@@ -38,14 +38,14 @@ namespace gsudo.Rpc
+             }
+         }
+ 
+-        private static string GetPipePrefix(bool isAdmin)
+-        {
+-            const string PROTECTED = "ProtectedPrefix\\Administrators\\gsudo";
+-            const string REGULAR = "gsudo";
+-            if (isAdmin)
+-                return PROTECTED;
+-            else
+-                return REGULAR;
++        private static string GetPipePrefix(bool isAdmin)
++        {
++            const string PROTECTED = "ProtectedPrefix\\Administrators\\WinProvision_gsudo";
++            const string REGULAR = "WinProvision_gsudo";
++            if (isAdmin)
++                return PROTECTED;
++            else
++                return REGULAR;
+         }    
+     }
+ }
+diff --git a/src/gsudo/Rpc/NamedPipeUtils.cs b/src/gsudo/Rpc/NamedPipeUtils.cs
+index 12d92be..02edfd4 100644
+--- a/src/gsudo/Rpc/NamedPipeUtils.cs
++++ b/src/gsudo/Rpc/NamedPipeUtils.cs
+@@ -1,8 +1,8 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.IO;
+-using System.Linq;
+-
++using System.Linq;
++
+ namespace gsudo.Rpc
+ {
+     static class NamedPipeUtils
+@@ -16,7 +16,7 @@ namespace gsudo.Rpc
+             var ptr = Native.FileApi.FindFirstFile($@"\\.\pipe\{name}", out lpFindFileData);
+             do
+             {
+-                if (lpFindFileData.cFileName.ToUpperInvariant().Contains("GSUDO") && 
++                if (lpFindFileData.cFileName.ToUpperInvariant().Contains("WINPROVISION_GSUDO") && 
+                     !lpFindFileData.cFileName.ToUpperInvariant().Contains("_CONTROL"))
+                 {
+                     namedPipes.Add(lpFindFileData.cFileName);
+@@ -33,21 +33,21 @@ namespace gsudo.Rpc
+         public static bool ExistsNamedPipe(string name)
+         {
+             //Logger.Instance.Log($"Searching for {name}", LogLevel.Debug);
+-            try
+-            {
+-                return System.IO.Directory.GetFiles("\\\\.\\\\pipe\\", name).Any();
++            try
++            {
++                return System.IO.Directory.GetFiles("\\\\.\\\\pipe\\", name).Any();
+             }
+             catch
+-            {
+-                // Windows 7 workaround
+-                foreach (var pipe in System.IO.Directory.GetFiles("\\\\.\\\\pipe\\"))
+-                {
+-                    if (pipe.EndsWith(name, StringComparison.Ordinal))
+-                    {
+-                        //Logger.Instance.Log($"Found Named Pipe {name}", LogLevel.Debug);
+-                        return true;
+-                    }
+-                }
++            {
++                // Windows 7 workaround
++                foreach (var pipe in System.IO.Directory.GetFiles("\\\\.\\\\pipe\\"))
++                {
++                    if (pipe.EndsWith(name, StringComparison.Ordinal))
++                    {
++                        //Logger.Instance.Log($"Found Named Pipe {name}", LogLevel.Debug);
++                        return true;
++                    }
++                }
+             }
+ 
+             return false;
+diff --git a/src/gsudo/Tokens/TokenProvider.cs b/src/gsudo/Tokens/TokenProvider.cs
+index 55bad5f..17d45f2 100644
+--- a/src/gsudo/Tokens/TokenProvider.cs
++++ b/src/gsudo/Tokens/TokenProvider.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using gsudo.Native;
+ using static gsudo.Native.ProcessApi;
+ using static gsudo.Native.TokensApi;
+@@ -114,8 +114,8 @@ namespace gsudo.Tokens
+         {
+             var tm = OpenCurrentProcessToken(access);
+             return tm.Duplicate(MAXIMUM_ALLOWED);
+-        }
+-
++        }
++
+         public static TokenProvider CreateFromLogin(string user, string password)
+         {
+             throw new NotImplementedException();
+@@ -178,8 +178,7 @@ namespace gsudo.Tokens
+                 }
+ 
+                 // Marshal the TOKEN_MANDATORY_LABEL struct from native to .NET object.
+-                TOKEN_LINKED_TOKEN linkedTokenStruct = (TOKEN_LINKED_TOKEN)
+-                    Marshal.PtrToStructure(pLinkedToken, typeof(TOKEN_LINKED_TOKEN));
++                TOKEN_LINKED_TOKEN linkedTokenStruct = Marshal.PtrToStructure<TOKEN_LINKED_TOKEN>(pLinkedToken);
+ 
+                 var sa = new SECURITY_ATTRIBUTES();
+                 sa.nLength = 0;
+@@ -354,11 +353,11 @@ namespace gsudo.Tokens
+ 
+             if (!NativeMethods.AdjustTokenPrivileges(Token.DangerousGetHandle(), false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+                 if (throwOnFailure)
+-                    throw new Win32Exception();
+-
+-            if (throwOnFailure && ConsoleApi.GetLastError() != 0)
+-                    throw new Win32Exception(); //throw new Exception("The token does not have the specified privilege. \n");
+-
++                    throw new Win32Exception();
++
++            if (throwOnFailure && ConsoleApi.GetLastError() != 0)
++                    throw new Win32Exception(); //throw new Exception("The token does not have the specified privilege. \n");
++
+             return this;
+         }
+ 
+diff --git a/src/gsudo/gsudo.csproj b/src/gsudo/gsudo.csproj
+index 563cfd9..e0feec1 100644
+--- a/src/gsudo/gsudo.csproj
++++ b/src/gsudo/gsudo.csproj
+@@ -1,83 +1,74 @@
+-﻿<Project Sdk="Microsoft.NET.Sdk">
+-  <PropertyGroup>
+-    <OutputType>Exe</OutputType>
+-	<TargetFrameworks>net9.0;net46</TargetFrameworks>
+-    <SignAssembly>false</SignAssembly>
+-    <AssemblyOriginatorKeyFile>StrongName.snk</AssemblyOriginatorKeyFile>
+-    <Authors>Gerardo Grignoli</Authors>
+-    <Description>gsudo is a sudo for Windows, allows to run commands with elevated permissions in the current console.</Description>
+-    <DelaySign>false</DelaySign>
+-    <OutputPath>bin\</OutputPath>
+-    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+-    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+-    <Version>1.0.0-prerelease</Version>
+-    <Copyright>2021 Gerardo Grignoli</Copyright>
+-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+-    <PackageProjectUrl>https://github.com/gerardog/gsudo</PackageProjectUrl>
+-    <RepositoryUrl>https://github.com/gerardog/gsudo</RepositoryUrl>
+-    <RepositoryType>git</RepositoryType>
+-    <PackageTags>sudo for windows</PackageTags>
+-    <AssemblyName>gsudo</AssemblyName>
+-    <Deterministic>true</Deterministic>
+-    <PathMap>$(MSBuildProjectDirectory)=C:\</PathMap>
+-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+-    <FileVersion>1.0.0.0</FileVersion>
+-	<NoWarn>1701;1702;CA1303;CA1707;CA1028;CA1001;CA1031;CA1416</NoWarn>
+-	<ApplicationIcon>icon\gsudo.ico</ApplicationIcon>
+-  </PropertyGroup>
+-  <PropertyGroup Condition="'$(TargetFramework)'=='net9.0'">
+-    <PublishAot>true</PublishAot>
+-    <AutoGenerateBindingRedirects>False</AutoGenerateBindingRedirects>
+-    <PublishTrimmed>true</PublishTrimmed>
+-    <InvariantGlobalization>true</InvariantGlobalization>
+-    <IlcOptimizationPreference>Size</IlcOptimizationPreference>	
+-  </PropertyGroup>
+-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+-    <DefineConstants>DEBUG</DefineConstants>
+-    <DebugType>pdbonly</DebugType>
+-    <DebugSymbols>true</DebugSymbols>
+-  </PropertyGroup>
+-  <ItemGroup>
+-    <Compile Remove="bin\**" />
+-    <EmbeddedResource Remove="bin\**" />
+-    <None Remove="bin\**" />
+-  </ItemGroup>
+-  <ItemGroup>
+-    <Compile Remove="Tokens\PrivilegeManager.cs" />
+-  </ItemGroup>
+-  <ItemGroup>
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <OutputType>Exe</OutputType>
++	<TargetFramework>net10.0</TargetFramework>
++    <SignAssembly>false</SignAssembly>
++    <AssemblyOriginatorKeyFile>StrongName.snk</AssemblyOriginatorKeyFile>
++    <Authors>Gerardo Grignoli</Authors>
++    <Description>WinProvision Elevator - auxiliar de elevação baseado em gsudo.</Description>
++    <Title>WinProvision Elevator</Title>
++    <AssemblyTitle>WinProvision Elevator</AssemblyTitle>
++    <Company>WinProvision Services</Company>
++    <DelaySign>false</DelaySign>
++    <OutputPath>bin\</OutputPath>
++    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
++    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
++    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
++    <Version>2.6.1.2</Version>
++    <Product>WinProvision Elevator (based on gsudo)</Product>
++    <Copyright>2021 Gerardo Grignoli</Copyright>
++    <PackageLicenseExpression>MIT</PackageLicenseExpression>
++    <PackageProjectUrl>https://github.com/gerardog/gsudo</PackageProjectUrl>
++    <RepositoryUrl>https://github.com/gerardog/gsudo</RepositoryUrl>
++    <RepositoryType>git</RepositoryType>
++    <PackageTags>sudo for windows</PackageTags>
++    <AssemblyName>WinProvision.Elevator</AssemblyName>
++    <Deterministic>true</Deterministic>
++    <PathMap>$(MSBuildProjectDirectory)=C:\</PathMap>
++    <AssemblyVersion>2.6.1.2</AssemblyVersion>
++    <FileVersion>2.6.1.2</FileVersion>
++	<NoWarn>1701;1702;CA1303;CA1707;CA1028;CA1001;CA1031;CA1416</NoWarn>
++	<ApplicationIcon>icon\winprovision.ico</ApplicationIcon>
++  </PropertyGroup>
++  <PropertyGroup Condition="'$(TargetFramework)'=='net10.0'">
++    <PublishAot>true</PublishAot>
++    <AutoGenerateBindingRedirects>False</AutoGenerateBindingRedirects>
++    <PublishTrimmed>true</PublishTrimmed>
++    <InvariantGlobalization>true</InvariantGlobalization>
++    <IlcOptimizationPreference>Size</IlcOptimizationPreference>	
++  </PropertyGroup>
++  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
++    <DefineConstants>DEBUG</DefineConstants>
++    <DebugType>pdbonly</DebugType>
++    <DebugSymbols>true</DebugSymbols>
++  </PropertyGroup>
++  <ItemGroup>
++    <Compile Remove="bin\**" />
++    <EmbeddedResource Remove="bin\**" />
++    <None Remove="bin\**" />
++  </ItemGroup>
++  <ItemGroup>
++    <Compile Remove="Tokens\PrivilegeManager.cs" />
++  </ItemGroup>
++  <ItemGroup>
+     <Content Include="gsudo.ico" />
+-  </ItemGroup>
+-  <ItemGroup>
+-    <None Include="Tokens\PrivilegeManager.cs" />
+-  </ItemGroup>
+-  <ItemGroup>
+-    <PackageReference Include="GitVersion.MsBuild" Version="5.6.11">
+-      <PrivateAssets>all</PrivateAssets>
+-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+-    </PackageReference>
+-    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.7">
+-      <PrivateAssets>all</PrivateAssets>
+-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+-    </PackageReference>
+-  </ItemGroup>
+-  <ItemGroup Condition="'$(TargetFramework)'!='net46'">
+-    <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+-    <PackageReference Include="System.Threading.AccessControl" Version="6.0.0" />
+-  </ItemGroup>
+-  <ItemGroup Condition="'$(TargetFramework)'=='net46'">
+-	<PackageReference Include="System.Security.Principal.Windows" Version="4.6.0" />
+-  </ItemGroup>
+-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+-    <Exec Command="IF NOT DEFINED nokill echo Killing running gsudo commands.&#xD;&#xA;IF NOT DEFINED nokill gsudo -k 2&gt;nul&#xD;&#xA;IF NOT DEFINED nokill %25windir%25\sysnative\tskill gsudo&#xD;&#xA;exit 0" />
+-  </Target>
+-  <Target Name="PostBuildMacros">
+-    <GetAssemblyIdentity AssemblyFiles="$(TargetPath)">
+-      <Output TaskParameter="Assemblies" ItemName="Targets" />
+-    </GetAssemblyIdentity>
+-    <ItemGroup>
+-      <VersionNumber Include="$([System.Text.RegularExpressions.Regex]::Replace(&quot;%(Targets.Version)&quot;, &quot;^(.*?)(\.0)*$&quot;, &quot;$1&quot;))" />
+-    </ItemGroup>
+-  </Target>
+-</Project>
++  </ItemGroup>
++  <ItemGroup>
++    <None Include="Tokens\PrivilegeManager.cs" />
++  </ItemGroup>
++  <ItemGroup>
++  </ItemGroup>
++  <ItemGroup Condition="'$(TargetFramework)'!='net46'">
++  </ItemGroup>
++  <ItemGroup Condition="'$(TargetFramework)'=='net46'">
++	<PackageReference Include="System.Security.Principal.Windows" Version="4.6.0" />
++  </ItemGroup>
++  <Target Name="PostBuildMacros">
++    <GetAssemblyIdentity AssemblyFiles="$(TargetPath)">
++      <Output TaskParameter="Assemblies" ItemName="Targets" />
++    </GetAssemblyIdentity>
++    <ItemGroup>
++      <VersionNumber Include="$([System.Text.RegularExpressions.Regex]::Replace(&quot;%(Targets.Version)&quot;, &quot;^(.*?)(\.0)*$&quot;, &quot;$1&quot;))" />
++    </ItemGroup>
++  </Target>
++</Project>
+diff --git a/src/gsudo/icon/winprovision-LICENSE.txt b/src/gsudo/icon/winprovision-LICENSE.txt
+new file mode 100644
+index 0000000..88ee36a
+--- /dev/null
++++ b/src/gsudo/icon/winprovision-LICENSE.txt
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2026 Gabriel Silva
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/src/gsudo/icon/winprovision.ico b/src/gsudo/icon/winprovision.ico
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c258ed8fbd10f44d52c871ac9fdc91af6b29c2c
+GIT binary patch
+literal 34791
+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
+z(9nX;mG*C8zZb`Y19Gi@yn!)AR#Pzf%0D8RlThG{x(k{BHA>KJTmxXO(<8wn5Ze*S
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/gsudo/packages.lock.json b/src/gsudo/packages.lock.json
+new file mode 100644
+index 0000000..4e111a5
+--- /dev/null
++++ b/src/gsudo/packages.lock.json
+@@ -0,0 +1,35 @@
++{
++  "version": 1,
++  "dependencies": {
++    "net10.0": {
++      "Microsoft.DotNet.ILCompiler": {
++        "type": "Direct",
++        "requested": "[10.0.12, )",
++        "resolved": "10.0.12",
++        "contentHash": "AawF393Q+VkdrnrnI1gu612zh5iqpa1AGSvnKCQ3IkMgSKJXIQbO1sXYRgEzOU4f0cPZ6MaCCF29xZSGWlmbuQ=="
++      },
++      "Microsoft.NET.ILLink.Tasks": {
++        "type": "Direct",
++        "requested": "[10.0.12, )",
++        "resolved": "10.0.12",
++        "contentHash": "xi+BDjFpW+Sb+MHFHaH6Y/gV9I8BluFwRXc1QyCdoZbIK26eNiBeFuMTe/FMwc33G1wdHCyDg7CVTmb8OdQrMQ=="
++      }
++    },
++    "net10.0/win-x64": {
++      "Microsoft.DotNet.ILCompiler": {
++        "type": "Direct",
++        "requested": "[10.0.12, )",
++        "resolved": "10.0.12",
++        "contentHash": "AawF393Q+VkdrnrnI1gu612zh5iqpa1AGSvnKCQ3IkMgSKJXIQbO1sXYRgEzOU4f0cPZ6MaCCF29xZSGWlmbuQ==",
++        "dependencies": {
++          "runtime.win-x64.Microsoft.DotNet.ILCompiler": "10.0.12"
++        }
++      },
++      "runtime.win-x64.Microsoft.DotNet.ILCompiler": {
++        "type": "Transitive",
++        "resolved": "10.0.12",
++        "contentHash": "clsgU9GnioCJ+PBzQTCoJHxLXRU+7O/BzYrwRT8CUP7jgyYjNgJmNsQ/kbzAA7MG5kDvFoFvIBGHGzYdINh/EQ=="
++      }
++    }
++  }
++}
+\ No newline at end of file

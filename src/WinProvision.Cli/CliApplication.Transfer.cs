@@ -40,8 +40,7 @@ public sealed partial class CliApplication
         string action = request.Download ? "baixar" : "instalar";
         Write($"{packages.Count} pacote(s) para {action}:");
         foreach (var package in packages) Write($"{package.Name ?? package.Id} | {package.Id} | {package.Source} | {package.PinnedVersion ?? "atual"}");
-        Write("[1] Confirmar\n[0] Sair");
-        if (await ReadConfirmation(token) == 0) return 0;
+        if (!await ConfirmAsync(request, "Executar a lista?", token)) return 0;
         int succeeded = 0, failed = 0, reboot = 0;
         for (int i = 0; i < packages.Count; i++)
         {

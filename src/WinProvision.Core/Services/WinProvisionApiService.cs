@@ -784,7 +784,9 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         string? preferredArchitecture = null,
         string? preferredScope = null,
         Action<InstallProgressUpdate>? onProgress = null,
-        string? source = null)
+        string? source = null,
+        bool requiresElevation = false,
+        bool elevationProhibited = false)
     {
         onLog?.Report($"[WinProvisionAPI] Consultando manifest de '{packageId}'...");
         PackageManifest? manifest;
@@ -942,8 +944,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
             onLog?.Report($"[WinProvisionAPI] Instalando formato {effectiveType} (silent: {installer.SilentArgs})...");
             onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Installing, Method: WingetMethod.OwnApi));
-            var exitCode = await RunInstallerAsync(runnablePath, effectiveType, installer.SilentArgs ?? string.Empty, installer.Scope ?? string.Empty, ct,
-                () => installerStarted = true);
+            var exitCode = await RunInstallerAsync(runnablePath, effectiveType, installer.SilentArgs ?? string.Empty, installer.Scope ?? effectiveScope ?? string.Empty, ct,
+                () => installerStarted = true, line => onLog?.Report(line), requiresElevation, elevationProhibited);
 
             // Códigos padrão do Windows Installer/Burn mais os códigos de sucesso
             // adicionais declarados no manifesto WinGet.
@@ -1544,13 +1546,15 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     private static async Task<int> RunInstallerAsync(
         string filePath, string installerType, string silentArgs, string scope, CancellationToken ct,
-        Action? onStarted = null)
+        Action? onStarted = null, Action<string>? onLog = null,
+        bool requiresElevation = false, bool elevationProhibited = false)
     {
         ct.ThrowIfCancellationRequested();
-        bool needsElevation = string.Equals(scope, "machine", StringComparison.OrdinalIgnoreCase)
-                              || string.Equals(scope, "system", StringComparison.OrdinalIgnoreCase);
+        bool needsElevation = InstallerElevationPolicy.RequiresElevation(scope, requiresElevation, elevationProhibited);
         bool elevate = needsElevation && !IsRunningElevated();
         var command = WinProvisionInstallerCommandBuilder.Build(filePath, installerType, silentArgs);
+        if (elevate && GsudoElevationService.IsBundled)
+            return await GsudoElevationService.RunElevatedAsync(command.FileName, command.Arguments, ct, onStarted, onLog).ConfigureAwait(false);
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = command.FileName,

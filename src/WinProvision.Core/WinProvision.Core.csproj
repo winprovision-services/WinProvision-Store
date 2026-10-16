@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
@@ -50,6 +50,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../../Tool/gsudo/win-x64/WinProvision.Elevator.exe" Link="Tool/gsudo/WinProvision.Elevator.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../Tool/gsudo/LICENSE.txt" Link="Tool/gsudo/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../Tool/gsudo/manifest.json" Link="Tool/gsudo/manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Services/Profile/OfflineInstall.ps1" LogicalName="WinProvision.Core.OfflineInstall.ps1" />
     <EmbeddedResource Include="Services/Profile/InstallOffice.ps1" LogicalName="WinProvision.Core.InstallOffice.ps1" />
     <None Update="ThirdParty/WiX-DTF/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskRequired = @('README.md','LICENSE','CONTRIBUTING.md','CODE_OF_CONDUCT.md','SECURITY.md',
     'PRIVACY.md','THIRD-PARTY-NOTICES.md','CHANGELOG.md','global.json',
+    'Tool/gsudo/LICENSE.txt','Tool/gsudo/manifest.json','Tool/gsudo/win-x64/WinProvision.Elevator.exe',
     '.github/CODEOWNERS','.github/workflows/ci.yml','.github/workflows/release-candidate.yml',
     'docs/REPOSITORY-AUDIT.md','src/WinProvision.Core/packages.lock.json','src/WinProvision.Core/packages.aot.lock.json',
     'src/WinProvision.Store/packages.lock.json','src/WinProvision.Store/packages.aot.lock.json',
@@ -44,5 +45,13 @@ foreach ($taskFile in $taskFiles) {
         }
     }
 }
+try {
+    $taskElevatorManifest = Get-Content -LiteralPath (Join-Path $taskRoot 'Tool/gsudo/manifest.json') -Raw | ConvertFrom-Json
+    $taskElevatorHash = (Get-FileHash -LiteralPath (Join-Path $taskRoot 'Tool/gsudo/win-x64/WinProvision.Elevator.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+    $taskElevatorCode = Get-Content -LiteralPath (Join-Path $taskRoot 'src/WinProvision.Core/Services/GsudoBinary.cs') -Raw
+    if ($taskElevatorManifest.sha256 -ne $taskElevatorHash -or -not $taskElevatorCode.Contains('"' + $taskElevatorHash + '"')) {
+        $taskErrors.Add('O helper, o inventário e o hash fixado no Core divergem.')
+    }
+} catch { $taskErrors.Add('Não foi possível conferir o helper de elevação distribuído.') }
 if ($taskErrors.Count -gt 0) { throw ($taskErrors -join [Environment]::NewLine) }
 Write-Output "Estrutura, links locais, ações fixadas e padrões comuns de segredos conferidos ($($taskFiles.Count) arquivos)."

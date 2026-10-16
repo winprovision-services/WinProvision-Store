@@ -58,7 +58,9 @@ winprovision --version
 | `-q`, `--query` | Consulta por nome; também aceita texto posicional |
 | `-e`, `--exact` | Correspondência exata |
 | `--json` | Resultado estruturado em pesquisa, listagem e consulta de atualizações |
-| `--no-input` | Consultar sem menus nas operações de leitura |
+| `--no-input` | Consultar sem menus; junto de `--yes`, executar a operação sem interação |
+| `--elevation-cache` | Reutilizar autorização do helper neste processo, por 5 minutos de inatividade |
+| `-y`, `--yes` | Confirmar a operação sem exibir menus; upgrade exige `--id` ou `--all` |
 | `--all` | Selecionar todas as atualizações, sem combinar filtros |
 | `-i`, `--input` | Arquivo JSON ou URL HTTPS direta para importação |
 | `-o`, `--output` | Arquivo de exportação ou pasta de download |
@@ -67,7 +69,7 @@ winprovision --version
 | `-h`, `--help` | Ajuda |
 | `-V`, `--version` | Versão do executável |
 
-O modo JSON apenas consulta e não inicia instalações. `--all` não combina com filtros, JSON ou `--no-input`. Operações de instalação e remoção não aceitam confirmação automática.
+O modo JSON apenas consulta e não inicia instalações. `--all` não combina com filtros nem JSON; aceita `--no-input` junto de `--yes`. Use `--yes` (ou `-y`) em operações para executar sem menus nem confirmação. Em atualizações, informe `--id` ou `--all`; a CLI não escolhe um resultado ambíguo. Sem essa opção, as confirmações interativas são preservadas. Com entrada redirecionada, operações que exigem confirmação falham com código 2 antes de consultar ou instalar; use `--yes` para executar ou `--no-input`/`--json` para apenas consultar. `--yes` não combina com `--json`.
 
 ## Listas JSON
 
@@ -132,4 +134,29 @@ Prefira os comandos principais e as opções longas em novos scripts.
 
 ## Execução no primeiro logon
 
-A CLI não exige inicialização da interface gráfica. O provisionamento de pacotes depende da rede, das permissões e dos serviços disponíveis na sessão do usuário. Um teste em uma sessão comum ou no Windows Sandbox não comprova funcionamento durante o FirstLogon de uma imagem personalizada. As confirmações de instalação e remoção continuam obrigatórias; scripts sem entrada interativa não confirmam operações automaticamente.
+A CLI não exige inicialização da interface gráfica. O provisionamento de pacotes depende da rede, das permissões e dos serviços disponíveis na sessão do usuário. Um teste em uma sessão comum ou no Windows Sandbox não comprova funcionamento durante o FirstLogon de uma imagem personalizada. Para executar instalações e remoções sem entrada interativa, informe `--yes` explicitamente. Sem essa opção, a CLI preserva as confirmações e rejeita operações com entrada redirecionada.
+
+## Automação
+
+```powershell
+winprovision install --id Google.Chrome --yes
+winprovision upgrade --all --yes
+winprovision uninstall --id Google.Chrome --yes
+winprovision import apps.json --yes
+winprovision install --office --yes
+```
+
+`--yes` elimina os prompts da CLI, preservando os códigos de saída e o cancelamento. Instaladores que precisam de elevação ainda dependem dos privilégios da sessão; a opção não contorna o UAC nem garante que todo instalador de terceiros seja autônomo. A remoção pelo fallback WinGet também solicita modo silencioso.
+
+Antes de usar a COM, o motor verifica sua ativação, mesmo quando `winget --version` já funciona. Em caso de falha, tenta registrar o App Installer para o usuário atual e depois reinstalar o pacote e suas dependências oficiais. A COM é verificada novamente após cada etapa; falha no reparo preserva a cadeia API própria/CLI. O reparo é limitado a uma tentativa por instância do motor, não é iniciado por erros de um pacote ou de conexão ao catálogo e respeita cancelamento. Em SYSTEM, a indisponibilidade da COM preserva o fallback sem tentar registro por usuário.
+
+### Cache de elevação
+
+```powershell
+winprovision import apps.json --yes --elevation-cache
+winprovision upgrade --all --yes --elevation-cache
+```
+
+O cache é solicitado apenas quando uma operação precisa do helper elevado. A primeira autorização continua passando pelo UAC. A permissão vale para o processo da CLI e seus descendentes, expira após 5 minutos de inatividade e é invalidada ao encerrar a execução. Não é compartilhada globalmente com o terminal ou com o gsudo instalado no sistema. A opção não altera os prompts da CLI: combine com `--yes` para dispensá-los.
+
+Solicitações de elevação feitas diretamente pela COM e por instaladores que elevam a si próprios não reutilizam necessariamente esse cache. Consulte a [integração gsudo](../Tool/gsudo/README.md).

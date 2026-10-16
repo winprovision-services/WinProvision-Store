@@ -20,7 +20,7 @@ public sealed class ApplicationEngine : IAsyncDisposable
     {
         _diagnostic = diagnostic;
         _bootstrapper = new(); _executor = new(); _api = new(); _catalog = new(); _ownsServices = true;
-        _packages = new(_executor, _api, _bootstrapper, preferredMethod, provision: ProvisionAsync);
+        _packages = new(_executor, _api, _bootstrapper, preferredMethod, provision: ProvisionAsync, diagnostic: diagnostic);
     }
 
     public ApplicationEngine(WinGetService packages, WingetExecutor executor, WinProvisionApiService api,

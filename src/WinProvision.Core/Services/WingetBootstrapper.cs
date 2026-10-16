@@ -147,8 +147,8 @@ public class WingetBootstrapper
             {
                 FileName = fileName,
                 Arguments = "--version",
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
@@ -156,6 +156,8 @@ public class WingetBootstrapper
             WingetCliAudit.Launch(startInfo.FileName, startInfo.Arguments);
             process = Process.Start(startInfo);
             if (process is null) return false;
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(VersionCheckTimeout);
@@ -313,16 +315,40 @@ public class WingetBootstrapper
         catch (Exception exception) { CoreLog.Warning(exception, "BootstrapLogCallback"); }
     }
 
+    /// <summary>Repara o registro e o pacote do App Installer quando a ativação COM falha.</summary>
+    public async Task<bool> EnsureComAsync(Func<CancellationToken, Task<bool>> isAvailable,
+        Action<string>? log = null, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (await isAvailable(ct)) return true;
+        if (WinProvisionApiService.IsRunningAsSystem())
+        {
+            log?.Invoke("API COM indisponível no contexto SYSTEM; preservando o fallback.");
+            return false;
+        }
+        log?.Invoke("API COM indisponível. Tentando registrar o App Installer para o usuário atual...");
+        var registered = await RegisterAppInstallerByFamilyNameAsync(ct);
+        if (registered.Success && await isAvailable(ct)) return true;
+        log?.Invoke("O registro não recuperou a COM. Reparando o App Installer e suas dependências oficiais...");
+        var result = await EnsureWingetAsync(log, ct, repair: true);
+        ct.ThrowIfCancellationRequested();
+        if (result.ErrorMessage?.Contains("0x80073D02", StringComparison.OrdinalIgnoreCase) == true)
+            log?.Invoke("O Windows bloqueou o reparo porque há aplicativos usando as dependências. Feche-os e tente novamente em uma nova execução; o fallback permanece disponível.");
+        bool available = result.IsUsable && await isAvailable(ct);
+        log?.Invoke(available ? "API COM recuperada." : "API COM não recuperada; seguindo com a cadeia de fallback.");
+        return available;
+    }
+
     /// <summary>
     /// Garante que o winget está utilizável: se já estiver, não faz nada e retorna na hora.
     /// Se não estiver, baixa o pacote oficial de dependências + o instalador do winget (em
     /// paralelo), instala tudo na ordem certa e reconfirma no final.
     /// </summary>
-    public async Task<WingetBootstrapResult> EnsureWingetAsync(Action<string>? log = null, CancellationToken ct = default)
+    public virtual async Task<WingetBootstrapResult> EnsureWingetAsync(Action<string>? log = null, CancellationToken ct = default, bool repair = false)
     {
         void Log(string message) => log?.Invoke(message);
 
-        if (await IsWingetAvailableAsync(ct))
+        if (!repair && await IsWingetAvailableAsync(ct))
         {
             return new WingetBootstrapResult(WingetBootstrapStatus.AlreadyAvailable);
         }
@@ -332,7 +358,7 @@ public class WingetBootstrapper
         // Atalho barato, sem download: o App Installer costuma já estar provisionado na imagem
         // e só faltar registrar pro usuário (Add-AppxPackage -RegisterByFamilyName, documentado
         // na Microsoft Learn). Não vale pra SYSTEM: o Windows rejeita esse registro pra Local System.
-        if (!isSystem)
+        if (!isSystem && !repair)
         {
             Log("[WinProvision] Winget ainda não está disponível. Tentando registrar o App Installer já presente no Windows...");
             var registerResult = await RegisterAppInstallerByFamilyNameAsync(ct);
@@ -343,8 +369,9 @@ public class WingetBootstrapper
             }
         }
 
-        Log("[WinProvision] Winget ainda não está disponível (comum logo após o primeiro logon, " +
-            "enquanto o Windows termina de provisionar os pacotes APPX). Baixando via GitHub (winget-cli)...");
+        Log(repair ? "[WinProvision] Reparando o App Installer com os pacotes oficiais do GitHub (winget-cli)..."
+            : "[WinProvision] Winget ainda não está disponível (comum logo após o primeiro logon, " +
+              "enquanto o Windows termina de provisionar os pacotes APPX). Baixando via GitHub (winget-cli)...");
 
         string workDir = Path.Combine(Path.GetTempPath(), $"winprovision-winget-bootstrap-{Guid.NewGuid():N}");
         string extractDir = Path.Combine(workDir, "deps");
@@ -365,6 +392,7 @@ public class WingetBootstrapper
                     DownloadFileAsync(DependenciesZipUrl, zipPath, ct),
                     DownloadFileAsync(DesktopAppInstallerUrl, bundlePath, ct));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 string error = $"Falha ao baixar os artefatos do winget-cli no GitHub: {ex.Message}";
@@ -592,7 +620,7 @@ public class WingetBootstrapper
     /// Registra o App Installer já provisionado no Windows pro usuário atual, sem baixar nada.
     /// Falha rápido (e sem consequência) se o pacote não estiver na imagem.
     /// </summary>
-    private static Task<(bool Success, string Output)> RegisterAppInstallerByFamilyNameAsync(CancellationToken ct) =>
+    protected virtual Task<(bool Success, string Output)> RegisterAppInstallerByFamilyNameAsync(CancellationToken ct) =>
         RunPowerShellAsync(
             "$ErrorActionPreference = 'Stop'; Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe",
             RegisterTimeout,

@@ -28,7 +28,7 @@ public interface ICliPackageBackend
         => throw new NotSupportedException();
 }
 
-public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version)
+public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version, bool inputRedirected = false)
 {
     private readonly TextWriter _output = TextWriter.Synchronized(output);
     private readonly TextWriter _error = TextWriter.Synchronized(error);
@@ -40,13 +40,16 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         token.ThrowIfCancellationRequested();
         if (request.Command == "help") { _output.WriteLine(Help(request.Query)); return 0; }
         if (request.Command == "version") { _output.WriteLine($"WinProvision Store {version}"); return 0; }
+        if (inputRedirected && !request.Yes && (request.Command is "install" or "uninstall" or "import"
+            || request.InstallOffice || (request.Command == "update" && !request.Json && !request.NoInput)))
+            throw new ArgumentException("Entrada redirecionada: use --yes para executar sem confirmação; em upgrade informe --id ou --all. Use --no-input ou --json para apenas consultar.");
+        if (request.ElevationCache) GsudoElevationService.RequestCache(5);
         if (request.Command == "office")
         {
             Write("Microsoft 365 Família — 64 bits, pt-br, canal Current; Access e Publisher excluídos.");
             if (request.InstallOffice)
             {
-                Write("Instalar o Office com o XML padrão?\n[1] Instalar\n[0] Sair");
-                if (await ReadConfirmation(token) == 0) return 0;
+                if (!await ConfirmAsync(request, "Instalar o Office com o XML padrão?", token)) return 0;
                 return Report(await backend.InstallOfficeAsync(Log, token));
             }
             Write(request.Offline ? "Baixando a mídia completa para uso offline..." : "Baixando setup e XML para instalação online...");
@@ -58,8 +61,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         if (request.Command == "export") return await ExportAsync(request, token);
         if (request.Command == "uninstall")
         {
-            Write($"Desinstalar {request.Id}?\n[1] Desinstalar\n[0] Sair");
-            if (await ReadConfirmation(token) == 0) return 0;
+            if (!await ConfirmAsync(request, $"Desinstalar {request.Id}?", token)) return 0;
             return Report(await backend.UninstallAsync(request.Id!, request.Source, Log, token));
         }
         if (request.Command == "show")
@@ -98,7 +100,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
             if (packages.Count != 1) throw new InvalidOperationException("O ID não resolveu um único pacote.");
             return Report(await backend.DownloadAsync(packages[0], request.Output, Log, token));
         }
-        if (request.Command is "list" or "search" || request.NoInput)
+        if (request.Command is "list" or "search" || (request.NoInput && !request.Yes))
         {
             foreach (var package in packages) Write(Describe(package, request.Command));
             Write($"\nTotal: {packages.Count}");
@@ -116,8 +118,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         Write($"\n{chosen.Count} pacote(s) para {(install ? "instalar" : "atualizar")}:");
         foreach (var package in chosen.Take(10)) Write(Describe(package, request.Command));
         if (chosen.Count > 10) Write($"... e mais {chosen.Count - 10} pacote(s).");
-        Write($"[1] {(install ? "Instalar" : "Atualizar")}\n[0] Sair");
-        if (await ReadConfirmation(token) == 0) return 0;
+        if (!await ConfirmAsync(request, install ? "Instalar os pacotes?" : "Atualizar os pacotes?", token)) return 0;
         int succeeded = 0, failed = 0, reboot = 0;
         for (int i = 0; i < chosen.Count; i++)
         {
@@ -177,6 +178,14 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         }
     }
 
+    private async Task<bool> ConfirmAsync(InteractiveCliRequest request, string message, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (request.Yes) return true;
+        Write(message + "\n[1] Confirmar\n[0] Sair");
+        return await ReadConfirmation(token) != 0;
+    }
+
     private async Task<int> ReadConfirmation(CancellationToken token)
     {
         while (true)
@@ -198,15 +207,15 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
 
     public static string Help(string command) => command switch
     {
-        "office" => "Uso: winprovision office [--offline]\n     winprovision install --office\nTambém aceita --office [--offline] e --install --office. office baixa em Downloads, sem instalar; install --office instala após confirmação. Padrão: Microsoft 365 Família, 64 bits, pt-br, Current; Access e Publisher excluídos. Com --offline: mídia completa e hashes, apenas download; não combina com install. Pode ocupar vários GB.",
+        "office" => "Uso: winprovision office [--offline]\n     winprovision install --office\nTambém aceita --office [--offline] e --install --office. office baixa em Downloads, sem instalar; install --office instala; --yes (-y) dispensa a confirmação. Padrão: Microsoft 365 Família, 64 bits, pt-br, Current; Access e Publisher excluídos. Com --offline: mídia completa e hashes, apenas download; não combina com install. Pode ocupar vários GB.",
         "search" => "Uso: winprovision search <nome> [--id ID] [--source winget|msstore] [--exact] [--json]\nPesquisa sem instalar. Use install --id ID para instalar um resultado.",
         "list" => "Uso: winprovision list [nome] [--id ID] [--source winget|msstore] [--exact] [--json]\nLista aplicativos instalados. --upgrade-available consulta atualizações.",
-        "update" => "Uso: winprovision upgrade [nome] [--id ID] [--source winget|msstore] [--json|--no-input]\n     winprovision upgrade --all\nSem opções: menu com índices. --all seleciona todas e pede confirmação. Alias: update.",
-        "install" => "Uso: winprovision install --id <ID> [--source winget|msstore]\n     winprovision install --office\nConfirmação obrigatória. --office instala Microsoft 365 Família com o XML padrão. Use search para encontrar IDs de pacotes.",
+        "update" => "Uso: winprovision upgrade [nome] [--id ID] [--source winget|msstore] [--json|--no-input]\n     winprovision upgrade --all\nSem opções: menu com índices. --all seleciona todas; use --yes (-y) com --all ou --id para executar sem confirmação. Alias: update.",
+        "install" => "Uso: winprovision install --id <ID> [--source winget|msstore]\n     winprovision install --office\nUse --yes (-y) para executar sem confirmação. --office instala Microsoft 365 Família com o XML padrão. Use search para encontrar IDs de pacotes.",
         "show" => "Uso: winprovision show --id <ID> [--source winget|msstore]\nExibe detalhes sem instalar.",
         "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: Downloads do usuário.",
-        "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato após confirmação. Use list para encontrar o ID.",
-        "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista após confirmação. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
+        "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato; use --yes (-y) para executar sem confirmação. Use list para encontrar o ID.",
+        "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista; use --yes (-y) para executar sem confirmação. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
         "export" => "Uso: winprovision export [--output arquivo.json]\nExporta os pacotes reconhecidos pelo WinGet em formato compatível com import. Padrão: winprovision-apps.json no diretório atual. Não sobrescreve arquivos.",
         _ => """
             WinProvision Store — CLI
@@ -233,7 +242,9 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
               -q, --query       Consulta por nome
               -e, --exact       Correspondência exata
               --json            JSON em search/list/upgrade; apenas consulta
-              --no-input        Consultar sem menus em search/list/upgrade
+              --elevation-cache Reutilizar autorização do helper neste processo (5 min de inatividade)
+              --yes, -y         Executar operação sem confirmação (upgrade exige --id ou --all)
+              --no-input        Consultar sem menus; com --yes executa sem interação
               -i, --input       Arquivo JSON ou URL HTTPS para import
               -o, --output      Arquivo de exportação ou pasta de download
               -h, --help        Ajuda geral ou específica

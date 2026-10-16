@@ -205,7 +205,7 @@ public sealed partial class SettingsViewModel
     private void NotifyPreferences() { OnPropertyChanged(nameof(LaunchAtStartup)); OnPropertyChanged(nameof(SelectedMethodName)); OnPropertyChanged(nameof(InstallMethodDescription)); }
     public async Task ShutdownAsync()
     {
-        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand };
+        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand, AuthorizeElevationCommand, StopElevationCommand };
         foreach (var command in commands) command.Cancel();
         foreach (var command in commands) if (command.ExecutionTask is { } task) await task;
     }

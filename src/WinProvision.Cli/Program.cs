@@ -39,7 +39,12 @@ internal static partial class Program
     {
         string version = typeof(CliApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.1.0";
         await using var backend = new ResilientCliBackend(message => Console.Error.WriteLine(CliApplication.Clean(message)));
-        return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version).RunAsync(args, token);
+        try { return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version, Console.IsInputRedirected).RunAsync(args, token); }
+        finally
+        {
+            try { await WinProvision.Core.Services.GsudoElevationService.StopCacheAsync(); }
+            catch (Exception ex) { Console.Error.WriteLine("Não foi possível encerrar a autorização temporária: " + CliApplication.Clean(ex.Message)); }
+        }
     }
 
     [LibraryImport("ole32.dll")]

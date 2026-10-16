@@ -25,6 +25,10 @@ public sealed partial class WinGetService
     private readonly Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>> _provision;
     private readonly Func<PackageInstallMethod> _preferredMethod;
     private int _postProvisionHandled;
+    private readonly WingetBootstrapper _bootstrapper;
+    private readonly Action<string> _diagnostic;
+    private readonly SemaphoreSlim _comReadinessGate = new(1, 1);
+    private bool _comReadinessChecked;
 
     /// <summary>
     /// Qual operação COM disparar em <see cref="RunComPackageOperationAsync"/>:
@@ -64,8 +68,10 @@ public sealed partial class WinGetService
         WinProvisionApiService apiService,
         WingetBootstrapper bootstrapper,
         Func<PackageInstallMethod>? preferredMethod = null,
-        Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>>? provision = null)
+        Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>>? provision = null, Action<string>? diagnostic = null)
     {
+        _bootstrapper = bootstrapper;
+        _diagnostic = diagnostic ?? PackageDiagnostics.Write;
         _wingetExecutor = wingetExecutor;
         _apiService = apiService;
         _provision = provision ?? ((log, token) => bootstrapper.EnsureOnceAsync(log, token));
@@ -144,8 +150,48 @@ public sealed partial class WinGetService
         {
             WinGetFactoryHelper.ResetAfterProvisioning("winget provisionado nesta sessão");
         }
+        if (WinGetFactoryHelper.Mode != WinGetMode.CliOnly)
+        {
+            await _comReadinessGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (!_comReadinessChecked)
+                {
+                    await _bootstrapper.EnsureComAsync(CheckComActivationAsync, onLog ?? _diagnostic, cancellationToken).ConfigureAwait(false);
+                    _comReadinessChecked = true;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _comReadinessChecked = true;
+                PackageDiagnostics.Write($"COM provisionamento falhou: {ex.Message}");
+                onLog?.Invoke("Não foi possível reparar a API COM; seguindo com o fallback.");
+            }
+            finally { _comReadinessGate.Release(); }
+        }
         return true;
     }
+
+    private Task<bool> CheckComActivationAsync(CancellationToken token) => Task.Run(() =>
+    {
+        token.ThrowIfCancellationRequested();
+        WinGetFactoryHelper.ResetAfterProvisioning("verificando ativação COM");
+        try
+        {
+            _ = WinGetFactoryHelper.CreateResilientPackageManager();
+            _ = WinGetFactoryHelper.CreateFindPackagesOptions();
+            _ = WinGetFactoryHelper.CreatePackageMatchFilter();
+            WinGetFactoryHelper.ReportComSuccess();
+            return true;
+        }
+        catch (Exception ex) when (WinGetFactoryHelper.IsActivationFailure(ex) || ex is InvalidCastException)
+        {
+            _diagnostic($"COM ativação indisponível: 0x{ex.HResult:X8} {ex.Message}");
+            WinGetFactoryHelper.DisableComForSession(ex);
+            return false;
+        }
+    }, token);
 
     public record WinGetPackageMatch(
         string PackageId,
@@ -614,7 +660,7 @@ public sealed partial class WinGetService
                 // predefinidos (OpenWindowsCatalog e, para source=msstore, MicrosoftStore).
                 return await Task.Run(
                     () => RunComPackageOperationAsync(
-                        opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, state),
+                        opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, state, forceComOnly),
                     cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -765,7 +811,9 @@ public sealed partial class WinGetService
                 effectivePreferences?.Architecture,
                 effectivePreferences?.Scope,
                 onProgress,
-                source).ConfigureAwait(false);
+                source,
+                requiresElevation: effectivePreferences?.RequiresElevation ?? false,
+                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -1081,7 +1129,8 @@ public sealed partial class WinGetService
         CancellationToken cancellationToken,
         string? installLocation,
         string source,
-        InstallAttemptState attemptState)
+        InstallAttemptState attemptState,
+        bool forceComOnly)
     {
         var stopwatch = Stopwatch.StartNew();
         // Rótulo usado em toda esta operação COM: "INSTALL COM" numa instalação nova,
@@ -1263,6 +1312,17 @@ public sealed partial class WinGetService
                 $"{comTag} installer-metadata unavailable {ex.GetType().Name}: {ex.Message}");
         }
 
+        // Route BEFORE dispatch: self-elevating installers otherwise show their own
+        // UAC prompt and cannot reuse the host's gsudo authorization.
+        if (!forceComOnly && WinGetFactoryHelper.Mode != WinGetMode.ComOnly
+            && source == "winget" && GsudoElevationService.IsBundled && !IsCurrentProcessElevated()
+            && preferences is not null && InstallerElevationPolicy.RequiresElevation(
+                preferences.Scope, preferences.RequiresElevation, preferences.ElevationProhibited))
+        {
+            onLogReceived?.Invoke("A elevação deste instalador será feita pelo WinProvision Elevator.");
+            return await RunApiThenCliFallbackAsync(opKind, packageId, onLogReceived, onProgress,
+                cancellationToken, installLocation, source, "elevação-pelo-helper", preferences).ConfigureAwait(false);
+        }
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
         attemptState.Started = true;
         PackageDiagnostics.Write($"{comTag} stage=install-dispatched elapsed={stopwatch.Elapsed}");
@@ -1644,7 +1704,9 @@ public sealed partial class WinGetService
                 effectivePreferences?.Architecture,
                 effectivePreferences?.Scope,
                 onProgress,
-                source).ConfigureAwait(false);
+                source,
+                requiresElevation: effectivePreferences?.RequiresElevation ?? false,
+                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

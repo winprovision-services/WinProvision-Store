@@ -919,7 +919,7 @@ public class WingetExecutor
     // CLI removal stays exact: no fallback to another ID or display name.
     public Task<WingetExecutionResult> UninstallExactPackageAsync(string id, string? source, Action<string>? log, CancellationToken token)
     {
-        var args = new List<string> { "uninstall", "--id", id, "--exact", "--accept-source-agreements", "--disable-interactivity" };
+        var args = new List<string> { "uninstall", "--id", id, "--exact", "--silent", "--accept-source-agreements", "--disable-interactivity" };
         if (source is not null) args.AddRange(["--source", source]);
         return ExecuteWingetCommandAsync("", log, token, args);
     }

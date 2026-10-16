@@ -65,6 +65,18 @@ public class InteractiveCliTests
     }
 
     [Theory]
+    [InlineData("install --id Google.Chrome --yes --elevation-cache")]
+    [InlineData("upgrade --all --yes --elevation-cache")]
+    [InlineData("import apps.json --yes --elevation-cache")]
+    [InlineData("install --office --yes --elevation-cache")]
+    public void ElevationCacheIsExplicitAndLimitedToOperations(string command)
+    {
+        var request = InteractiveCliInput.ParseRequest(command.Split(' '));
+        Assert.True(request.ElevationCache);
+        Assert.True(request.Yes);
+    }
+
+    [Theory]
     [InlineData("install --office --offline")]
     [InlineData("install --office --id Google.Chrome")]
     [InlineData("office --id Google.Chrome")]
@@ -85,6 +97,13 @@ public class InteractiveCliTests
     [InlineData("upgrade --all --no-input")]
     [InlineData("search Chrome --source arbitrary")]
     [InlineData("search Chrome --yes")]
+    [InlineData("search Chrome --elevation-cache")]
+    [InlineData("upgrade --json --elevation-cache")]
+    [InlineData("list --elevation-cache")]
+    [InlineData("upgrade --yes")]
+    [InlineData("upgrade Chrome --yes")]
+    [InlineData("upgrade --id Google.Chrome --json --yes")]
+    [InlineData("install --id Google.Chrome --yes -y")]
     [InlineData("search Chrome --souce winget")]
     [InlineData("search Chrome --id Google.Chrome")]
     [InlineData("search Chrome --json=false")]

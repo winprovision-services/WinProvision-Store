@@ -13,7 +13,7 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent(); ViewModel = viewModel; DataContext = viewModel;
         _categories = new() { ["General"] = ("Preferências gerais", PanelGeneral), ["Interface"] = ("Interface e inicialização", PanelInterface), ["Operations"] = ("Armazenamento e cache", PanelOperations) };
-        _targets = new() { ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
+        _targets = new() { ["elevation-cache"] = ElevationCacheCard, ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
         Loaded += OnLoaded; Unloaded += OnUnloaded;
         SizeChanged += (_, _) => SettingsSearchBox.Width = Math.Min(320, Math.Max(160, ActualWidth - 160));
     }

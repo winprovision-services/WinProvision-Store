@@ -22,6 +22,9 @@ public static class WinProvisionElevationState
     /// </summary>
     public static void MarkFailed() => Interlocked.Exchange(ref _failed, 1);
 
+    /// <summary>Nova autorização explícita do usuário permite operações após uma recusa anterior.</summary>
+    internal static void MarkAuthorized() => Interlocked.Exchange(ref _failed, 0);
+
     /// <summary>Reseta o estado — exposto só pra testes; não é chamado em produção.</summary>
     internal static void ResetForTests() => Interlocked.Exchange(ref _failed, 0);
 }

@@ -147,6 +147,19 @@ public static class OdtProcessRunner
         try
         {
             ct.ThrowIfCancellationRequested();
+            if (GsudoElevationService.IsBundled)
+            {
+                int code = await GsudoElevationService.RunElevatedAsync(absoluteSetupPath,
+                    startInfo.Arguments, ct, workingDirectory: workingDir).ConfigureAwait(false);
+                if (mode == "/download") ct.ThrowIfCancellationRequested();
+                return new OdtProcessResult
+                {
+                    Success = InstallerExitCodes.IsSuccess(code), ExitCode = code, ProcessStarted = true,
+                    ElevationCanceled = code == 999,
+                    Output = code == 999 ? "Elevação não concluída pelo helper." : InstallerExitCodes.IsSuccess(code)
+                        ? string.Empty : $"{InstallerExitCodes.Describe(code)} Consulte os logs do Office Deployment Tool."
+                };
+            }
             using var process = Process.Start(startInfo);
             if (process is null)
             {

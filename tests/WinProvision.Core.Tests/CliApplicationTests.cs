@@ -210,6 +210,61 @@ public class CliApplicationTests
         Assert.Empty(confirmed.Backend.OfficeDownloads);
     }
 
+    [Theory]
+    [InlineData("install", "--id", "Google.Chrome")]
+    [InlineData("upgrade", "--id", "Google.Chrome")]
+    [InlineData("upgrade", "--all", "--no-input")]
+    public async Task YesExecutesWithoutReadingAnyInput(string command, string option, string value)
+    {
+        var fixture = new Fixture("");
+        Assert.Equal(0, await fixture.App.RunAsync([command, option, value, "-y"], default));
+        Assert.NotEmpty(fixture.Backend.Executed);
+        Assert.DoesNotContain("[0]", fixture.Output.ToString());
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
+    }
+
+    [Fact]
+    public async Task YesSupportsUninstallOfficeAndImportWithoutMenus()
+    {
+        var fixture = new Fixture("");
+        Assert.Equal(0, await fixture.App.RunAsync(["uninstall", "--id", "Google.Chrome", "--yes"], default));
+        Assert.Single(fixture.Backend.Removed);
+        Assert.Equal(0, await fixture.App.RunAsync(["install", "--office", "--yes"], default));
+        Assert.Equal(1, fixture.Backend.OfficeInstallations);
+        string path = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(path, "[{\"id\":\"Google.Chrome\"}]");
+            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--yes", "--no-input"], default));
+            Assert.Single(fixture.Backend.Executed);
+            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--download", "--yes"], default));
+            Assert.Single(fixture.Backend.Downloaded);
+        }
+        finally { File.Delete(path); }
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
+        Assert.DoesNotContain("[0]", fixture.Output.ToString());
+    }
+
+    [Fact]
+    public async Task RedirectedMutationWithoutYesFailsBeforeQueryingOrExecuting()
+    {
+        var fixture = new Fixture("");
+        var app = new CliApplication(fixture.Backend, TextReader.Null, fixture.Output, fixture.Error, "test", inputRedirected: true);
+        await Assert.ThrowsAsync<ArgumentException>(() => app.RunAsync(["install", "--id", "Google.Chrome"], default));
+        Assert.Empty(fixture.Backend.Executed);
+        Assert.Equal(0, await app.RunAsync(["install", "--id", "Google.Chrome", "--yes"], default));
+        Assert.Single(fixture.Backend.Executed);
+    }
+
+    [Fact]
+    public async Task UnattendedBatchReturnsFailureAndContinues()
+    {
+        var fixture = new Fixture("");
+        fixture.Backend.FailId = "Google.Chrome";
+        Assert.Equal(1, await fixture.App.RunAsync(["upgrade", "--all", "--yes"], default));
+        Assert.Equal(2, fixture.Backend.Executed.Count);
+    }
+
     private sealed class Fixture
     {
         public FakeBackend Backend { get; } = new();

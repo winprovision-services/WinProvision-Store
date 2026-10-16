@@ -255,6 +255,16 @@ internal static partial class SmokeTest
         {
             window.RootElement.RequestedTheme = theme;
             var settingsPage = (Views.SettingsPage)window.CurrentPage!;
+            settingsPage.NavigateToCategory("General");
+            Check(ReferenceEquals(((Button)settingsPage.FindName("AuthorizeElevationButton")).Command,
+                settingsPage.ViewModel.AuthorizeElevationCommand), "Elevação: autorização explícita por sessão");
+            Check(WinProvision.Core.Services.GsudoElevationService.CacheMinutes == 0, "Elevação: cache desativado por padrão");
+            await CaptureAsync(window.RootElement, $"settings-elevation-{theme}.png");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
+            await Task.Delay(250);
+            await CaptureAsync(window.RootElement, $"settings-elevation-compact-{theme}.png");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
+            await Task.Delay(250);
             settingsPage.NavigateToCategory("Operations");
             Check(ReferenceEquals(((Button)settingsPage.FindName("RefreshCatalogButton")).Command,
                 settingsPage.ViewModel.RefreshCatalogCommand), "Catálogo: atualização manual separada da limpeza de cache");
