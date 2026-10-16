@@ -10,6 +10,7 @@ $taskOutput = Join-Path $taskRoot 'artifacts/installation-validation'
 dotnet build $taskProject -c Release -o $taskOutput -p:RestoreLockedMode=true
 if ($LASTEXITCODE -ne 0) { throw 'Build do teste real falhou.' }
 Copy-Item -LiteralPath (Join-Path $taskPublished 'cli') -Destination $taskOutput -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $taskPublished 'Microsoft.Management.Deployment.winmd') -Destination $taskOutput -Force
 $taskHelper = Join-Path $taskOutput 'Tool/gsudo/WinProvision Elevator.exe'
 $taskPidFile = Join-Path $taskOutput 'worker.pid'
 $taskReady = Join-Path $taskOutput 'worker.ready'
@@ -17,6 +18,8 @@ $taskDotnet = (Get-Command dotnet).Source
 $taskDll = Join-Path $taskOutput 'WinProvision.Installation.Validation.dll'
 $taskProbe = @'
 $ErrorActionPreference = 'Stop'
+$env:GITHUB_ACTIONS = 'true'
+$env:RUNNER_ENVIRONMENT = 'github-hosted'
 [IO.File]::WriteAllText('__PID__', [string]$PID)
 $deadline = [DateTime]::UtcNow.AddSeconds(60)
 while (-not (Test-Path -LiteralPath '__READY__')) {
