@@ -435,6 +435,24 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     public async Task<PackageManifest?> GetPackageAsync(string id, CancellationToken ct = default, string? source = null)
     {
+        try { return await GetPackageCoreAsync(id, ct, source).ConfigureAwait(false); }
+        catch (Exception exception) when (HasIntegrityFailure(exception))
+        {
+            ct.ThrowIfCancellationRequested();
+            await GetIndexAsync(forceRefresh: true, ct).ConfigureAwait(false);
+            return await GetPackageCoreAsync(id, ct, source).ConfigureAwait(false);
+        }
+    }
+
+    private static bool HasIntegrityFailure(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is InvalidDataException) return true;
+        return false;
+    }
+
+    private async Task<PackageManifest?> GetPackageCoreAsync(string id, CancellationToken ct, string? source)
+    {
         string requestedSource = string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase) ? "msstore" : "winget";
         string cachePath = GetManifestCachePath(id, requestedSource);
         try

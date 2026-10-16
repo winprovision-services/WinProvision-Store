@@ -45,6 +45,24 @@ public partial class AppEntry : INotifyPropertyChanged
     [JsonPropertyName("source")]
     public string Source { get; set; } = "winget";
 
+    [JsonPropertyName("catalogOrigin")]
+    public string? CatalogOrigin { get; set; }
+
+    [JsonPropertyName("wingetManifestAvailable")]
+    public bool? WingetManifestAvailable { get; set; }
+
+    [JsonPropertyName("releaseDate")]
+    public DateTimeOffset? ReleaseDate { get; set; }
+
+    [JsonPropertyName("catalogSyncedUtc")]
+    public DateTimeOffset? CatalogSyncedUtc { get; set; }
+
+    [JsonPropertyName("author")]
+    public string? Author { get; set; }
+
+    [JsonPropertyName("releaseNotes")]
+    public string? ReleaseNotes { get; set; }
+
     /// <summary>
     /// URL direta recebida em resultados ao vivo da Microsoft Store. Os registros do
     /// catálogo V2 usam o caminho em <see cref="Media"/> e montam a URL pelo IconService.

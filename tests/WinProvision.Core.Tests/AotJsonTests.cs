@@ -9,6 +9,26 @@ namespace WinProvision.Core.Tests;
 public sealed class AotJsonTests
 {
     [Fact]
+    public void CuratedCatalogMetadataDeserializesWithoutReflection()
+    {
+        const string json = """
+            {"id":"WinProvision.Store","catalogOrigin":"curated","wingetManifestAvailable":false,
+             "publisher":"WinProvision Services","author":"WinProvision Services",
+             "releaseDate":"2026-10-15T01:53:09Z","catalogSyncedUtc":"2026-10-16T15:00:00Z",
+             "releaseNotes":"Versão publicada.","installers":[{"architecture":"x64","type":"inno",
+             "url":"https://example.com/setup.exe","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}
+            """;
+        var app = AotJson.Deserialize<AppEntry>(json)!;
+        Assert.Equal("curated", app.CatalogOrigin);
+        Assert.False(app.WingetManifestAvailable);
+        Assert.Equal("WinProvision Services", app.Author);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-15T01:53:09Z"), app.ReleaseDate);
+        Assert.Equal("inno", Assert.Single(app.Installers).Type);
+        var restored = AotJson.Deserialize<AppEntry>(AotJson.Serialize(app))!;
+        Assert.Equal(app.CatalogSyncedUtc, restored.CatalogSyncedUtc);
+        Assert.Equal(app.ReleaseNotes, restored.ReleaseNotes);
+    }
+    [Fact]
     public void ProfileRoundTripPreservesPinnedVersionAndOfficeOptions()
     {
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);

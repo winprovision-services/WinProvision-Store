@@ -18,6 +18,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly IClipboardService _clipboard;
     private readonly IPackageDetailsProvider _metadata;
+    private readonly IconService _icons;
     private AppEntry? _app;
     private string? _availableUpdateVersion;
     private string? _installLocation;
@@ -25,6 +26,8 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     public AppEntry? App => _app;
     public string? IconUrl => _app?.IconUrl;
     public string[] Screenshots { get; private set; } = [];
+    public bool IsOfficeStoreOffer => _app is not null && IsMicrosoftStoreSource(_app.Source)
+        && _app.Tags.Contains("Office", StringComparer.OrdinalIgnoreCase);
     public bool CanAddCurrentAppToPackages => _app is not null && IsSupportedCollectionSource(_app.Source);
     public bool AlreadyAdded => _app is not null && _collectionService.Items?.Any(a => string.Equals(a.Id, _app.Id, StringComparison.OrdinalIgnoreCase) && string.Equals(a.App.Source, _app.Source, StringComparison.OrdinalIgnoreCase)) == true;
     public async Task<AppEntry> LoadCatalogDetailsAsync(AppEntry app, CancellationToken cancellationToken)
@@ -64,6 +67,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string ManifestLinkText { get; set; } = string.Empty;
     [ObservableProperty] public partial string? ManifestLinkTag { get; set; } = null;
     [ObservableProperty] public partial bool IsManifestLinkVisible { get; set; } = false;
+    [ObservableProperty] public partial bool IsManifestNotFoundVisible { get; set; } = false;
     [ObservableProperty] public partial bool IsHomepageLinkVisible { get; set; } = false;
     [ObservableProperty] public partial bool IsHomepageNotAvailableTextVisible { get; set; } = false;
     [ObservableProperty] public partial string HomepageLinkText { get; set; } = string.Empty;
@@ -97,11 +101,11 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool IsUpdateButtonVisible { get; set; }
     [ObservableProperty] public partial bool IsInstallSplitGroupVisible { get; set; }
     [ObservableProperty] public partial bool IsUninstallSplitGroupVisible { get; set; }
-    public AppDetailsViewModel(CollectionsViewModel collections, IPackageBackend backend, PackageInstallOptionsService options, IPresentationService presentation, IUiDispatcher dispatcher, IClipboardService clipboard, IPackageDetailsProvider metadata)
+    public AppDetailsViewModel(CollectionsViewModel collections, IPackageBackend backend, PackageInstallOptionsService options, IPresentationService presentation, IUiDispatcher dispatcher, IClipboardService clipboard, IPackageDetailsProvider metadata, IconService icons)
     {
         _collectionService = collections; _installedPackagesViewModel = backend;
         _packageInstallOptionsService = options; _interaction = presentation;
-        _dispatcher = dispatcher; _clipboard = clipboard; _metadata = metadata;
+        _dispatcher = dispatcher; _clipboard = clipboard; _metadata = metadata; _icons = icons;
         InstallCommand = new AsyncRelayCommand(InstallAsync);
         UpdateCommand = new AsyncRelayCommand(UpdateAsync);
         UninstallCommand = new AsyncRelayCommand(UninstallAsync);
@@ -125,7 +129,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
 
         AppNameText = app.Name;
 
-        string sourceLabel = IsMicrosoftStoreSource(app.Source)
+        string sourceLabel = string.Equals(app.CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase)
+            ? "WinProvision"
+            : IsMicrosoftStoreSource(app.Source)
             ? "Microsoft Store"
             : IsSupportedCollectionSource(app.Source)
                 ? $"WinGet: {app.Source}"
@@ -140,9 +146,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             ? "Nenhuma descrição disponível."
             : app.Description;
 
-        Screenshots = (app.StoreScreenshotUrls is { Count: > 0 } ? app.StoreScreenshotUrls : app.ScreenshotUrls)?
+        Screenshots = _icons.ResolveScreenshotUrls(app)
             .Where(url => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
-            .Distinct(StringComparer.OrdinalIgnoreCase).Take(12).ToArray() ?? [];
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(12).ToArray();
         // Tags
         Tags = app.Tags;
         IsTagsListVisible = app.Tags.Count > 0;
@@ -151,20 +157,21 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         PackageIdText = app.Id;
 
         // Manifesto URL
-        SetupManifestUrl(app.Id, app.Source);
+        SetupManifestUrl(app.Id, app.Source, app.WingetManifestAvailable
+            ?? (string.Equals(app.CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase) ? false : null));
 
         // Página Inicial
         SetupHomepage(app.Homepage);
 
         // Desenvolvedor e Autor
         DeveloperText = !string.IsNullOrWhiteSpace(app.Publisher) ? app.Publisher : "—";
-        AuthorText = !string.IsNullOrWhiteSpace(app.Publisher) ? app.Publisher : "—";
+        AuthorText = app.Author ?? DeveloperText;
 
         // Licença
         SetupLicense(app.License, app.LicenseUrl);
 
         // Última atualização
-        bool isOfficeStoreOffer = app.Tags.Contains("Office", StringComparer.OrdinalIgnoreCase);
+        bool isOfficeStoreOffer = IsOfficeStoreOffer;
         IsLoadingProgressBarVisible = !isOfficeStoreOffer;
         LastUpdatedText = isOfficeStoreOffer ? "Microsoft Store" : "Carregando...";
 
@@ -181,6 +188,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         DependenciesText = "Nenhuma dependência especificada";
         ReleaseNotesText = "Não disponível";
         SetupReleaseNotesUrl(app.ReleaseNotesUrl);
+        if (!isOfficeStoreOffer) ApplyCatalogMetadata(app);
 
         // Update comparison panel
         IsUpdateVersionPanelVisible = currentVersion is not null && availableVersion is not null
@@ -251,8 +259,16 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         IsUninstallSplitGroupVisible = !(isUpdateContext || !_app.IsInstalled);
 
     }
-    private void SetupManifestUrl(string id, string source)
+    private void SetupManifestUrl(string id, string source, bool? available)
     {
+        IsManifestNotFoundVisible = available == false;
+        if (available == false)
+        {
+            ManifestLinkText = "Não encontrado";
+            ManifestLinkTag = null;
+            IsManifestLinkVisible = false;
+            return;
+        }
         if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
         {
             string url = $"https://apps.microsoft.com/detail/{id}";
@@ -324,6 +340,13 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public async Task LoadExtendedDetailsAsync(AppEntry app, CancellationToken cancellationToken)
     {
+        if (string.Equals(app.CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyCatalogMetadata(app);
+            IsLoadingProgressBarVisible = false;
+            return;
+        }
         IsLoadingProgressBarVisible = true;
 
         try
@@ -409,9 +432,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             {
                 if (_app == app && !cancellationToken.IsCancellationRequested)
                 {
-                    LastUpdatedText = "Não disponível";
-                    InstallerTypeText = "Padrão";
-                    Sha256Text = "Não disponível";
+                    ApplyCatalogMetadata(app);
                 }
             });
         }
@@ -422,6 +443,29 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
                 if (_app == app && !cancellationToken.IsCancellationRequested) IsLoadingProgressBarVisible = false;
             });
         }
+    }
+    private void ApplyCatalogMetadata(AppEntry app)
+    {
+        var date = app.ReleaseDate ?? app.CatalogSyncedUtc;
+        LastUpdatedText = date?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Não disponível";
+        string architecture = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString();
+        var installer = app.Installers.FirstOrDefault(item =>
+            string.Equals(item.Architecture, architecture, StringComparison.OrdinalIgnoreCase))
+            ?? app.Installers.FirstOrDefault();
+        InstallerTypeText = installer?.Type?.ToLowerInvariant() switch
+        {
+            "inno" => "Inno Setup",
+            "nullsoft" => "Nullsoft (NSIS)",
+            "msi" or "wix" => "Windows Installer (MSI)",
+            null or "" => "Não informado",
+            _ => installer!.Type!
+        };
+        InstallerUrlLinkText = installer?.Url ?? string.Empty;
+        InstallerUrlLinkTag = DownloadInstallerLinkTag = installer?.Url;
+        IsInstallerUrlLinkVisible = IsDownloadInstallerLinkVisible =
+            Uri.TryCreate(installer?.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+        Sha256Text = string.IsNullOrWhiteSpace(installer?.Sha256) ? "Não disponível" : installer.Sha256.ToUpperInvariant();
+        ReleaseNotesText = string.IsNullOrWhiteSpace(app.ReleaseNotes) ? "Não disponível" : app.ReleaseNotes;
     }
     public void SaveOptions()
     {

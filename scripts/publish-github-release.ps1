@@ -15,8 +15,14 @@ foreach ($taskName in $taskNames[0..2]) {
 }
 $taskTag = "v$AppVersion"
 $taskNotes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+$taskChangelog = Get-Content -LiteralPath (Join-Path $taskRoot 'CHANGELOG.md') -Raw
+$taskVersionPattern = [regex]::Escape($AppVersion)
+$taskSection = [regex]::Match($taskChangelog, "(?ms)^##\s+$taskVersionPattern(?:\s[^\r\n]*)?\r?\n(?<notes>.*?)(?=^##\s|\z)")
+$taskChanges = if ($taskSection.Success) { $taskSection.Groups['notes'].Value.Trim() } else { '' }
 @"
 WinProvision Store $AppVersion para Windows x64.
+
+$taskChanges
 
 - Instalador: ``WinProvision.Store-Setup.exe``.
 - Versão portátil: ``WinProvision.Store-win-x64.zip``.

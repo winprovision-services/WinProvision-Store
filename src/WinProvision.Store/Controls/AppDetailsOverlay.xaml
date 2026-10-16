@@ -524,6 +524,8 @@
 
                                 <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}">
                                     <TextBlock Text="Manifesto:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock Text="Não encontrado" Style="{StaticResource AppDetailsRowValueStyle}"
+                                               Visibility="{Binding IsManifestNotFoundVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <HyperlinkButton x:Name="ManifestLink" AutomationProperties.AutomationId="ManifestLink" Visibility="{Binding IsManifestLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}" Tag="{Binding ManifestLinkTag}"
                                                         Style="{StaticResource AppDetailsInlineLinkStyle}"
                                                         Click="OpenLink_Click">

@@ -117,7 +117,7 @@ public sealed partial class AppDetailsOverlay : UserControl
             if (_session != session || session.Source.IsCancellationRequested) return;
             _model.SetApp(details, current, available, preserveOptions: true);
             UpdateScreenshots(session, true);
-            if (!details.Tags.Contains("Office", StringComparer.OrdinalIgnoreCase))
+            if (!_model.IsOfficeStoreOffer)
                 await _model.LoadExtendedDetailsAsync(details, session.Source.Token);
         }
         catch (OperationCanceledException) when (session.Source.IsCancellationRequested) { }

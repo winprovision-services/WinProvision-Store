@@ -208,6 +208,30 @@ internal static partial class SmokeTest
         details.Close();
         await Task.Delay(300);
         Check(!details.IsOpen, "Detalhes: overlay fecha e conclui a animação");
+        var curated = new AppEntry
+        {
+            Id = "WinProvision.Store", Name = "WinProvision Store", Source = "winget", CatalogOrigin = "curated",
+            Publisher = "WinProvision Services", Author = "WinProvision Services", Version = "0.1.2",
+            WingetManifestAvailable = false, ReleaseDate = DateTimeOffset.Parse("2026-10-15T01:53:09Z"),
+            Tags = ["office", "cli"], CatalogDetailPath = "apps/w/winprovision/store/app.json",
+            Media = new CatalogMedia { Screenshots = ["media/curated/screenshot-test.png"] },
+            Installers = [new CatalogInstaller { Architecture = "x64", Type = "inno", Url = "https://example.com/setup.exe", Sha256 = new string('a', 64) }]
+        };
+        window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
+        await Task.Delay(250);
+        foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light })
+        {
+            window.RootElement.RequestedTheme = theme;
+            await details.ShowAsync(curated);
+            var model = services.GetRequiredService<AppDetailsViewModel>();
+            Check(!model.IsOfficeStoreOffer && model.InstallerTypeText == "Inno Setup", "Detalhes: tag office não transforma aplicativo curado em Microsoft 365");
+            Check(model.DeveloperText == "WinProvision Services" && model.IsManifestNotFoundVisible && !model.IsManifestLinkVisible, "Detalhes: desenvolvedor e manifesto ausente da origem própria");
+            Check(model.IsInstallerUrlLinkVisible && model.Sha256Text == new string('A', 64) && model.LastUpdatedText.Contains("2026"), "Detalhes: URL, hash e data vêm do catálogo");
+            Check(model.Screenshots.Length == 1, "Detalhes: galeria relativa funciona para pacotes fora da Microsoft Store");
+            await CaptureAsync(window.RootElement, $"details-curated-{theme}.png");
+            details.Close();
+            await Task.Delay(250);
+        }
         var queue = services.GetRequiredService<OperationsQueueService>();
         var queueModel = services.GetRequiredService<OperationsViewModel>();
         var operation = queue.Enqueue("Operação de demonstração", OperationKind.Install);

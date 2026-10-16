@@ -139,7 +139,10 @@ public class StoreService : IAsyncDisposable
     }
 
     /// <summary>Carrega o registro completo do app selecionado sem baixar o catálogo completo.</summary>
-    public async Task<AppEntry> LoadDetailsAsync(AppEntry app, CancellationToken cancellationToken = default)
+    public Task<AppEntry> LoadDetailsAsync(AppEntry app, CancellationToken cancellationToken = default)
+        => LoadDetailsCoreAsync(app, cancellationToken, allowRefresh: true);
+
+    private async Task<AppEntry> LoadDetailsCoreAsync(AppEntry app, CancellationToken cancellationToken, bool allowRefresh)
     {
         int cacheGeneration = Volatile.Read(ref _cacheGeneration);
         if (string.IsNullOrWhiteSpace(app.CatalogDetailPath))
@@ -147,7 +150,7 @@ public class StoreService : IAsyncDisposable
             AppEntry? catalogEntry = _cachedCatalog.FirstOrDefault(entry =>
                 string.Equals(entry.Id, app.Id, StringComparison.OrdinalIgnoreCase));
             if (catalogEntry is not null && !ReferenceEquals(catalogEntry, app))
-                return await LoadDetailsAsync(catalogEntry, cancellationToken);
+                return await LoadDetailsCoreAsync(catalogEntry, cancellationToken, allowRefresh);
         }
         string? catalogHash = app.CatalogDetailCatalogSha256 ?? _catalogSha256;
         if (string.IsNullOrWhiteSpace(app.CatalogDetailPath) || string.IsNullOrWhiteSpace(catalogHash))
@@ -158,6 +161,7 @@ public class StoreService : IAsyncDisposable
             return app;
 
         SemaphoreSlim detailLock = _detailLocks.GetOrAdd(app.Id, _ => new SemaphoreSlim(1, 1));
+        bool hashMismatch = false;
         await detailLock.WaitAsync(cancellationToken);
         try
         {
@@ -193,7 +197,10 @@ public class StoreService : IAsyncDisposable
                 response.EnsureSuccessStatusCode();
                 json = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (!HasExpectedHash(json, expectedDetailHash))
+                {
+                    hashMismatch = true;
                     throw new JsonException($"O hash do detalhe de {app.Id} não corresponde ao índice de busca.");
+                }
                 AppEntry? downloaded = WinProvision.Core.Services.AotJson.Deserialize<AppEntry>(json, _jsonOptions);
                 if (downloaded is null || !string.Equals(downloaded.Id, app.Id, StringComparison.OrdinalIgnoreCase))
                     return app;
@@ -218,12 +225,18 @@ public class StoreService : IAsyncDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"[StoreService] Não foi possível carregar detalhes de {app.Id}: {ex.Message}");
-            return app;
+            if (!hashMismatch || !allowRefresh) return app;
         }
         finally
         {
             detailLock.Release();
         }
+        // Release the per-app lock before refreshing and retrying the new generation.
+        var catalog = await LoadCatalogAsync(forceRefresh: true, cancellationToken);
+        var refreshed = catalog.FirstOrDefault(entry => entry.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase)
+            && entry.Source.Equals(app.Source, StringComparison.OrdinalIgnoreCase));
+        return refreshed is not null && refreshed.CatalogDetailSha256 != app.CatalogDetailSha256
+            ? await LoadDetailsCoreAsync(refreshed, cancellationToken, allowRefresh: false) : app;
     }
 
     private AppEntry CompleteDetails(AppEntry details, AppEntry summary)
