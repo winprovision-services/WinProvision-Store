@@ -5,17 +5,19 @@ Variante do [gsudo de Gerardo Grignoli](https://github.com/gerardog/gsudo), mant
 ## Conteúdo e origem
 
 - [manifest.json](manifest.json): versão, commit do fork, base upstream e SHA-256 do executável distribuído.
-- [win-x64/WinProvision.Elevator.exe](win-x64/WinProvision.Elevator.exe): helper Native AOT para Windows x64.
+- [win-x64/WinProvision Elevator.exe](win-x64/WinProvision Elevator.exe): helper Native AOT para Windows x64.
 - [winprovision.patch](winprovision.patch): alterações de fonte em relação ao gsudo v2.6.1.
 - [rebuild.ps1](rebuild.ps1): recompila o commit fixado em uma pasta nova de `artifacts`, sem substituir automaticamente o binário distribuído.
 
-A variante incorpora o ícone do WinProvision Store e os metadados de exibição WinProvision Elevator. Usa .NET 10, nome `WinProvision.Elevator.exe`, registro `SOFTWARE\WinProvision\Gsudo`, pipes `WinProvision_gsudo` e eventos de invalidação próprios. Preserva as verificações de cliente, ACLs e o cache explícito do upstream. Ajusta as chamadas de marshalling para as versões genéricas compatíveis com Native AOT e remove o hook de build que encerrava processos globais de gsudo.
+A variante incorpora o ícone do WinProvision Store e os metadados de exibição WinProvision Elevator. Usa .NET 10, nome `WinProvision Elevator.exe`, registro `SOFTWARE\WinProvision\Gsudo`, pipes `WinProvision_gsudo` e eventos de invalidação próprios. Preserva as verificações de cliente, ACLs e o cache explícito do upstream. Ajusta as chamadas de marshalling para as versões genéricas compatíveis com Native AOT e remove o hook de build que encerrava processos globais de gsudo.
 
 O executável atual não tem assinatura Authenticode. O hash fixado no Core confere o arquivo antes de executá-lo; isso não equivale a assinatura digital, nem implementa o reconhecimento por certificado da variante da Devolutions. Não foram incluídos código, marcas ou certificados da Devolutions.
 
 ## Uso no WinProvision
 
-O helper acompanha a interface e a CLI, cada uma com sua pasta `Tool/gsudo`. Não modifica o PATH nem instala um serviço permanente. No modo Automático, requisitos de elevação identificados pela COM são encaminhados à cadeia API própria/CLI antes de despachar a instalação. As elevações explícitas de instaladores da API própria, fallback WinGet e ODT usam o helper; solicitações feitas diretamente pelo servidor COM ou por instaladores que elevam a si próprios continuam sob controle desses componentes.
+O helper acompanha a interface e a CLI, cada uma com sua pasta `Tool/gsudo`. Não modifica o PATH nem instala um serviço permanente. Para instalações WinGet com elevação conhecida, a COM executa em um worker da CLI elevado pelo helper, preservando o backend escolhido, o resultado e o progresso. O modo CLI consulta os requisitos antes do despacho; instaladores da API própria, fallback WinGet e ODT também usam o helper. A interface permanece sem elevação. Pacotes de usuário e instaladores que proíbem elevação preservam seu contexto; operações da Microsoft Store continuam pelo serviço oficial.
+
+O arquivo distribuído usa o nome `WinProvision Elevator.exe`, com espaços, para preservar uma identificação legível inclusive quando o UAC apresenta o nome do arquivo sem assinatura. É uma renomeação dos mesmos bytes produzidos pelo fork; o SHA-256 permanece o do inventário.
 
 O cache é desativado por padrão e não é persistido entre sessões. Nas Configurações, o usuário pode autorizar a sessão por 2, 5, 10 ou 15 minutos de inatividade ou encerrar essa autorização. Na CLI, `--elevation-cache` solicita 5 minutos quando a primeira operação elevada do helper for necessária. O cache é vinculado ao PID do WinProvision e seus descendentes; nunca é iniciado com PID 0. O encerramento normal pede a invalidação desse PID e o upstream observa também a saída do processo e a expiração por inatividade.
 

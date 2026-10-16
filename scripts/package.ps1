@@ -45,6 +45,15 @@ if ($PublishedDirectory) { $publishDir = (Resolve-Path -LiteralPath $PublishedDi
 if (Test-Path (Join-Path $publishDir 'validation-harness.flag')) { throw 'Não empacote uma publicação de testes.' }
 $packageExe = Join-Path $publishDir 'WinProvision.Store.exe'
 if (-not (Test-Path -LiteralPath $packageExe)) { throw 'Executável da publicação não encontrado.' }
+$taskHelperManifest = Get-Content (Join-Path $taskRoot 'Tool/gsudo/manifest.json') -Raw | ConvertFrom-Json
+foreach ($taskHost in @($publishDir, (Join-Path $publishDir 'cli'))) {
+    $taskHelper = Join-Path $taskHost 'Tool/gsudo/WinProvision Elevator.exe'
+    if (-not (Test-Path -LiteralPath $taskHelper) -or
+        (Get-FileHash -LiteralPath $taskHelper).Hash.ToLowerInvariant() -ne $taskHelperManifest.sha256 -or
+        -not (Test-Path -LiteralPath (Join-Path $taskHost 'Tool/gsudo/LICENSE.txt'))) {
+        throw "Elevator ausente, divergente ou sem licença em '$taskHost'."
+    }
+}
 foreach ($packageBinary in @($packageExe, (Join-Path $publishDir 'cli\winprovision.exe'))) {
     if (-not (Test-Path -LiteralPath $packageBinary)) { throw "Executável ausente: $packageBinary" }
     if ($RequireSignature -and (Get-AuthenticodeSignature -LiteralPath $packageBinary).Status -ne 'Valid') {

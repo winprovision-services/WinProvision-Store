@@ -13,7 +13,7 @@ public static class GsudoElevationService
     private static int _cacheMinutes;
     private static bool _cacheStarted;
     public static int CacheMinutes => Volatile.Read(ref _cacheMinutes);
-    public static string HelperPath => Path.Combine(AppContext.BaseDirectory, "Tool", "gsudo", "WinProvision.Elevator.exe");
+    public static string HelperPath => Path.Combine(AppContext.BaseDirectory, "Tool", "gsudo", "WinProvision Elevator.exe");
     public static bool IsBundled => File.Exists(HelperPath);
 
     public static void RequestCache(int minutes)

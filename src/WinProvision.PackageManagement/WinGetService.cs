@@ -294,9 +294,11 @@ public sealed partial class WinGetService
                     forceComOnly: true).ConfigureAwait(false);
             case PackageInstallMethod.WingetCli:
                 await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+                var cliPreferences = await ResolveInstallerElevationAsync(packageId, source, cancellationToken).ConfigureAwait(false);
                 onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
                 return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
-                    installLocation, source).ConfigureAwait(false);
+                    installLocation, source, cliPreferences?.Scope, cliPreferences?.Architecture,
+                    cliPreferences?.RequiresElevation ?? false, cliPreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
             case PackageInstallMethod.WinProvisionApi:
                 // A API própria só instala pacotes publicados no catálogo WinProvision.
                 // IDs da Microsoft Store (9.../Store Product ID) podem não existir nele;
@@ -322,11 +324,16 @@ public sealed partial class WinGetService
                 onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.OwnApi));
                 try
                 {
+                    var apiPreferences = await ResolveInstallerElevationAsync(packageId, source, cancellationToken).ConfigureAwait(false);
                     var result = await _apiService.TryInstallAsync(packageId,
                         onLogReceived is null ? null : new Progress<string>(onLogReceived),
                         cancellationToken,
+                        preferredArchitecture: apiPreferences?.Architecture,
+                        preferredScope: apiPreferences?.Scope,
                         onProgress: onProgress,
-                        source: source).ConfigureAwait(false);
+                        source: source,
+                        requiresElevation: apiPreferences?.RequiresElevation ?? false,
+                        elevationProhibited: apiPreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
                     if (result.Outcome is WinProvisionInstallOutcome.RequiresWinget
                         or WinProvisionInstallOutcome.PackageNotFound
                         or WinProvisionInstallOutcome.NoCompatibleInstaller)
@@ -1314,14 +1321,13 @@ public sealed partial class WinGetService
 
         // Route BEFORE dispatch: self-elevating installers otherwise show their own
         // UAC prompt and cannot reuse the host's gsudo authorization.
-        if (!forceComOnly && WinGetFactoryHelper.Mode != WinGetMode.ComOnly
-            && source == "winget" && GsudoElevationService.IsBundled && !IsCurrentProcessElevated()
+        if (source == "winget" && GsudoElevationService.IsBundled && !IsCurrentProcessElevated()
             && preferences is not null && InstallerElevationPolicy.RequiresElevation(
                 preferences.Scope, preferences.RequiresElevation, preferences.ElevationProhibited))
         {
             onLogReceived?.Invoke("A elevação deste instalador será feita pelo WinProvision Elevator.");
-            return await RunApiThenCliFallbackAsync(opKind, packageId, onLogReceived, onProgress,
-                cancellationToken, installLocation, source, "elevação-pelo-helper", preferences).ConfigureAwait(false);
+            return await RunElevatedComWorkerAsync(opKind, packageId, installLocation, onLogReceived,
+                onProgress, cancellationToken, attemptState).ConfigureAwait(false);
         }
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
         attemptState.Started = true;

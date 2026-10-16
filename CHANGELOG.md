@@ -1,5 +1,17 @@
 # Histórico de alterações
 
+## 1.0.5 - 16 de outubro de 2026
+
+- WinProvision Elevator com nome de arquivo legível, ícone próprio, licença MIT e verificação de integridade na interface e CLI.
+- Instalações COM que exigem administração executam em um worker elevado pelo Elevator, preservando a seleção explícita de COM, progresso e resultado.
+- WinGet CLI e API própria consultam requisitos de elevação antes de iniciar instaladores; escopo de máquina e proibição de elevação são respeitados.
+- Cache de autorização opcional por sessão, limitado ao processo, com encerramento explícito e prazo de inatividade.
+- CLI autônoma com `--yes`/`-y`, sem menus nas automações, e `--elevation-cache` opcional.
+- Provisionamento verifica a ativação COM e tenta registro/reparo do App Installer antes de preservar os fallbacks.
+- Logs identificam caminho, versão e presença do Elevator; empacotamento rejeita helper ausente, divergente ou sem licença.
+
+Validação: testes automatizados e smoke da interface; esses testes não substituem a confirmação visual do UAC e instalações reais em máquinas de usuários.
+
 ## 1.0.4 - 16 de outubro de 2026
 
 - O próprio WinProvision Store pode ser adicionado aos Pacotes e exportado, mas é protegido contra instalação, atualização ou remoção pela interface em execução.

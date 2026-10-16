@@ -5,7 +5,7 @@
   "commit": "3aaabf48fbbe176413913e7f94249e4ae951dcf8",
   "sha256": "806c1160adcc50f168dd9037880a593d12aace9601206368368b8288689238e0",
   "upstream": "https://github.com/gerardog/gsudo",
-  "binary": "win-x64/WinProvision.Elevator.exe",
+  "binary": "win-x64/WinProvision Elevator.exe",
   "authenticodeSigned": false,
   "fork": "https://github.com/winprovision-services/gsudo",
   "license": "LICENSE.txt",

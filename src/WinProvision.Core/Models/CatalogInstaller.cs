@@ -11,6 +11,7 @@ public class CatalogInstaller
     [JsonPropertyName("nestedInstallerFile")] public string? NestedInstallerFile { get; set; }
     [JsonPropertyName("portableCommandAlias")] public string? PortableCommandAlias { get; set; }
     [JsonPropertyName("scope")] public string? Scope { get; set; }
+    [JsonPropertyName("elevationRequirement")] public string? ElevationRequirement { get; set; }
     [JsonPropertyName("locale")] public string? Locale { get; set; }
     [JsonPropertyName("url")] public string Url { get; set; } = string.Empty;
     [JsonPropertyName("sha256")] public string? Sha256 { get; set; }

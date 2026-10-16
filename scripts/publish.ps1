@@ -51,7 +51,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\winprovision.exe')
 if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\Microsoft.Management.Deployment.winmd'))) { throw 'Metadados COM do WinGet ausentes na CLI.' }
 $taskElevator = Get-Content (Join-Path $taskRoot 'Tool/gsudo/manifest.json') -Raw | ConvertFrom-Json
 foreach ($taskHostDirectory in @($taskStaging, (Join-Path $taskStaging 'cli'))) {
-    $taskHelperPath = Join-Path $taskHostDirectory 'Tool/gsudo/WinProvision.Elevator.exe'
+    $taskHelperPath = Join-Path $taskHostDirectory 'Tool/gsudo/WinProvision Elevator.exe'
     if (-not (Test-Path -LiteralPath $taskHelperPath) -or
         (Get-FileHash -LiteralPath $taskHelperPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskElevator.sha256 -or
         -not (Test-Path -LiteralPath (Join-Path $taskHostDirectory 'Tool/gsudo/LICENSE.txt'))) {

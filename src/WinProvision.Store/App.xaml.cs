@@ -57,6 +57,7 @@ public partial class App : Application
         services.AddSingleton<GitHubBackupService>();
         services.AddSingleton<IAccountBackupService, AccountBackupService>();
         WinProvision.PackageManagement.PackageDiagnostics.Configure(WinProvisionLog.Write, WinProvisionLog.WriteComServerInfo);
+        WinProvisionLog.Write($"APP version={System.Diagnostics.FileVersionInfo.GetVersionInfo(Environment.ProcessPath!).FileVersion} path={Environment.ProcessPath} elevator={WinProvision.Core.Services.GsudoElevationService.IsBundled}");
         services.AddSingleton<WinGetService>(p => new WinGetService(
             p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
             p.GetRequiredService<WingetBootstrapper>(), () => p.GetRequiredService<InstallationPreferencesService>().PreferredMethod));

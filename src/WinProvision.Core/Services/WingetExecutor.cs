@@ -140,7 +140,7 @@ public class WingetExecutor
         args += " --accept-source-agreements --accept-package-agreements";
         var result = await ExecuteInstallWithRecoveryAsync(
             args, onLogReceived, cancellationToken, normalizedScope, normalizedArchitecture,
-            requiresElevation && !elevationProhibited,
+            InstallerElevationPolicy.RequiresElevation(normalizedScope, requiresElevation, elevationProhibited),
             preserveScopeOnRetry: WinProvisionApiService.IsRunningAsSystem());
 
         return NormalizeInstallOutcome(result, isUpgrade: false);
@@ -496,7 +496,7 @@ public class WingetExecutor
         if (normalizedArchitecture is not null) args += $" --architecture {normalizedArchitecture}";
         var result = await ExecuteInstallWithRecoveryAsync(
             args, onLogReceived, cancellationToken, normalizedScope, normalizedArchitecture,
-            requiresElevation && !elevationProhibited,
+            InstallerElevationPolicy.RequiresElevation(normalizedScope, requiresElevation, elevationProhibited),
             preserveScopeOnRetry: WinProvisionApiService.IsRunningAsSystem());
 
         return NormalizeInstallOutcome(result, isUpgrade: true);

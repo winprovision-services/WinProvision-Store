@@ -17,5 +17,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Build do helper falhou.' }
 } finally { Pop-Location }
 Copy-Item -LiteralPath (Join-Path $taskSource 'LICENSE.txt') -Destination (Join-Path $taskOutput 'LICENSE.txt')
-Get-FileHash -LiteralPath (Join-Path $taskOutput 'WinProvision.Elevator.exe') -Algorithm SHA256
+Move-Item -LiteralPath (Join-Path $taskOutput 'WinProvision.Elevator.exe') -Destination (Join-Path $taskOutput 'WinProvision Elevator.exe')
+Get-FileHash -LiteralPath (Join-Path $taskOutput 'WinProvision Elevator.exe') -Algorithm SHA256
 Write-Output "Helper recompilado para revisão em $taskOutput"

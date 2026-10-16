@@ -945,7 +945,9 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             onLog?.Report($"[WinProvisionAPI] Instalando formato {effectiveType} (silent: {installer.SilentArgs})...");
             onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Installing, Method: WingetMethod.OwnApi));
             var exitCode = await RunInstallerAsync(runnablePath, effectiveType, installer.SilentArgs ?? string.Empty, installer.Scope ?? effectiveScope ?? string.Empty, ct,
-                () => installerStarted = true, line => onLog?.Report(line), requiresElevation, elevationProhibited);
+                () => installerStarted = true, line => onLog?.Report(line),
+                requiresElevation || installer.ElevationRequirement is "elevationRequired" or "elevatesSelf",
+                elevationProhibited || installer.ElevationRequirement == "elevationProhibited");
 
             // Códigos padrão do Windows Installer/Burn mais os códigos de sucesso
             // adicionais declarados no manifesto WinGet.
@@ -1554,7 +1556,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         bool elevate = needsElevation && !IsRunningElevated();
         var command = WinProvisionInstallerCommandBuilder.Build(filePath, installerType, silentArgs);
         if (elevate && GsudoElevationService.IsBundled)
+        {
+            onLog?.Invoke("A elevação deste instalador será feita pelo WinProvision Elevator.");
             return await GsudoElevationService.RunElevatedAsync(command.FileName, command.Arguments, ct, onStarted, onLog).ConfigureAwait(false);
+        }
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = command.FileName,
