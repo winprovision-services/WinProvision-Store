@@ -34,6 +34,9 @@ public class CliConsoleTests
         {
             Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.Yes, Interactive = InteractionSupport.Yes
         });
+        // CI capability detection deliberately disables interaction; this test supplies a virtual terminal.
+        terminal.Profile.Capabilities.Interactive = true;
+        terminal.Profile.Capabilities.Ansi = true;
         var console = new CliConsole(output, TextWriter.Null, terminal);
         await Assert.ThrowsAsync<IOException>(() => console.RunAsync<int>("App [red]", () => throw new IOException("teste"), default));
         Assert.Equal(7, await console.RunAsync("Outro app", () => Task.FromResult(7), default));
@@ -49,6 +52,9 @@ public class CliConsoleTests
         {
             Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.Yes, Interactive = InteractionSupport.Yes
         });
+        // CI capability detection deliberately disables interaction; this test supplies a virtual terminal.
+        terminal.Profile.Capabilities.Interactive = true;
+        terminal.Profile.Capabilities.Ansi = true;
         var console = new CliConsole(output, TextWriter.Null, terminal);
         bool started = false;
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => console.RunAsync("App", () =>
