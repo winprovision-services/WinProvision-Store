@@ -35,6 +35,11 @@ internal static partial class Program
             using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(6));
             var removed = await executor.UninstallAppAsync("7zip.7zip", Console.WriteLine, timeout.Token,
                 source: "winget", requiresElevation: true);
+            // Some uninstallers return before their cleanup process removes the files.
+            // Keep the binary check as a hard prerequisite, but allow cleanup to finish.
+            var cleanupDeadline = DateTime.UtcNow.AddSeconds(30);
+            while (File.Exists(binary) && DateTime.UtcNow < cleanupDeadline)
+                await Task.Delay(250, timeout.Token);
             if (File.Exists(binary)) throw new InvalidOperationException($"7-Zip ainda instalado antes de testar {method}: {removed.Output}");
             WingetMethod actualMethod = WingetMethod.Unknown;
             bool inProcessObserved = false;
