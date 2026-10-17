@@ -14,8 +14,8 @@ Copy-Item -LiteralPath (Join-Path $taskPublished 'Microsoft.Management.Deploymen
 $taskHelper = Join-Path $taskOutput 'Tool/gsudo/WinProvision Elevator.exe'
 $taskPidFile = Join-Path $taskOutput 'worker.pid'
 $taskReady = Join-Path $taskOutput 'worker.ready'
-$taskDotnet = (Get-Command dotnet).Source
-$taskDll = Join-Path $taskOutput 'WinProvision.Installation.Validation.dll'
+$taskExecutable = Join-Path $taskOutput 'WinProvision.Installation.Validation.exe'
+if (-not (Test-Path -LiteralPath $taskExecutable)) { throw 'Executável de validação ausente.' }
 $taskProbe = @'
 $ErrorActionPreference = 'Stop'
 $env:GITHUB_ACTIONS = 'true'
@@ -26,10 +26,10 @@ while (-not (Test-Path -LiteralPath '__READY__')) {
     if ([DateTime]::UtcNow -gt $deadline) { throw 'Autorização do teste não recebida.' }
     Start-Sleep -Milliseconds 100
 }
-& '__DOTNET__' '__DLL__'
+& '__EXECUTABLE__'
 exit $LASTEXITCODE
 '@
-$taskProbe = $taskProbe.Replace('__PID__',$taskPidFile).Replace('__READY__',$taskReady).Replace('__DOTNET__',$taskDotnet).Replace('__DLL__',$taskDll)
+$taskProbe = $taskProbe.Replace('__PID__',$taskPidFile).Replace('__READY__',$taskReady).Replace('__EXECUTABLE__',$taskExecutable)
 $taskEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskProbe))
 $taskLauncher = Start-Process -FilePath $taskHelper -WindowStyle Hidden -PassThru `
     -ArgumentList "--integrity Medium --direct `"$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe`" -NoProfile -NonInteractive -EncodedCommand $taskEncoded" `
