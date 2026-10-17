@@ -1,9 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 namespace WinProvision.Core.Services;
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
-[JsonSerializable(typeof(CatalogCacheSettings))]
-[JsonSerializable(typeof(CatalogCacheEntry))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(decimal))]
 [JsonSerializable(typeof(Dictionary<string, string>))]

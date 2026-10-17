@@ -276,27 +276,6 @@ internal static partial class SmokeTest
             Check(ReferenceEquals(((Button)settingsPage.FindName("RefreshCatalogButton")).Command,
                 settingsPage.ViewModel.RefreshCatalogCommand), "Catálogo: atualização manual separada da limpeza de cache");
             await CaptureAsync(window.RootElement, $"settings-catalog-{theme}.png");
-            Check(ReferenceEquals(((Button)settingsPage.FindName("SaveCacheSettingsButton")).Command,
-                settingsPage.ViewModel.SaveCacheSettingsCommand), "Cache: configuração compartilhada disponível");
-            Check(ReferenceEquals(((Button)settingsPage.FindName("PruneCacheButton")).Command,
-                settingsPage.ViewModel.PruneCacheCommand), "Cache: limpeza seletiva disponível");
-            await settingsPage.ViewModel.CacheUsageCommand.ExecuteAsync(null);
-            Check(settingsPage.ViewModel.CacheUsageSummary.Contains("Catálogo local:"), "Cache: consulta de espaço local funciona sem rede");
-            var cacheScroll = (ScrollViewer)settingsPage.FindName("SubCategoryScrollViewer");
-            cacheScroll.ChangeView(null, cacheScroll.ScrollableHeight, null, true);
-            await Task.Delay(200);
-            await CaptureAsync(window.RootElement, $"settings-cache-{theme}.png");
-            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
-            await Task.Delay(250);
-            cacheScroll.ChangeView(null, 0, null, true);
-            ((FrameworkElement)settingsPage.FindName("CacheSharedDirectoryBox")).StartBringIntoView();
-            await Task.Delay(250);
-            await CaptureAsync(window.RootElement, $"settings-cache-compact-{theme}.png");
-            cacheScroll.ChangeView(null, cacheScroll.ScrollableHeight, null, true);
-            await Task.Delay(200);
-            await CaptureAsync(window.RootElement, $"settings-cache-actions-compact-{theme}.png");
-            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
-            await Task.Delay(200);
         }
         var queue = services.GetRequiredService<OperationsQueueService>();
         var queueModel = services.GetRequiredService<OperationsViewModel>();

@@ -1,11 +1,5 @@
 # CLI do WinProvision Store
 
-## Cache local do catálogo
-
-`winprovision cache list` (ou apenas `cache`) informa tamanho, arquivos e pastas do catálogo bruto compartilhado pela UI/CLI. `winprovision cache prune` remove arquivos antigos e excedentes; `winprovision cache clear` remove essa cópia local, preservando a pasta compartilhada. Esses comandos não consultam R2 nem preparam o WinGet; não removem instaladores, imagens, perfis ou credenciais. A limpeza seletiva também mantém a pasta compartilhada dentro da política quando configurada.
-
-Pasta adicional/rede, prazo (6/12/24 horas) e limite por cópia (128 MiB a 2 GiB; padrão 512 MiB) são salvos nas Configurações da interface e lidos na próxima execução. A cópia local permite uso sem a pasta de rede. O prazo é persistido entre processos; detalhes/índices com SHA inalterado não precisam ser baixados novamente. Consulte a [política de cache](ARCHITECTURE.md#cache-do-catálogo).
-
 A CLI é o executável `winprovision`. O instalador oferece adicioná-lo ao PATH do usuário. Abra um novo terminal após a instalação.
 
 Na distribuição portátil, mantenha o conteúdo completo da pasta `cli`, incluindo `Microsoft.Management.Deployment.winmd`, junto do executável. Esse arquivo de suporte é necessário à integração COM na publicação Native AOT.

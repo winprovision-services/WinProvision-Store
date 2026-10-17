@@ -18,13 +18,6 @@ public partial class App
     {
         if (IsSmokeTest)
         {
-            var testCacheRoot = Path.Combine(SmokeTest.OutputDirectory, "catalog-cache-test");
-            services.AddSingleton(new CatalogCacheService(testCacheRoot, new()));
-            services.AddSingleton<SmokeCatalogClient>();
-            services.AddSingleton<StoreService>(p => new(p.GetRequiredService<SmokeCatalogClient>(),
-                p.GetRequiredService<IconService>(), Path.Combine(testCacheRoot, "ui-state"), p.GetRequiredService<CatalogCacheService>()));
-            services.AddSingleton<WinProvisionApiService>(p => new(p.GetRequiredService<SmokeCatalogClient>(),
-                Path.Combine(testCacheRoot, "api-state"), p.GetRequiredService<CatalogCacheService>()));
             var testCollections = Path.Combine(SmokeTest.OutputDirectory, "collections-test.json");
             if (File.Exists(testCollections)) File.Delete(testCollections);
             var testPreferences = Path.Combine(SmokeTest.OutputDirectory,"updates-preferences-test.json");
@@ -50,12 +43,6 @@ public partial class App
                 officeInstaller: provider.GetRequiredService<IOfficeCollectionInstaller>()));
             services.AddSingleton<IOfficeCollectionInstaller, SmokePackageBackend.SmokeOfficeCollectionInstaller>();
         }
-    }
-    private sealed partial class SmokeCatalogClient() : HttpClient(new SmokeCatalogHandler());
-    private sealed partial class SmokeCatalogHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
-            => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
     }
     partial void TryLaunchValidation(ref bool handled)
     {

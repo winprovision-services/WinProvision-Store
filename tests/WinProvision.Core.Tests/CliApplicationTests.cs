@@ -9,28 +9,6 @@ namespace WinProvision.Core.Tests;
 public class CliApplicationTests
 {
     [Theory]
-    [InlineData("list")]
-    [InlineData("prune")]
-    [InlineData("clear")]
-    public async Task CacheCommandsOperateLocallyWithoutPackageOperations(string action)
-    {
-        string root = Path.Combine(Path.GetTempPath(), "WinProvision-cli-cache-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            var fixture = new Fixture("");
-            var cache = new CatalogCacheService(root, new());
-            var app = new CliApplication(fixture.Backend, TextReader.Null, fixture.Output, fixture.Error, "test",
-                inputRedirected: true, catalogCache: cache);
-            Assert.Equal(0, await app.RunAsync(["cache", action], default));
-            Assert.Contains(root, fixture.Output.ToString());
-            Assert.Empty(fixture.Backend.Executed);
-            Assert.Empty(fixture.Error.ToString());
-            Assert.Throws<ArgumentException>(() => InteractiveCliInput.ParseRequest(["cache", "invalid"]));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Theory]
     [InlineData("search")]
     [InlineData("upgrade")]
     [InlineData("list")]

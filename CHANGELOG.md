@@ -2,9 +2,6 @@
 
 ## Não lançado
 
-- Catálogo bruto compartilhado entre UI e CLI, persistido por URL/SHA-256 com revalidação padrão de 6 horas, ETag, espera após falhas e cópia local de pasta compartilhada opcional. Índices e detalhes inalterados são reutilizados por hash.
-- Diagnóstico de conexão consulta apenas os dois pequenos manifestos, sem baixar os índices completos. Configurações oferecem prazo, pasta de rede, limite, consulta de espaço e limpeza seletiva; CLI ganha `cache list|prune|clear`. Limpeza automática diária remove arquivos sem uso por 30 dias e excedentes da cota.
-
 - “Iniciar com o Windows” executa as atualizações pela CLI sem abrir a interface. Entradas antigas são migradas; o lote preserva seleção, versões ignoradas, método e opções salvas, notificações e cache do Elevator.
 
 - Cache de elevação automático e fixo em 5 minutos de inatividade na interface e CLI; removidos os controles de duração e encerramento manual. `--elevation-cache` permanece aceito por compatibilidade.

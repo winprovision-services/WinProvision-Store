@@ -29,7 +29,6 @@ public sealed class CacheService
     {
         _storeService.ClearCache();
         await _apiService.ClearLocalCacheAsync();
-        await _storeService.SharedCache.ClearAsync();
         _iconService.ClearCache();
         await _packageMetricsService.ClearAsync();
 
@@ -38,15 +37,9 @@ public sealed class CacheService
         // no Core para manter independência da interface.
     }
 
-    public Task<CatalogCacheUsage> GetCatalogUsageAsync(CancellationToken token = default)
-        => _storeService.SharedCache.GetUsageAsync(token);
-    public Task MaintainAsync(CancellationToken token = default)
-        => _storeService.SharedCache.MaintainAsync(true, token);
-
     public async Task<int> RefreshCatalogAsync(CancellationToken token = default)
     {
         var apps = await _storeService.LoadCatalogAsync(forceRefresh: true, cancellationToken: token);
-        await _apiService.RefreshFromSharedCacheAsync(token);
         return apps.Count;
     }
 }

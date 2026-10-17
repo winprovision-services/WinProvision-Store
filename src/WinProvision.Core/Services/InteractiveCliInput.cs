@@ -37,13 +37,6 @@ public static class InteractiveCliInput
             if (arg is "--help" or "-h") return new("help", command);
         }
 
-        if (command == "cache")
-        {
-            string action = args.Length == 0 ? "list" : args.Length == 1 ? args[0].ToLowerInvariant() : "";
-            if (action is not ("list" or "prune" or "clear")) throw Invalid("Use cache [list|prune|clear].");
-            return new("cache", action);
-        }
-
         string? id = null, source = null, input = null, output = null;
         bool download = false, offline = false, installOffice = false;
         bool exact = false, json = false, noInput = false, all = false, positionalOnly = false, yes = false, elevationCache = false;
@@ -140,7 +133,6 @@ public static class InteractiveCliInput
         "install" => "install",
         "import" or "export" or "download" or "uninstall" or "office" => command.TrimStart('-').ToLowerInvariant(),
         "help" => "help",
-        "cache" => "cache",
         _ => throw Invalid($"Comando desconhecido: {command}.")
     };
 
