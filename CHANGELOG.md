@@ -1,6 +1,10 @@
 # Histórico de alterações
 
-## Não lançado
+## 1.0.9 - 17 de outubro de 2026
+
+- Console com Spectre.Console: progresso temporário, spinner e resultados por aplicativo, com saída simples em redirecionamentos e JSON preservado.
+
+- CLI executa instalações, importações e atualizações sem menus; somente desinstalação pede confirmação. Terminal apresenta progresso por aplicativo e resultados; diagnósticos técnicos ficam em arquivo, com pasta acessível por `winprovision logs`. `--download` continua apenas baixando.
 
 - “Iniciar com o Windows” executa as atualizações pela CLI sem abrir a interface. Entradas antigas são migradas; o lote preserva seleção, versões ignoradas, método e opções salvas, notificações e cache do Elevator.
 

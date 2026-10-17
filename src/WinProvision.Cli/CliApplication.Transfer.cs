@@ -5,10 +5,15 @@ namespace WinProvision.Cli;
 
 public sealed partial class CliApplication
 {
-    private int Report(WingetExecutionResult result)
+    private int Report(WingetExecutionResult result, string success = "Concluído", string? name = null)
     {
-        if (!result.Success) { Log($"Falha (código {result.ExitCode}): {result.Output}"); return 1; }
-        Write(result.RebootRequired ? "Concluído. Reinicialização necessária." : "Concluído.");
+        if (!result.Success)
+        {
+            Log($"Falha (código {result.ExitCode}): {result.Output}");
+            _console.Result($"{(name is null ? "" : name + " — ")}não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false);
+            return 1;
+        }
+        _console.Result(success, true, result.RebootRequired);
         return 0;
     }
 
@@ -39,25 +44,24 @@ public sealed partial class CliApplication
         if (packages.Count == 0) { Write("A lista não contém pacotes."); return 0; }
         string action = request.Download ? "baixar" : "instalar";
         Write($"{packages.Count} pacote(s) para {action}:");
-        foreach (var package in packages) Write($"{package.Name ?? package.Id} | {package.Id} | {package.Source} | {package.PinnedVersion ?? "atual"}");
         if (!await ConfirmAsync(request, "Executar a lista?", token)) return 0;
         int succeeded = 0, failed = 0, reboot = 0;
         for (int i = 0; i < packages.Count; i++)
         {
             token.ThrowIfCancellationRequested();
             var package = packages[i];
-            Write($"\n{i + 1}/{packages.Count} — {action} {package.Id}");
             try
             {
-                var result = request.Download
-                    ? await backend.DownloadProfileAsync(package, request.Output, Log, token)
-                    : await backend.ExecuteProfileAsync(package, Log, token);
-                if (Report(result) == 0) succeeded++; else failed++;
+                var result = await _console.RunAsync($"{(request.Download ? "Baixando" : "Instalando")} {package.Name ?? package.Id}",
+                    () => request.Download
+                        ? backend.DownloadProfileAsync(package, request.Output, Log, token)
+                        : backend.ExecuteProfileAsync(package, Log, token), token, i, packages.Count);
+                if (Report(result, $"{package.Name ?? package.Id} — {(request.Download ? "download concluído" : "instalado")}", package.Name ?? package.Id) == 0) succeeded++; else failed++;
                 if (result.RebootRequired) reboot++;
                 if (result.RebootInitiated) break;
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception exception) { failed++; Log($"Falha em {package.Id}: {exception.Message}"); }
+            catch (Exception exception) { failed++; Log(exception.ToString()); _console.Result($"{package.Name ?? package.Id} — não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false); }
         }
         Write($"\nResumo: {succeeded} concluído(s), {failed} falha(s), {reboot} exige(m) reinicialização.");
         return failed == 0 ? 0 : 1;

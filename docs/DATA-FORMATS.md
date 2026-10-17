@@ -16,13 +16,15 @@ A mídia offline conserva sua versão e seu inventário de integridade. Arquivos
 
 ## Linha de comando
 
+A apresentação interativa da CLI usa Spectre.Console: barra verde, spinner azul e resultado fixo por aplicativo. A barra mede aplicativos concluídos no lote; operações sem porcentagem disponível usam animação indeterminada. A barra temporária desaparece ao terminar ou cancelar, preservando o histórico do terminal. Com saída redirecionada ou terminal sem suporte, usa texto simples, sem códigos ANSI. JSON não passa pelo renderizador de progresso.
+
 A distribuição da CLI inclui o executável e os metadados `Microsoft.Management.Deployment.winmd` na mesma pasta. A integração de pacotes é compartilhada com o aplicativo; preservar a pasta completa mantém o suporte à API COM em Native AOT.
 
-Os comandos e aliases aceitos estão em [CLI](CLI.md). Mudanças devem preservar os códigos de saída, as confirmações e o significado das opções existentes.
+Os comandos e aliases aceitos estão em [CLI](CLI.md). Mudanças devem preservar os códigos de saída e o significado das opções existentes; mudanças de confirmação são registradas abaixo.
 
 Exportações da CLI usam o perfil nativo com `apps`. Importações aceitam esse formato, backups com `tabs`, listas simples e exportações WinGet. O limite é de 16 MiB e 10.000 aplicativos. Opções Office e `pinnedVersion` dos perfis nativos acompanham a execução; duplicatas com opções conflitantes são rejeitadas antes do lote. URLs HTTPS podem seguir até cinco redirecionamentos HTTPS e links de Gist podem apontar ao perfil armazenado na nuvem. Metadados de provisionamento não são aplicados pela importação de aplicativos.
 
-A CLI aceita `--yes`/`-y` para confirmar operações em automações; os comandos sem essa opção preservam a confirmação. Operações com entrada redirecionada sem confirmação explícita retornam código 2 em vez de encerrar silenciosamente sem executar. JSON permanece apenas para consultas.
+A CLI passa a executar instalações, importações e atualizações sem confirmação ou seleção interativa. `upgrade` executa todos os resultados do filtro; `--json` e `--no-input` sem `--yes` continuam apenas consultas. Somente desinstalação mantém confirmação; com entrada redirecionada exige `--yes`. A opção `--yes` permanece aceita nas demais operações por compatibilidade. `--download` mantém o significado de apenas baixar. Diagnósticos técnicos passam do terminal para arquivos por processo em `logs/cli`, consultáveis por `winprovision logs`; stdout JSON e códigos de saída são preservados.
 
 O helper de elevação acompanha cada host em `Tool/gsudo`, com licença e inventário; a CLI portátil precisa preservar também essa pasta. O cache de autorização é temporário e não altera preferências persistidas nem o formato das coleções.
 

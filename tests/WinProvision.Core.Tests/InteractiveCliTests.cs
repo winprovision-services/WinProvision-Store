@@ -100,8 +100,6 @@ public class InteractiveCliTests
     [InlineData("search Chrome --elevation-cache")]
     [InlineData("upgrade --json --elevation-cache")]
     [InlineData("list --elevation-cache")]
-    [InlineData("upgrade --yes")]
-    [InlineData("upgrade Chrome --yes")]
     [InlineData("upgrade --id Google.Chrome --json --yes")]
     [InlineData("install --id Google.Chrome --yes -y")]
     [InlineData("search Chrome --souce winget")]

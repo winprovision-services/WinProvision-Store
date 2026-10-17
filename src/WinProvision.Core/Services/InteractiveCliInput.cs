@@ -90,7 +90,6 @@ public static class InteractiveCliInput
             throw Invalid("--elevation-cache exige uma operação de instalação, atualização, remoção ou importação.");
         if (yes && json) throw Invalid("--yes não combina com --json; JSON apenas consulta.");
         if (yes && command is not ("install" or "update" or "uninstall" or "import") && !installOffice) throw Invalid("--yes exige uma operação de instalação, atualização, remoção ou importação.");
-        if (yes && command == "update" && !all && id is null) throw Invalid("Com --yes, informe --id ou --all para atualizar sem seleção interativa.");
         if (command == "office" && (seen.Any(option => option != "--offline" && option != "--office" && option != "--yes" && option != "--elevation-cache" && !(option == "--no-input" && yes)) || query.Length > 0))
             throw Invalid("Use office [--offline], sem filtros ou outras opções.");
         if (installOffice && offline) throw Invalid("--offline apenas baixa. Use office --offline ou install --office separadamente.");
@@ -133,6 +132,7 @@ public static class InteractiveCliInput
         "install" => "install",
         "import" or "export" or "download" or "uninstall" or "office" => command.TrimStart('-').ToLowerInvariant(),
         "help" => "help",
+        "logs" => "logs",
         _ => throw Invalid($"Comando desconhecido: {command}.")
     };
 

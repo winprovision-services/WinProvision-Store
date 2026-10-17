@@ -1,3 +1,4 @@
+using Spectre.Console;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -26,7 +27,8 @@ internal static partial class Program
         catch (OperationCanceledException) { Console.Error.WriteLine("Operação cancelada."); return 130; }
         catch (Exception exception)
         {
-            Console.Error.WriteLine("Erro: " + CliApplication.Clean(exception.Message));
+            CliDiagnostics.Write(exception.ToString());
+            Console.Error.WriteLine(exception is ArgumentException ? "Erro: " + CliApplication.Clean(exception.Message) : "Não foi possível concluir. Consulte o diagnóstico com winprovision logs.");
             return exception is ArgumentException ? 2 : 1;
         }
         finally
@@ -46,12 +48,19 @@ internal static partial class Program
             return await BackgroundUpdateApplication.RunScheduledAsync(token);
         }
         string version = typeof(CliApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.1.0";
-        await using var backend = new ResilientCliBackend(message => Console.Error.WriteLine(CliApplication.Clean(message)));
-        try { return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version, Console.IsInputRedirected).RunAsync(args, token); }
+        await using var backend = new ResilientCliBackend(CliDiagnostics.Write);
+        var terminal = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(Console.Out),
+            Ansi = Console.IsOutputRedirected ? AnsiSupport.No : AnsiSupport.Detect,
+            Interactive = Console.IsOutputRedirected || Console.IsInputRedirected ? InteractionSupport.No : InteractionSupport.Detect
+        });
+        var presentation = new CliConsole(Console.Out, Console.Error, terminal);
+        try { return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version, Console.IsInputRedirected, presentation).RunAsync(args, token); }
         finally
         {
             try { await WinProvision.Core.Services.GsudoElevationService.StopCacheAsync(); }
-            catch (Exception ex) { Console.Error.WriteLine("Não foi possível encerrar a autorização temporária: " + CliApplication.Clean(ex.Message)); }
+            catch (Exception ex) { CliDiagnostics.Write(ex.ToString()); }
         }
     }
 

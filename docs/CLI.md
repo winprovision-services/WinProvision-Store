@@ -17,17 +17,17 @@ Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao exe
 | `search <nome>` | Pesquisar aplicativos sem instalar |
 | `show --id ID` | Consultar detalhes |
 | `list [nome]` | Listar aplicativos instalados |
-| `install --id ID` | Instalar após confirmação |
+| `install --id ID` | Instalar diretamente |
 | `download --id ID` | Baixar o instalador para Downloads |
-| `upgrade` | Mostrar atualizações em um menu com índices |
-| `upgrade --all` | Selecionar todas as atualizações e pedir confirmação |
+| `upgrade` | Atualizar todos os aplicativos com atualização disponível |
+| `upgrade --all` | Atualizar todos os aplicativos diretamente |
 | `uninstall --id ID` | Desinstalar o identificador exato após confirmação |
 | `export` | Exportar a lista reconhecida de aplicativos para JSON |
-| `import arquivo.json` | Instalar os aplicativos da lista após confirmação |
-| `import arquivo.json --download` | Apenas baixar os instaladores da lista, após confirmação |
+| `import arquivo.json` | Instalar os aplicativos da lista diretamente |
+| `import arquivo.json --download` | Apenas baixar os instaladores da lista |
 | `office` | Baixar a ferramenta, o XML e o script do Office |
 | `office --offline` | Baixar também a mídia completa do Office |
-| `install --office` | Instalar o Office padrão após confirmação |
+| `install --office` | Instalar o Office padrão diretamente |
 | `help [comando]` | Exibir ajuda geral ou específica |
 
 ## Exemplos
@@ -60,7 +60,7 @@ winprovision --version
 | `--json` | Resultado estruturado em pesquisa, listagem e consulta de atualizações |
 | `--no-input` | Consultar sem menus; junto de `--yes`, executar a operação sem interação |
 | `--elevation-cache` | Aceito por compatibilidade; o cache de 5 minutos de inatividade já é automático |
-| `-y`, `--yes` | Confirmar a operação sem exibir menus; upgrade exige `--id` ou `--all` |
+| `-y`, `--yes` | Dispensar confirmação na desinstalação; compatibilidade nas demais operações |
 | `--all` | Selecionar todas as atualizações, sem combinar filtros |
 | `-i`, `--input` | Arquivo JSON ou URL HTTPS direta para importação |
 | `-o`, `--output` | Arquivo de exportação ou pasta de download |
@@ -69,7 +69,9 @@ winprovision --version
 | `-h`, `--help` | Ajuda |
 | `-V`, `--version` | Versão do executável |
 
-O modo JSON apenas consulta e não inicia instalações. `--all` não combina com filtros nem JSON; aceita `--no-input` junto de `--yes`. Use `--yes` (ou `-y`) em operações para executar sem menus nem confirmação. Em atualizações, informe `--id` ou `--all`; a CLI não escolhe um resultado ambíguo. Sem essa opção, as confirmações interativas são preservadas. Com entrada redirecionada, operações que exigem confirmação falham com código 2 antes de consultar ou instalar; use `--yes` para executar ou `--no-input`/`--json` para apenas consultar. `--yes` não combina com `--json`.
+Instalação, importação e atualização executam diretamente, sem menus ou confirmação da CLI. `upgrade` atualiza todos os resultados; use `--id ID` para limitar a um aplicativo ou um nome para filtrar. `--json` e `upgrade --no-input` permanecem apenas consultas. A desinstalação pede confirmação; `uninstall --id ID --yes` confirma explicitamente em automações. `--yes` continua aceito nas demais operações por compatibilidade. `--yes` não combina com `--json`.
+
+`import arquivo.json` instala. `import arquivo.json --download` apenas baixa; remova `--download` para instalar. O terminal mostra o aplicativo em execução, conclusão ou falha e o resumo do lote. Detalhes técnicos ficam em `%LOCALAPPDATA%/WinProvisionStoreWinUI3/logs/cli`; `winprovision logs` mostra essa pasta. Os diagnósticos são separados por processo e têm dados sensíveis ocultados. Instaladores ainda podem exigir autorização do Windows.
 
 ## Listas JSON
 
@@ -94,7 +96,7 @@ A exportação escreve um perfil nativo com `schemaVersion`, `createdAt`, `name`
 
 ## Office
 
-Os comandos `office` e `office --offline` apenas baixam. Para instalar, use `install --office`, que pede confirmação.
+Os comandos `office` e `office --offline` apenas baixam. Para instalar, use `install --office`, que instala diretamente.
 
 O XML padrão utiliza Microsoft 365 Família, 64 bits, português do Brasil, canal Current, atualizações automáticas e interface de instalação oculta. Access e Publisher ficam excluídos.
 
@@ -106,16 +108,17 @@ Consulte [Office online e offline](OFFICE-OFFLINE.md).
 
 ## Interação
 
+A apresentação interativa da CLI usa Spectre.Console: barra verde, spinner azul e resultado fixo por aplicativo. A barra mede aplicativos concluídos no lote; operações sem porcentagem disponível usam animação indeterminada. A barra temporária desaparece ao terminar ou cancelar, preservando o histórico do terminal. Com saída redirecionada ou terminal sem suporte, usa texto simples, sem códigos ANSI. JSON não passa pelo renderizador de progresso.
+
 - `0` ou fim da entrada sai do menu sem confirmar uma operação.
 - `Ctrl+C` solicita cancelamento.
-- `N` e `P` navegam pelas páginas dos menus.
 - Lotes mostram progresso e um resumo de conclusões e falhas.
 
 Instaladores podem pedir autorização administrativa ou interação própria.
 
 ## Saída e códigos
 
-Resultados são escritos em stdout; diagnósticos e progresso, em stderr. A saída JSON de consultas contém `id`, `name`, `version`, `availableVersion` e `source`.
+Resultados são escritos em stdout; status de consulta e falhas resumidas, em stderr. Diagnósticos técnicos são gravados em arquivo. A saída JSON de consultas contém `id`, `name`, `version`, `availableVersion` e `source`.
 
 | Código | Significado |
 | --- | --- |
@@ -134,7 +137,7 @@ Prefira os comandos principais e as opções longas em novos scripts.
 
 ## Execução no primeiro logon
 
-A CLI não exige inicialização da interface gráfica. O provisionamento de pacotes depende da rede, das permissões e dos serviços disponíveis na sessão do usuário. Um teste em uma sessão comum ou no Windows Sandbox não comprova funcionamento durante o FirstLogon de uma imagem personalizada. Para executar instalações e remoções sem entrada interativa, informe `--yes` explicitamente. Sem essa opção, a CLI preserva as confirmações e rejeita operações com entrada redirecionada.
+A CLI não exige inicialização da interface gráfica. O provisionamento de pacotes depende da rede, das permissões e dos serviços disponíveis na sessão do usuário. Um teste em uma sessão comum ou no Windows Sandbox não comprova funcionamento durante o FirstLogon de uma imagem personalizada. Instalações e atualizações não leem entrada interativa. Para remoções com entrada redirecionada, informe `--yes` explicitamente.
 
 ## Automação
 
@@ -146,7 +149,7 @@ winprovision import apps.json --yes
 winprovision install --office --yes
 ```
 
-`--yes` elimina os prompts da CLI, preservando os códigos de saída e o cancelamento. Instaladores que precisam de elevação ainda dependem dos privilégios da sessão; a opção não contorna o UAC nem garante que todo instalador de terceiros seja autônomo. A remoção pelo fallback WinGet também solicita modo silencioso.
+A execução direta preserva os códigos de saída e o cancelamento. `--yes` dispensa a confirmação da desinstalação. Instaladores que precisam de elevação ainda dependem dos privilégios da sessão; a opção não contorna o UAC nem garante que todo instalador de terceiros seja autônomo. A remoção pelo fallback WinGet também solicita modo silencioso.
 
 Antes de usar a COM, o motor verifica sua ativação, mesmo quando `winget --version` já funciona. Em caso de falha, tenta registrar o App Installer para o usuário atual e depois reinstalar o pacote e suas dependências oficiais. A COM é verificada novamente após cada etapa; falha no reparo preserva a cadeia API própria/CLI. O reparo é limitado a uma tentativa por instância do motor, não é iniciado por erros de um pacote ou de conexão ao catálogo e respeita cancelamento. Em SYSTEM, a indisponibilidade da COM preserva o fallback sem tentar registro por usuário.
 
@@ -157,7 +160,7 @@ winprovision import apps.json --yes --elevation-cache
 winprovision upgrade --all --yes --elevation-cache
 ```
 
-O cache de 5 minutos é automático, sem opção de desativação ou mudança de duração, e é solicitado apenas quando uma operação precisa do helper elevado. A primeira autorização continua passando pelo UAC. A permissão vale para o processo da CLI e seus descendentes, expira após 5 minutos de inatividade e é invalidada ao encerrar a execução. Não é compartilhada globalmente com o terminal ou com o gsudo instalado no sistema. `--elevation-cache` permanece aceito por compatibilidade e é redundante. Use `--yes` para dispensar as confirmações da CLI.
+O cache de 5 minutos é automático, sem opção de desativação ou mudança de duração, e é solicitado apenas quando uma operação precisa do helper elevado. A primeira autorização continua passando pelo UAC. A permissão vale para o processo da CLI e seus descendentes, expira após 5 minutos de inatividade e é invalidada ao encerrar a execução. Não é compartilhada globalmente com o terminal ou com o gsudo instalado no sistema. `--elevation-cache` permanece aceito por compatibilidade e é redundante. Use `--yes` para dispensar a confirmação da desinstalação.
 
 Solicitações de elevação feitas diretamente pela COM e por instaladores que elevam a si próprios não reutilizam necessariamente esse cache. Consulte a [integração gsudo](../Tool/gsudo/README.md).
 

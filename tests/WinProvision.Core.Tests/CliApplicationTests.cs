@@ -35,27 +35,30 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task UpdatesAllStillRequiresConfirmationAndContinuesAfterFailure()
+    public async Task UpdatesAllRunsDirectlyAndContinuesAfterFailure()
     {
         var exit = new Fixture("");
         Assert.Equal(0, await exit.App.RunAsync(["upgrade", "--all"], default));
-        Assert.Empty(exit.Backend.Executed);
+        Assert.Equal(2, exit.Backend.Executed.Count);
         var fixture = new Fixture("invalid\n1\n");
         fixture.Backend.FailId = "Google.Chrome";
         Assert.Equal(1, await fixture.App.RunAsync(["upgrade", "--all"], default));
         Assert.Equal(new[] { "Google.Chrome", "Valve.Steam" }, fixture.Backend.Executed);
         Assert.Contains("2/2", fixture.Output.ToString());
         Assert.Contains("1 concluído(s), 1 falha(s)", fixture.Output.ToString());
-        Assert.Contains("Opção:", fixture.Output.ToString());
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
         Assert.DoesNotContain("Usuário:", fixture.Output.ToString());
+        Assert.DoesNotContain("Diagnóstico do WinGet", fixture.Error.ToString());
+        Assert.DoesNotContain("COM HRESULT", fixture.Error.ToString());
+        Assert.Contains("não foi possível concluir", fixture.Error.ToString());
     }
 
     [Fact]
-    public async Task ExplicitInstallUsesOnlyExactIdAndCannotRunAtEndOfInput()
+    public async Task ExplicitInstallUsesOnlyExactIdWithoutInput()
     {
         var fixture = new Fixture("");
         Assert.Equal(0, await fixture.App.RunAsync(["install", "--id", "Google.Chrome"], default));
-        Assert.Empty(fixture.Backend.Executed);
+        Assert.Single(fixture.Backend.Executed);
         Assert.Contains("1 pacote(s)", fixture.Output.ToString());
         var confirmed = new Fixture("1\n");
         Assert.Equal(0, await confirmed.App.RunAsync(["install", "--id", "Google.Chrome"], default));
@@ -63,14 +66,13 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task PageNavigationKeepsIdentifiersAlignedWithNumbers()
+    public async Task FilteredUpdatesRunWithoutMenus()
     {
-        var fixture = new Fixture("n\np\nn\n16\n1\n");
-        fixture.Backend.Packages = Enumerable.Range(1, 20)
-            .Select(index => new UpgradablePackage { Id = $"App.{index}", Name = $"App {index}", Source = "winget" }).ToList();
-        Assert.Equal(0, await fixture.App.RunAsync(["upgrade", "App"], default));
-        Assert.Equal("App.16", Assert.Single(fixture.Backend.Executed));
-        Assert.Contains("Resultados 16–20 de 20", fixture.Output.ToString());
+        var fixture = new Fixture("");
+        Assert.Equal(0, await fixture.App.RunAsync(["upgrade", "Chrome"], default));
+        Assert.Equal("Google.Chrome", Assert.Single(fixture.Backend.Executed));
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
+        Assert.DoesNotContain("Diagnóstico do WinGet", fixture.Error.ToString());
     }
 
     [Fact]
@@ -113,7 +115,7 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task ImportValidatesEntireListBeforeAnyOperationAndRequiresConfirmation()
+    public async Task ImportValidatesEntireListBeforeExecutingWithoutInput()
     {
         string path = Path.GetTempFileName();
         try
@@ -125,7 +127,7 @@ public class CliApplicationTests
             await File.WriteAllTextAsync(path, "[{\"id\":\"Google.Chrome\"},{\"id\":\"Valve.Steam\",\"source\":\"winget\"}]");
             var exit = new Fixture("");
             Assert.Equal(0, await exit.App.RunAsync(["import", "-i", path], default));
-            Assert.Empty(exit.Backend.Executed);
+            Assert.Equal(2, exit.Backend.Executed.Count);
             var confirmed = new Fixture("1\n");
             Assert.Equal(0, await confirmed.App.RunAsync(["import", path], default));
             Assert.Equal(new[] { "Google.Chrome", "Valve.Steam" }, confirmed.Backend.Executed);
@@ -199,11 +201,11 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task OfficeInstallationRequiresExplicitCommandAndConfirmation()
+    public async Task OfficeInstallationRequiresExplicitCommandWithoutConfirmation()
     {
         var exited = new Fixture("");
         Assert.Equal(0, await exited.App.RunAsync(["--install", "--office"], default));
-        Assert.Equal(0, exited.Backend.OfficeInstallations);
+        Assert.Equal(1, exited.Backend.OfficeInstallations);
         var confirmed = new Fixture("1\n");
         Assert.Equal(0, await confirmed.App.RunAsync(["install", "--office"], default));
         Assert.Equal(1, confirmed.Backend.OfficeInstallations);
@@ -246,14 +248,16 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task RedirectedMutationWithoutYesFailsBeforeQueryingOrExecuting()
+    public async Task RedirectedInstallRunsButRemovalStillNeedsExplicitConsent()
     {
         var fixture = new Fixture("");
         var app = new CliApplication(fixture.Backend, TextReader.Null, fixture.Output, fixture.Error, "test", inputRedirected: true);
-        await Assert.ThrowsAsync<ArgumentException>(() => app.RunAsync(["install", "--id", "Google.Chrome"], default));
-        Assert.Empty(fixture.Backend.Executed);
-        Assert.Equal(0, await app.RunAsync(["install", "--id", "Google.Chrome", "--yes"], default));
+        Assert.Equal(0, await app.RunAsync(["install", "--id", "Google.Chrome"], default));
         Assert.Single(fixture.Backend.Executed);
+        await Assert.ThrowsAsync<ArgumentException>(() => app.RunAsync(["uninstall", "--id", "Google.Chrome"], default));
+        Assert.Empty(fixture.Backend.Removed);
+        Assert.Equal(0, await app.RunAsync(["uninstall", "--id", "Google.Chrome", "--yes"], default));
+        Assert.Single(fixture.Backend.Removed);
     }
 
     [Fact]
@@ -307,6 +311,6 @@ public class CliApplicationTests
         public Task<string> DetailsAsync(string id, string source, CancellationToken token)
         { DetailsId = id; return Task.FromResult("Detalhes do pacote"); }
         public Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
-        { Executed.Add(package.Id); return Task.FromResult(new WingetExecutionResult { Success = package.Id != FailId, ExitCode = package.Id == FailId ? 1 : 0 }); }
+        { Executed.Add(package.Id); return Task.FromResult(new WingetExecutionResult { Success = package.Id != FailId, ExitCode = package.Id == FailId ? 1 : 0, Output = "COM HRESULT backend interno" }); }
     }
 }
