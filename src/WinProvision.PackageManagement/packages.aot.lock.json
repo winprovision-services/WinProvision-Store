@@ -26,6 +26,12 @@
         "resolved": "1.29.380",
         "contentHash": "O2KWbqShmCi9KZgmweDo2DxPFDskM8IDtXkhnVt1d/lNL22eBqPAM69YobFLbMUB+cdTQrApQJx+qhQRXkiltw=="
       },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -90,6 +96,12 @@
         "dependencies": {
           "runtime.win-x64.Microsoft.DotNet.ILCompiler": "10.0.12"
         }
+      },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
       },
       "Microsoft.Win32.SystemEvents": {
         "type": "Transitive",

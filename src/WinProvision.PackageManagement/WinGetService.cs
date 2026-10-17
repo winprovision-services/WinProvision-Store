@@ -37,7 +37,7 @@ public sealed partial class WinGetService
     /// (atualização de uma instalação existente) — mesmo InstallOptions, mesmo InstallResult/
     /// InstallProgress, só o método da COM que muda.
     /// </summary>
-    private enum ComOperationKind { Install, Upgrade }
+    private enum ComOperationKind { Install, Upgrade, Uninstall }
 
     /// <summary>Marca o instante em que a instalação foi entregue ao servidor COM (a partir daí não se repete).</summary>
     private sealed partial class InstallAttemptState
@@ -1321,26 +1321,13 @@ public sealed partial class WinGetService
 
         // Route BEFORE dispatch: self-elevating installers otherwise show their own
         // UAC prompt and cannot reuse the host's gsudo authorization.
-        if (preferences is not null && InstallerElevationPolicy.DelegateComExecutionToCli(source,
-            preferences.Scope, preferences.RequiresElevation, preferences.ElevationProhibited, GsudoElevationService.IsBundled))
+        if (!InProcessWinGetFactory.Enabled && preferences is not null
+            && InstallerElevationPolicy.RequiresElevatedComHost(source, preferences.Scope,
+                preferences.RequiresElevation, preferences.ElevationProhibited))
         {
-            const string reason = "O servidor COM do WinGet não herda a elevação do cliente. Para evitar um segundo UAC, a instalação será executada pelo WinGet CLI com o WinProvision Elevator.";
-            if (WinGetFactoryHelper.Mode == WinGetMode.ComOnly)
-                return new WingetExecutionResult { Success = false, ExitCode = -1,
-                    Output = "A COM exclusiva não garante a reutilização da elevação. Selecione Automático ou WinGet CLI para este instalador.",
-                    FailureReason = WingetFailureReason.ElevationRequired };
-            onLogReceived?.Invoke(reason);
-            PackageDiagnostics.Write($"{comTag} stage=delegated-before-dispatch method=WinGetCLI reason=com-server-elevation");
-            onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
-            // Once delegated, an exception must not dispatch the same package through another backend.
-            attemptState.Started = true;
-            return opKind == ComOperationKind.Install
-                ? await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
-                    installLocation, source, preferences.Scope, preferences.Architecture,
-                    requiresElevation: true, elevationProhibited: false).ConfigureAwait(false)
-                : await _wingetExecutor.UpdateAppAsync(packageId, onLogReceived, cancellationToken,
-                    source, preferences.Scope, preferences.Architecture,
-                    requiresElevation: true, elevationProhibited: false).ConfigureAwait(false);
+            onLogReceived?.Invoke("A operação COM será executada no host local elevado pelo WinProvision Elevator.");
+            return await RunElevatedComWorkerAsync(opKind, packageId, installLocation, onLogReceived,
+                onProgress, cancellationToken, attemptState).ConfigureAwait(false);
         }
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
         attemptState.Started = true;

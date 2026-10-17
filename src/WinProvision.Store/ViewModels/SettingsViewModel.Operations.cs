@@ -114,7 +114,8 @@ public sealed partial class SettingsViewModel
                 return;
             }
             cancellationToken.ThrowIfCancellationRequested();
-            AppUpdateService.ScheduleSilentInstallAndRestart(setupPath, "WinProvision.Store.exe");
+            UpdateSubtitle = "Preparando a atualização e a autorização necessária...";
+            await AppUpdateService.ScheduleSilentInstallAndRestartAsync(setupPath, "WinProvision.Store.exe", cancellationToken);
             setupPath = null;
             HasPendingUpdate = false;
             UpdateSubtitle = "Atualização preparada. O aplicativo será fechado e reiniciado.";

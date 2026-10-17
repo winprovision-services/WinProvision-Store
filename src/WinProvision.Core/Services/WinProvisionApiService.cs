@@ -1555,7 +1555,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         bool needsElevation = InstallerElevationPolicy.RequiresElevation(scope, requiresElevation, elevationProhibited);
         bool elevate = needsElevation && !IsRunningElevated();
         var command = WinProvisionInstallerCommandBuilder.Build(filePath, installerType, silentArgs);
-        if (elevate && GsudoElevationService.IsBundled)
+        if (elevate)
         {
             onLog?.Invoke("A elevação deste instalador será feita pelo WinProvision Elevator.");
             return await GsudoElevationService.RunElevatedAsync(command.FileName, command.Arguments, ct, onStarted, onLog).ConfigureAwait(false);
@@ -1564,9 +1564,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         {
             FileName = command.FileName,
             Arguments = command.Arguments,
-            UseShellExecute = elevate,
-            CreateNoWindow = !elevate,
-            Verb = elevate ? "runas" : string.Empty
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
 
         using var process = System.Diagnostics.Process.Start(psi)

@@ -76,6 +76,11 @@
         "resolved": "1.29.380",
         "contentHash": "O2KWbqShmCi9KZgmweDo2DxPFDskM8IDtXkhnVt1d/lNL22eBqPAM69YobFLbMUB+cdTQrApQJx+qhQRXkiltw=="
       },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Transitive",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
+      },
       "Newtonsoft.Json": {
         "type": "Transitive",
         "resolved": "13.0.3",
@@ -170,6 +175,7 @@
         "dependencies": {
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "Microsoft.WindowsPackageManager.ComInterop": "[1.29.380, )",
+          "Microsoft.WindowsPackageManager.InProcCom": "[1.29.380, )",
           "WinProvision.Core": "[1.0.0, )"
         }
       }

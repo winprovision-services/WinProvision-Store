@@ -205,11 +205,11 @@ public class UninstallerEngineService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Apenas primeira tentativa requer elevação (evita múltiplos prompts UAC)
-            bool requireElevation = (attempt == 1);
+            bool requireElevation = true;
             var result = await TryRunUninstallProcess(fileName, arguments, cancellationToken, requireElevation);
             if (result.Success)
                 return true;
+            if (WinProvisionElevationState.HasFailedThisSession) return false;
 
             Debug.WriteLine($"[UninstallerEngine] Tentativa {attempt}/{maxRetries} falhou para {app.DisplayName}: {result.ErrorMessage}");
 
@@ -301,13 +301,18 @@ public class UninstallerEngineService
                 fileName = runtime.ExecutablePath;
             }
 
+            if (requireElevation)
+            {
+                int code = await GsudoElevationService.RunElevatedAsync(fileName, arguments, cancellationToken).ConfigureAwait(false);
+                return InstallerExitCodes.IsSuccess(code) || code == 1605
+                    ? (true, string.Empty) : (false, $"{InstallerExitCodes.Describe(code)} Código: {code}.");
+            }
             var startInfo = new ProcessStartInfo
             {
                 FileName = fileName,
                 Arguments = arguments,
                 CreateNoWindow = true,
                 UseShellExecute = true,
-                Verb = requireElevation ? "runas" : "", // Elevação apenas se necessário
                 WindowStyle = ProcessWindowStyle.Hidden
             };
 
@@ -349,13 +354,14 @@ public class UninstallerEngineService
         }
 
         // Fallback 1: Tenta sem argumentos adicionais (usando apenas o UninstallString original)
-        var result1 = await TryRunUninstallProcess(fileName, existingArguments, cancellationToken, false);
+        if (WinProvisionElevationState.HasFailedThisSession) return false;
+        var result1 = await TryRunUninstallProcess(fileName, existingArguments, cancellationToken, true);
         if (result1.Success)
             return true;
 
         // Fallback 2: Tenta com parâmetros genéricos mais agressivos
         var fallbackArgs = $"{existingArguments} /S /silent /quiet /VERYSILENT /SUPPRESSMSGBOXES /NORESTART".Trim();
-        var result2 = await TryRunUninstallProcess(fileName, fallbackArgs, cancellationToken, false);
+        var result2 = await TryRunUninstallProcess(fileName, fallbackArgs, cancellationToken, true);
         if (result2.Success)
             return true;
 
@@ -363,7 +369,7 @@ public class UninstallerEngineService
         if (fileName.Contains("msiexec", StringComparison.OrdinalIgnoreCase))
         {
             var msiFallback = $"{existingArguments} /x /qn /norestart REBOOT=ReallySuppress".Trim();
-            var result3 = await TryRunUninstallProcess(fileName, msiFallback, cancellationToken, false);
+            var result3 = await TryRunUninstallProcess(fileName, msiFallback, cancellationToken, true);
             if (result3.Success)
                 return true;
         }

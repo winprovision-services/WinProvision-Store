@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 1.0.7 - 16 de outubro de 2026
+
+- Restaurada a execução administrativa por COM usando o SDK oficial Microsoft.WindowsPackageManager.InProcCom 1.29.380 dentro do host elevado pelo WinProvision Elevator.
+- A escolha COM não é convertida para CLI por precisar de administração. A API própria continua independente, com execução direta pelo Elevator.
+- Atualização do próprio aplicativo passa pelo Elevator quando exige administração, espera autorização antes de fechar e preserva diretório/escopo e reinício sem elevação.
+- Remoções administrativas, Office e demais executores explícitos usam o helper, sem fallback para um UAC direto do instalador.
+- SDK COM nativo e cópia temporária do Elevator são conferidos por hash antes do uso.
+
 ## 1.0.6 - 16 de outubro de 2026
 
 - Corrigida a rota que elevava o cliente COM, mas deixava o Windows Installer pedir outro UAC pelo servidor externo do WinGet.

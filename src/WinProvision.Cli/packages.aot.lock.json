@@ -43,6 +43,11 @@
         "resolved": "2.3.1",
         "contentHash": "ojoYrj8m8mAx6LVxofQXgfvsReDTv2LQFeDgXt5Lw99r5fv7dCR19ybd1JN0OueaWvL+BNqv0E7zZCgqptP9zA=="
       },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Transitive",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
+      },
       "System.Drawing.Common": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -84,6 +89,7 @@
         "dependencies": {
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "Microsoft.WindowsPackageManager.ComInterop": "[1.29.380, )",
+          "Microsoft.WindowsPackageManager.InProcCom": "[1.29.380, )",
           "WinProvision.Core": "[1.0.0, )"
         }
       }
@@ -102,6 +108,11 @@
         "type": "Transitive",
         "resolved": "10.0.12",
         "contentHash": "kdj5cqOwgZCMltEhQ4+WVUoFkMHG08EJfy1MDyS9H+FBg66vTTFyX8YcNl8IQh5wRQv79P+iduQgDGY8ucBR+w=="
+      },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Transitive",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
       },
       "runtime.win-x64.Microsoft.DotNet.ILCompiler": {
         "type": "Transitive",

@@ -442,6 +442,7 @@ public static partial class WinGetFactoryHelper
 
     public static T CreateInstance<T>(Guid clsid, Guid iid)
     {
+        if (InProcessWinGetFactory.Enabled) return InProcessWinGetFactory.Create<T>(clsid, iid);
         IntPtr pUnknown = IntPtr.Zero;
         var stopwatch = Stopwatch.StartNew();
         var strategy = CurrentStrategy;

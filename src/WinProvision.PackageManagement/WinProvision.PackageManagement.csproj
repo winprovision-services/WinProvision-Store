@@ -11,9 +11,15 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Native DLLs only; the legacy managed target/metadata is deliberately excluded. -->
+    <PackageReference Include="Microsoft.WindowsPackageManager.InProcCom" Version="1.29.380" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all" NoWarn="NU1701" />
     <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
     <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(PkgMicrosoft_WindowsPackageManager_InProcCom)/runtimes/win-x64/native/*.dll" Link="Tool/winget-com/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(PkgMicrosoft_WindowsPackageManager_InProcCom)/NOTICE.txt" Link="Tool/winget-com/NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="IncludeWinGetMetadata" AfterTargets="ComputeFilesToPublish">
     <ItemGroup>

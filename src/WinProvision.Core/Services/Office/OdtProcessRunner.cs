@@ -140,49 +140,22 @@ public static class OdtProcessRunner
             Arguments = $"{mode} \"{absoluteXmlPath}\"",
             WorkingDirectory = workingDir,
             UseShellExecute = true,
-            Verb = "runas",
+
             WindowStyle = ProcessWindowStyle.Hidden,
         };
 
         try
         {
             ct.ThrowIfCancellationRequested();
-            if (GsudoElevationService.IsBundled)
-            {
-                int code = await GsudoElevationService.RunElevatedAsync(absoluteSetupPath,
-                    startInfo.Arguments, ct, workingDirectory: workingDir).ConfigureAwait(false);
-                if (mode == "/download") ct.ThrowIfCancellationRequested();
-                return new OdtProcessResult
-                {
-                    Success = InstallerExitCodes.IsSuccess(code), ExitCode = code, ProcessStarted = true,
-                    ElevationCanceled = code == 999,
-                    Output = code == 999 ? "Elevação não concluída pelo helper." : InstallerExitCodes.IsSuccess(code)
-                        ? string.Empty : $"{InstallerExitCodes.Describe(code)} Consulte os logs do Office Deployment Tool."
-                };
-            }
-            using var process = Process.Start(startInfo);
-            if (process is null)
-            {
-                return new OdtProcessResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    Output = "Não foi possível iniciar o processo elevado.",
-                    ProcessStarted = false,
-                };
-            }
-
-            // Cancellation is accepted before launch; a running installation must finish.
-            await process.WaitForExitAsync().ConfigureAwait(false);
+            int code = await GsudoElevationService.RunElevatedAsync(absoluteSetupPath,
+                startInfo.Arguments, ct, workingDirectory: workingDir).ConfigureAwait(false);
             if (mode == "/download") ct.ThrowIfCancellationRequested();
-
-
             return new OdtProcessResult
             {
-                Success = InstallerExitCodes.IsSuccess(process.ExitCode),
-                ExitCode = process.ExitCode,
-                Output = InstallerExitCodes.IsSuccess(process.ExitCode) ? string.Empty : $"{InstallerExitCodes.Describe(process.ExitCode)} Consulte os logs do Office Deployment Tool na pasta temporária do Windows.",
-                ProcessStarted = true,
+                Success = InstallerExitCodes.IsSuccess(code), ExitCode = code, ProcessStarted = true,
+                ElevationCanceled = code == 999,
+                Output = code == 999 ? "Elevação não concluída pelo helper." : InstallerExitCodes.IsSuccess(code)
+                    ? string.Empty : $"{InstallerExitCodes.Describe(code)} Consulte os logs do Office Deployment Tool."
             };
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) // ERROR_CANCELLED — usuário clicou "Não" no UAC.

@@ -51,6 +51,16 @@ if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\winprovision.exe')
 if (-not (Test-Path -LiteralPath (Join-Path $taskStaging 'cli\Microsoft.Management.Deployment.winmd'))) { throw 'Metadados COM do WinGet ausentes na CLI.' }
 $taskElevator = Get-Content (Join-Path $taskRoot 'Tool/gsudo/manifest.json') -Raw | ConvertFrom-Json
 foreach ($taskHostDirectory in @($taskStaging, (Join-Path $taskStaging 'cli'))) {
+    foreach ($taskNativeDll in @(
+        @{ Name = 'WindowsPackageManager.dll'; Sha256 = '0fb0f8eee1214ae3c17abe740ea32964a7da8b01f829ffa66dec241b9fb3b384' },
+        @{ Name = 'Microsoft.Management.Deployment.InProc.dll'; Sha256 = '5ab84530dc02019e06c6e482c61ceca3eea87c90cb0962b8a42a0e4c55b08fa3' }
+    )) {
+        $taskNativePath = Join-Path $taskHostDirectory ("Tool/winget-com/" + $taskNativeDll.Name)
+        if (-not (Test-Path -LiteralPath $taskNativePath) -or
+            (Get-FileHash -LiteralPath $taskNativePath).Hash.ToLowerInvariant() -ne $taskNativeDll.Sha256) {
+            throw 'SDK COM no processo ausente ou divergente na publicação.'
+        }
+    }
     $taskHelperPath = Join-Path $taskHostDirectory 'Tool/gsudo/WinProvision Elevator.exe'
     if (-not (Test-Path -LiteralPath $taskHelperPath) -or
         (Get-FileHash -LiteralPath $taskHelperPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskElevator.sha256 -or

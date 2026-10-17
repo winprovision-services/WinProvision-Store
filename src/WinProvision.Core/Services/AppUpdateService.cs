@@ -39,7 +39,6 @@ public sealed class AppUpdateService : IDisposable
 
     // Tempo máximo esperando o processo atual encerrar antes do script de atualização
     // desistir e apagar o instalador baixado sem aplicá-lo.
-    private static readonly TimeSpan MaxWaitForExit = TimeSpan.FromMinutes(1);
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
@@ -431,54 +430,12 @@ public sealed class AppUpdateService : IDisposable
     /// já que o instalador precisa que o WinProvision.Store.exe em uso já não esteja rodando
     /// pra poder substituir seus arquivos.
     /// </summary>
-    public static void ScheduleSilentInstallAndRestart(
-        string setupPath,
-        string applicationExeName = "WinProvision.Store.exe")
-    {
-        if (!File.Exists(setupPath))
-            throw new FileNotFoundException("Instalador não encontrado.", setupPath);
+    public static void ScheduleSilentInstallAndRestart(string setupPath, string applicationExeName = "WinProvision.Store.exe")
+        => ScheduleSilentInstallAndRestartAsync(setupPath, applicationExeName).GetAwaiter().GetResult();
 
-        if (string.IsNullOrWhiteSpace(applicationExeName) ||
-            !string.Equals(Path.GetFileName(applicationExeName), applicationExeName, StringComparison.Ordinal))
-            throw new ArgumentException("Nome do executável inválido.", nameof(applicationExeName));
-
-        string exePath = Environment.ProcessPath
-            ?? Path.Combine(AppContext.BaseDirectory, applicationExeName);
-        setupPath = Path.GetFullPath(setupPath);
-        static string Literal(string value) => "'" + value.Replace("'", "''") + "'";
-        int pid = Environment.ProcessId;
-        int maxWaitSeconds = (int)MaxWaitForExit.TotalSeconds;
-
-        // EncodedCommand avoids cmd expansion of %, !, & and Unicode paths.
-        string script = $$"""
-            $ErrorActionPreference = 'Stop'
-            $setup = {{Literal(setupPath)}}
-            $application = {{Literal(exePath)}}
-            try {
-                $current = Get-Process -Id {{pid}} -ErrorAction SilentlyContinue
-                if ($current -and -not $current.WaitForExit({{maxWaitSeconds}} * 1000)) { exit 1 }
-                $installer = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -WindowStyle Hidden -Wait -PassThru
-                if ($installer.ExitCode -notin @(0, 3010, 1641)) { exit $installer.ExitCode }
-                Start-Process -FilePath $application
-            } finally {
-                Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
-            }
-            """;
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "WindowsPowerShell", "v1.0", "powershell.exe"),
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-        startInfo.ArgumentList.Add("-NoProfile");
-        startInfo.ArgumentList.Add("-NonInteractive");
-        startInfo.ArgumentList.Add("-EncodedCommand");
-        startInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.Unicode.GetBytes(script)));
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Não foi possível iniciar a atualização.");
-    }
+    public static Task ScheduleSilentInstallAndRestartAsync(string setupPath,
+        string applicationExeName = "WinProvision.Store.exe", CancellationToken cancellationToken = default)
+        => DeferredAppUpdate.PrepareAsync(setupPath, applicationExeName, cancellationToken);
 
     private static void TryDelete(string path)
     {

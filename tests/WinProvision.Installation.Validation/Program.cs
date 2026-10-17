@@ -37,20 +37,23 @@ internal static partial class Program
                 source: "winget", requiresElevation: true);
             if (File.Exists(binary)) throw new InvalidOperationException($"7-Zip ainda instalado antes de testar {method}: {removed.Output}");
             WingetMethod actualMethod = WingetMethod.Unknown;
-            var result = await service.InstallWithMethodAsync("7zip.7zip", method, Console.WriteLine, timeout.Token,
+            bool inProcessObserved = false;
+            void Log(string line) { if (line.StartsWith("COM INPROC ", StringComparison.Ordinal)) inProcessObserved = true; Console.WriteLine(line); }
+            var result = await service.InstallWithMethodAsync("7zip.7zip", method, Log, timeout.Token,
                 onProgress: update => { actualMethod = update.Method; Console.WriteLine($"PROGRESS {method} {update.Method} {update.Phase} {update.Percent}"); });
             if (!result.Success || !File.Exists(binary))
                 throw new InvalidOperationException($"Instalação real {method} falhou: {result.ExitCode} {result.Output}");
             var expectedMethod = method switch
             {
-                // COM resolves the manifest, but administrative execution must leave the COM server.
-                PackageInstallMethod.ComApi => WingetMethod.WingetExe,
+                PackageInstallMethod.ComApi => WingetMethod.ComApi,
                 PackageInstallMethod.WingetCli => WingetMethod.WingetExe,
                 _ => WingetMethod.OwnApi
             };
             if (actualMethod != expectedMethod) throw new InvalidOperationException($"O teste de {method} mudou para {actualMethod}.");
             if (method != PackageInstallMethod.WinProvisionApi && !result.WasElevated)
                 throw new InvalidOperationException($"O método {method} não confirmou elevação pelo helper.");
+            if (method == PackageInstallMethod.ComApi && !inProcessObserved)
+                throw new InvalidOperationException("A instalação COM não comprovou o uso do SDK no processo elevado.");
             Console.WriteLine($"REAL INSTALL PASSED: selected={method}; executed={actualMethod}; exit={result.ExitCode}; binary={binary}");
         }
         return 0;

@@ -33,6 +33,18 @@ public sealed partial class WinGetService
                 var package = matches[0];
                 string origin = package.InstalledVersion.PackageCatalog?.Info?.Name?.ToLowerInvariant() ?? "";
                 if (source is not null && !origin.Equals(source, StringComparison.OrdinalIgnoreCase)) return null;
+                if (!InProcessWinGetFactory.Enabled && !string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
+                {
+                    var installer = package.InstalledVersion.GetApplicableInstaller(WinGetFactoryHelper.CreateInstallOptions());
+                    if (installer?.Scope == PackageInstallerScope.System)
+                    {
+                        dispatched = true;
+                        return await RunElevatedComWorkerAsync(ComOperationKind.Uninstall, id, null,
+                            _diagnostic, null, token, new InstallAttemptState()).ConfigureAwait(false);
+                    }
+                    // Unknown scope must not let the external server trigger an unmanaged UAC.
+                    if (installer?.Scope != PackageInstallerScope.User) return null;
+                }
                 var uninstallOptions = WinGetFactoryHelper.CreateUninstallOptions();
                 uninstallOptions.PackageUninstallMode = PackageUninstallMode.Silent;
                 token.ThrowIfCancellationRequested();

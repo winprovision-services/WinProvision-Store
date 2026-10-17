@@ -6,16 +6,16 @@ namespace WinProvision.Core.Tests;
 public class InstallerElevationPolicyTests
 {
     [Theory]
-    [InlineData("winget", "machine", false, false, true, true)]
-    [InlineData("WINGET", "user", true, false, true, true)]
-    [InlineData("winget", null, true, false, true, true)]
-    [InlineData("winget", "user", false, false, true, false)]
-    [InlineData("winget", "machine", true, true, true, false)]
-    [InlineData("msstore", "machine", true, false, true, false)]
-    [InlineData("winget", "machine", true, false, false, false)]
-    public void OutOfProcessComMustDelegateBeforeAdministrativeInstall(string source, string? scope,
-        bool required, bool prohibited, bool helper, bool expected)
-        => Assert.Equal(expected, InstallerElevationPolicy.DelegateComExecutionToCli(source, scope, required, prohibited, helper));
+    [InlineData("winget", "machine", false, false, true)]
+    [InlineData("WINGET", "user", true, false, true)]
+    [InlineData("winget", null, true, false, true)]
+    [InlineData("winget", "user", false, false, false)]
+    [InlineData("winget", "machine", true, true, false)]
+    [InlineData("msstore", "machine", true, false, false)]
+    [InlineData("other", "machine", true, false, false)]
+    public void AdministrativeComRequiresAnElevatedLocalHost(string source, string? scope,
+        bool required, bool prohibited, bool expected)
+        => Assert.Equal(expected, InstallerElevationPolicy.RequiresElevatedComHost(source, scope, required, prohibited));
 
     [Theory]
     [InlineData("machine", false, false, true)]

@@ -33,7 +33,9 @@ O Core integra o WinProvision Elevator, variante do gsudo distribuída em `Tool/
 
 ## Validação
 
-A COM consulta os metadados do instalador. Quando eles exigem administração, a execução é encaminhada ao WinGet CLI elevado pelo Elevator antes do despacho COM, com escopo e arquitetura preservados. Elevar apenas um cliente COM não garante a elevação do servidor externo e pode causar outro UAC do Windows Installer. O log e o progresso identificam a execução pela CLI. O modo diagnóstico COM exclusivo recusa essa operação em vez de mudar de backend; pacotes de usuário continuam pela COM quando aplicável.
+A COM administrativa executa no host privado da CLI elevado pelo Elevator, carregando `Microsoft.WindowsPackageManager.InProcCom` 1.29.380. As DLLs oficiais são conferidas por SHA-256 e as classes são criadas localmente por `DllGetClassObject`, sem reutilizar o servidor COM externo. A consulta da interface permanece na COM do sistema. O protocolo privado v2 preserva resultado/progresso; após o despacho, falha de comunicação não inicia outro backend. A API própria mantém sua instalação direta pelo Elevator.
+
+A atualização do próprio app usa um coordenador sem elevação e uma cópia temporária verificada do Elevator. O payload administrativo verifica o hash, sinaliza prontidão, aguarda o app encerrar e executa o instalador no diretório/escopo original. O app só fecha depois da prontidão; o coordenador reabre a interface sem elevação. Instalações por usuário não são promovidas a instalações de máquina. A cópia temporária separa os arquivos em execução dos que serão substituídos e isola o pipe/cache do helper original.
 
 Os testes de regressão ficam em `tests/WinProvision.Core.Tests`. O smoke da interface fica em `tests/WinProvision.Store.Smoke` e é habilitado apenas em compilações de validação.
 

@@ -30,6 +30,8 @@ Na 1.0.5, o executável do helper passa a `WinProvision Elevator.exe`. A pasta `
 
 ## Catálogo remoto
 
+Na 1.0.7, o host COM privado v2 substitui a delegação administrativa para CLI: usa o SDK oficial InProcCom no processo elevado pelo Elevator. Os comandos públicos e formatos salvos não mudam. A distribuição completa inclui `Tool/winget-com` na interface e na CLI. As atualizações próprias preservam o escopo/diretório da instalação e aguardam autorização antes de fechar a interface.
+
 A origem de apresentação distingue WinGet, Microsoft Store e Catálogo WinProvision sem alterar o campo de roteamento `source`. O próprio app é identificado como instalado pela versão do processo em execução e permanece exportável nos Pacotes, mas é ignorado nas instalações locais em lote. A consulta manual do catálogo preserva instaladores e imagens em cache; limpar o cache continua sendo uma ação separada.
 
 Pacotes mantidos pela infraestrutura própria usam `catalogOrigin: "curated"`, preservando `source: "winget"` para compatibilidade de roteamento. `wingetManifestAvailable: false` indica que o link do manifesto não deve ser apresentado. `releaseDate` e `catalogSyncedUtc` são datas ISO 8601 da release e da última publicação dos dados; `author` e `releaseNotes` são opcionais. A tela usa os instaladores do detalhe para tipo, URL e SHA-256 desses pacotes, sem depender de uma consulta ao WinGet. A galeria aceita os caminhos relativos de `media.screenshots` em ambas as origens.
