@@ -26,9 +26,9 @@ $taskHeader
 InstallerLocale: pt-BR
 MinimumOSVersion: 10.0.17763.0
 InstallerType: inno
-Scope: user
+Scope: machine
 InstallerSwitches:
-  Custom: /MERGETASKS="clipath"
+  Custom: /ALLUSERS
 UpgradeBehavior: install
 ProductCode: '{71B03A9D-2C64-4E81-BF6D-3A90257F1C49}_is1'
 AppsAndFeaturesEntries:

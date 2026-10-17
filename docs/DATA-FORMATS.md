@@ -14,6 +14,12 @@ Configurações salvas mantêm produto, arquitetura, idiomas, aplicativos seleci
 
 A mídia offline conserva sua versão e seu inventário de integridade. Arquivos incompletos não devem iniciar uma instalação.
 
+## Instalação
+
+Na 1.0.10, novas instalações usam escopo de máquina (Program Files, registro de desinstalação HKLM e PATH do sistema), com privilégios administrativos. O nome de tarefa `clipath` é preservado para scripts antigos, mas o PATH passa a ser obrigatório, inclusive na instalação silenciosa sem `/MERGETASKS`. Reinstalar não duplica a entrada; a desinstalação remove apenas a entrada registrada pelo instalador, preservando as demais.
+
+`/CURRENTUSER` mantém instalações por usuário e seu PATH em HKCU. A atualização pelo aplicativo já informa `/ALLUSERS` ou `/CURRENTUSER` e preserva diretório e escopo. O instalador padrão não migra nem remove instalações antigas por usuário: para converter para máquina, remova a instalação anterior e instale novamente para todos os usuários. O ZIP portátil continua sem modificar o PATH. Processos já abertos mantêm seu ambiente antigo; abra outro terminal após instalar, e no deployment use o caminho completo da CLI no processo atual.
+
 ## Linha de comando
 
 A apresentação interativa da CLI usa Spectre.Console: barra verde, spinner azul e resultado fixo por aplicativo. A barra mede aplicativos concluídos no lote; operações sem porcentagem disponível usam animação indeterminada. A barra temporária desaparece ao terminar ou cancelar, preservando o histórico do terminal. Com saída redirecionada ou terminal sem suporte, usa texto simples, sem códigos ANSI. JSON não passa pelo renderizador de progresso.

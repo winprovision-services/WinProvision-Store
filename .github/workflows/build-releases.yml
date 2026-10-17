@@ -90,6 +90,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'A CLI não iniciou.' }
           .\scripts\stage-release.ps1 -AppVersion $env:RELEASE_VERSION
           .\scripts\winget-release.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath .\artifacts\release\WinProvision.Store-Setup.exe
+      - name: Validar instalação e PATH nos escopos de máquina e usuário
+        run: .\scripts\test-release-install.ps1 -AppVersion $env:RELEASE_VERSION -InstallerPath .\artifacts\release\WinProvision.Store-Setup.exe
       - name: Instalar 7-Zip pelos três métodos em processo de integridade média
         run: .\scripts\validate-installation-methods.ps1 -PublishedDirectory .\artifacts\publish\win-x64
       - name: Preservar evidências de instalação real
@@ -97,7 +99,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installation-validation-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/installation-validation/*.log
+          path: |
+            artifacts/installation-validation/*.log
+            artifacts/winget-install-test.json
           if-no-files-found: warn
           retention-days: 14
       - name: Preservar arquivos da release

@@ -1,8 +1,8 @@
 ﻿#ifndef AppVersion
-  #define AppVersion "1.0.9"
+  #define AppVersion "1.0.10"
 #endif
 #ifndef FileVersion
-  #define FileVersion "1.0.9.0"
+  #define FileVersion "1.0.10.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\publish\win-x64"
@@ -34,8 +34,8 @@ DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 DirExistsWarning=no
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
@@ -57,7 +57,8 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "clipath"; Description: "Adicionar winprovision ao PATH do usuário (CLI)"; GroupDescription: "Linha de comando:"; Flags: unchecked
+; Keep the task name for existing /MERGETASKS callers. PATH registration is mandatory.
+Name: "clipath"; Description: "Disponibilizar winprovision no PATH (CLI)"; GroupDescription: "Linha de comando:"; Check: ShowCliPathTask
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -97,20 +98,34 @@ begin
   end;
 end;
 
+function ShowCliPathTask: Boolean;
+begin
+  Result := False;
+end;
+
+function EnvironmentRegistryKey: string;
+begin
+  if IsAdminInstallMode then
+    Result := 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+  else
+    Result := 'Environment';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   CurrentPath, CliPath: string;
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('clipath') then
+  if CurStep = ssPostInstall then
   begin
     CliPath := ExpandConstant('{app}\cli');
-    RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+    RegQueryStringValue(HKA, EnvironmentRegistryKey, 'Path', CurrentPath);
     if WithoutCliPath(CurrentPath, CliPath) = CurrentPath then
     begin
       if CurrentPath <> '' then CurrentPath := CurrentPath + ';';
-      if not RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath + CliPath) then
-        RaiseException('Não foi possível adicionar a CLI ao PATH do usuário.');
-      RegWriteStringValue(HKCU, CliRegistryKey, 'OwnedPath', CliPath);
+      if not RegWriteExpandStringValue(HKA, EnvironmentRegistryKey, 'Path', CurrentPath + CliPath) then
+        RaiseException('Não foi possível adicionar a CLI ao PATH.');
+      if not RegWriteStringValue(HKA, CliRegistryKey, 'OwnedPath', CliPath) then
+        RaiseException('Não foi possível registrar a configuração do PATH.');
     end;
   end;
 end;
@@ -119,14 +134,15 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   CurrentPath, CliPath: string;
 begin
-  if (CurUninstallStep = usUninstall) and RegQueryStringValue(HKCU, CliRegistryKey, 'OwnedPath', CliPath) then
+  if (CurUninstallStep = usUninstall) and RegQueryStringValue(HKA, CliRegistryKey, 'OwnedPath', CliPath) then
   begin
     if CompareText(CliPath, ExpandConstant('{app}\cli')) = 0 then
     begin
-      if RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
-        RegWriteExpandStringValue(HKCU, 'Environment', 'Path', WithoutCliPath(CurrentPath, CliPath));
-      RegDeleteValue(HKCU, CliRegistryKey, 'OwnedPath');
-      RegDeleteKeyIfEmpty(HKCU, CliRegistryKey);
+      if RegQueryStringValue(HKA, EnvironmentRegistryKey, 'Path', CurrentPath) then
+        if not RegWriteExpandStringValue(HKA, EnvironmentRegistryKey, 'Path', WithoutCliPath(CurrentPath, CliPath)) then
+          RaiseException('Não foi possível remover a CLI do PATH.');
+      RegDeleteValue(HKA, CliRegistryKey, 'OwnedPath');
+      RegDeleteKeyIfEmpty(HKA, CliRegistryKey);
     end;
   end;
 end;

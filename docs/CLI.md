@@ -1,6 +1,6 @@
 # CLI do WinProvision Store
 
-A CLI é o executável `winprovision`. O instalador oferece adicioná-lo ao PATH do usuário. Abra um novo terminal após a instalação.
+A CLI é o executável `winprovision`. O instalador instala para todos os usuários e adiciona a CLI ao PATH do sistema por padrão, com autorização administrativa. `/CURRENTUSER` mantém suporte a instalações por usuário e registra o PATH nesse escopo. Abra um novo terminal após a instalação.
 
 Na distribuição portátil, mantenha o conteúdo completo da pasta `cli`, incluindo `Microsoft.Management.Deployment.winmd`, junto do executável. Esse arquivo de suporte é necessário à integração COM na publicação Native AOT.
 

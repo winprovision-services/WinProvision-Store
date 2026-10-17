@@ -1,5 +1,10 @@
 # Histórico de alterações
 
+## 1.0.10 - 17 de outubro de 2026
+
+- Instalador usa escopo de máquina e PATH do sistema por padrão, inclusive em execução silenciosa por SYSTEM. Mantido `/CURRENTUSER` para instalações e atualizações por usuário; PATH automático sem duplicação e remoção apenas da entrada registrada. Manifesto WinGet passa a escopo de máquina.
+- Validação real da release cobre instalação, reinstalação, resolução da CLI pelo PATH e desinstalação nos dois escopos.
+
 ## 1.0.9 - 17 de outubro de 2026
 
 - Console com Spectre.Console: progresso temporário, spinner e resultados por aplicativo, com saída simples em redirecionamentos e JSON preservado.
