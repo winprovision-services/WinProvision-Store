@@ -35,6 +35,7 @@ winprovision --version
 - Exporte e importe listas JSON pela CLI.
 - Conecte sua conta GitHub, opcionalmente, para sincronizar coleções.
 - Use os temas claro e escuro e a navegação por teclado.
+- Reutilize o catálogo baixado entre a interface e a CLI, com pasta de rede opcional, revalidação por prazo e limpeza automática. Configure em **Configurações → Armazenamento e cache**; consulte os limites em [cache local](docs/ARCHITECTURE.md#cache-do-catálogo).
 
 Instaladores podem solicitar autorização administrativa ou interação adicional. A disponibilidade de aplicativos depende das fontes consultadas. A preparação de mídia offline exige conexão durante o download.
 
@@ -91,6 +92,10 @@ O smoke verifica navegação, bindings e temas com dados de teste. Testes simula
 ## Dados e privacidade
 
 O aplicativo mantém preferências, coleções, histórico, logs e caches no perfil do usuário. Consultas online e o backup opcional envolvem comunicação de dados. A [política de privacidade](PRIVACY.md) explica quais dados são usados, armazenados e transmitidos.
+
+## Inspiração e agradecimentos
+
+O WinProvision Store tem como fonte de inspiração o UniGetUI. Agradecemos à Devolutions e a Martí Climent pelo trabalho no projeto e pela inspiração para desenvolver esta aplicação.
 
 ## Documentação e participação
 

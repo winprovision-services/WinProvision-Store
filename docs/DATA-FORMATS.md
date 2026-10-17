@@ -50,8 +50,20 @@ A manutenção concede sete dias de carência, a partir da primeira detecção, 
 
 `Store/Automation/maintenance/last-success.json` registra a geração, as contagens conferidas e a execução que concluiu a validação integral dos catálogos e a manutenção. Esse indicador é operacional e não substitui os manifestos lidos pelo app. Uma execução parcial ou com falha não o atualiza.
 
+## Cache HTTP local v1
+
+`%LOCALAPPDATA%/WinProvisionStore/cache-preferences.json` guarda `SharedDirectory` (nulo por padrão), `MaximumMegabytes` (512) e `RevalidationHours` (6). Arquivo ausente/inválido usa padrões; campos ausentes mantêm os padrões do registro. Alterações exigem reinício da UI; a CLI lê a cada processo. Este prazo é independente dos 5 minutos fixos da autorização administrativa.
+
+Em `Cache/Catalog-v1`, `objects/<sha256>.bin` contém JSON bruto; `entries/<sha256-da-URL-absoluta>.json` mantém `Sha256`, `ValidatedUtc`, `ETag`, `LastModified`, `RetryAfterUtc`, `FailedExpectedSha256` e `FailureStatus`. Os últimos campos são opcionais e controlam espera após falha/404. Datas são UTC. SHA esperado e limites de leitura são conferidos também no disco. Nenhum contrato publicado do catálogo muda.
+
+`access.lock` coordena processos; `maintenance.txt` persiste a manutenção; `size.txt` registra tamanho aproximado reconciliado na manutenção; `shared-retry.txt` evita tentativas repetidas a uma pasta indisponível. A pasta compartilhada usa o mesmo layout sob `WinProvisionCache/Catalog-v1`. Caches derivados existentes são preservados; a nova cota não inclui essas projeções, instaladores ou imagens. Preferências, perfis e credenciais ficam fora da limpeza.
+
 ## Verificação de alterações
 
 Execute os testes apropriados ao formato alterado. Use arquivos de teste isolados e confira cancelamento, dados incompletos e preservação de arquivos anteriores.
 
 Registre mudanças de comportamento no [histórico](../CHANGELOG.md).
+
+O cache do Elevator passa a ser automático e fixo em 5 minutos de inatividade para interface e CLI, sem opção de duração ou desativação. `--elevation-cache` permanece aceito por compatibilidade e torna-se redundante. A autorização inicial continua no UAC; o vínculo ao processo e a invalidação na saída são preservados.
+
+“Iniciar com o Windows” passa a ativar atualizações pela CLI, preservando o esquema de `app-preferences.json`. Registros existentes de abertura da interface são migrados ao carregar as preferências e passam a habilitar `AutoUpdateAtStartup`. As entradas de logon usam a CLI; a entrada adicional de atualização é omitida quando já existe a entrada principal para evitar execução duplicada. Desativar a atualização automática também desativa essa inicialização.

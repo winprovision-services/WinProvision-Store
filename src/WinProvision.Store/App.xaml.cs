@@ -72,7 +72,7 @@ public partial class App : Application
         services.AddSingleton<FeaturedCatalogService>();
         services.AddSingleton<IconService>();
         services.AddSingleton<WinProvision.Core.Services.Indexing.MsStoreCatalogService>();
-        services.AddSingleton<WindowsAppNotificationService>();
+        services.AddSingleton(_ => new WindowsAppNotificationService { SuppressNotifications = IsSmokeTest, Log = WinProvisionLog.Write });
         services.AddSingleton<CollectionsViewModel>();
         services.AddSingleton<OfficeDeploymentToolService>();
         services.AddSingleton<IOfficeCollectionInstaller, OfficeCollectionInstaller>();
@@ -95,7 +95,6 @@ public partial class App : Application
         services.AddSingleton<IUpdatesIgnoreStore, UpdatesIgnoreStore>();
         services.AddSingleton<UpdatesViewModel>();
         services.AddSingleton<InstalledPackagesViewModel>();
-        services.AddSingleton<BackgroundUpdateRunner>();
         services.AddSingleton<IClipboardService, ClipboardService>();
         services.AddSingleton<UninstallerEngineService>();
         services.AddSingleton<PackageInstallOptionsService>();
@@ -148,50 +147,24 @@ public partial class App : Application
     }
     private async Task RunBackgroundUpdatesAsync()
     {
-        int code = 1;
-        bool acquired = false;
-        Mutex? gate = null;
-        var notifications = new WindowsAppNotificationService();
+        // Older logon registrations still point to the UI host. Forward them to the CLI.
         try
         {
-            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
-            gate = new Mutex(false, @"Local\WinProvision.WinUI3.BackgroundUpdates." + identity.User!.Value);
-            try { acquired = gate.WaitOne(0); }
-            catch (AbandonedMutexException) { acquired = true; }
-
-            if (acquired)
+            var start = new System.Diagnostics.ProcessStartInfo(
+                WinProvision.Core.Services.BackgroundUpdateCommand.CliPath(AppContext.BaseDirectory))
             {
-                notifications.TryRegister();
-                code = await _services!.GetRequiredService<BackgroundUpdateRunner>().RunAsync(notifications);
-            }
+                UseShellExecute = false, CreateNoWindow = true
+            };
+            start.ArgumentList.Add("--background-update");
+            using var process = System.Diagnostics.Process.Start(start)
+                ?? throw new InvalidOperationException("Não foi possível iniciar o atualizador pela CLI.");
+            await process.WaitForExitAsync();
+            Environment.ExitCode = process.ExitCode;
         }
-        catch (Exception ex)
-        {
-            WinProvisionLog.Error(ex, "BackgroundUpdate");
-            notifications.ShowBackgroundUpdateFailure();
-        }
+        catch (Exception ex) { WinProvisionLog.Error(ex, "BackgroundUpdateCli"); Environment.ExitCode = 1; }
         finally
         {
-            try { notifications.Unregister(); }
-            catch (Exception ex) { WinProvisionLog.Error(ex, "BackgroundUpdateNotificationCleanup"); code = 1; }
-
-            if (acquired)
-            {
-                try { await _services!.GetRequiredService<IPackageBackend>().ShutdownAsync(); }
-                catch (Exception ex) { WinProvisionLog.Error(ex, "BackgroundUpdateBackendCleanup"); code = 1; }
-            }
-
-            try { await _services!.DisposeAsync(); }
-            catch (Exception ex) { WinProvisionLog.Error(ex, "BackgroundUpdateServiceCleanup"); code = 1; }
-
-            try
-            {
-                if (acquired) gate?.ReleaseMutex();
-                gate?.Dispose();
-            }
-            catch (Exception ex) { WinProvisionLog.Error(ex, "BackgroundUpdateMutexCleanup"); code = 1; }
-
-            Environment.ExitCode = code;
+            await _services!.DisposeAsync();
             Exit();
         }
     }

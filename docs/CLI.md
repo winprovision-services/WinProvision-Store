@@ -1,5 +1,11 @@
 # CLI do WinProvision Store
 
+## Cache local do catálogo
+
+`winprovision cache list` (ou apenas `cache`) informa tamanho, arquivos e pastas do catálogo bruto compartilhado pela UI/CLI. `winprovision cache prune` remove arquivos antigos e excedentes; `winprovision cache clear` remove essa cópia local, preservando a pasta compartilhada. Esses comandos não consultam R2 nem preparam o WinGet; não removem instaladores, imagens, perfis ou credenciais. A limpeza seletiva também mantém a pasta compartilhada dentro da política quando configurada.
+
+Pasta adicional/rede, prazo (6/12/24 horas) e limite por cópia (128 MiB a 2 GiB; padrão 512 MiB) são salvos nas Configurações da interface e lidos na próxima execução. A cópia local permite uso sem a pasta de rede. O prazo é persistido entre processos; detalhes/índices com SHA inalterado não precisam ser baixados novamente. Consulte a [política de cache](ARCHITECTURE.md#cache-do-catálogo).
+
 A CLI é o executável `winprovision`. O instalador oferece adicioná-lo ao PATH do usuário. Abra um novo terminal após a instalação.
 
 Na distribuição portátil, mantenha o conteúdo completo da pasta `cli`, incluindo `Microsoft.Management.Deployment.winmd`, junto do executável. Esse arquivo de suporte é necessário à integração COM na publicação Native AOT.
@@ -59,7 +65,7 @@ winprovision --version
 | `-e`, `--exact` | Correspondência exata |
 | `--json` | Resultado estruturado em pesquisa, listagem e consulta de atualizações |
 | `--no-input` | Consultar sem menus; junto de `--yes`, executar a operação sem interação |
-| `--elevation-cache` | Reutilizar autorização do helper neste processo, por 5 minutos de inatividade |
+| `--elevation-cache` | Aceito por compatibilidade; o cache de 5 minutos de inatividade já é automático |
 | `-y`, `--yes` | Confirmar a operação sem exibir menus; upgrade exige `--id` ou `--all` |
 | `--all` | Selecionar todas as atualizações, sem combinar filtros |
 | `-i`, `--input` | Arquivo JSON ou URL HTTPS direta para importação |
@@ -157,6 +163,10 @@ winprovision import apps.json --yes --elevation-cache
 winprovision upgrade --all --yes --elevation-cache
 ```
 
-O cache é solicitado apenas quando uma operação precisa do helper elevado. A primeira autorização continua passando pelo UAC. A permissão vale para o processo da CLI e seus descendentes, expira após 5 minutos de inatividade e é invalidada ao encerrar a execução. Não é compartilhada globalmente com o terminal ou com o gsudo instalado no sistema. A opção não altera os prompts da CLI: combine com `--yes` para dispensá-los.
+O cache de 5 minutos é automático, sem opção de desativação ou mudança de duração, e é solicitado apenas quando uma operação precisa do helper elevado. A primeira autorização continua passando pelo UAC. A permissão vale para o processo da CLI e seus descendentes, expira após 5 minutos de inatividade e é invalidada ao encerrar a execução. Não é compartilhada globalmente com o terminal ou com o gsudo instalado no sistema. `--elevation-cache` permanece aceito por compatibilidade e é redundante. Use `--yes` para dispensar as confirmações da CLI.
 
 Solicitações de elevação feitas diretamente pela COM e por instaladores que elevam a si próprios não reutilizam necessariamente esse cache. Consulte a [integração gsudo](../Tool/gsudo/README.md).
+
+### Execução automática no Windows
+
+A opção “Iniciar com o Windows” do aplicativo executa a CLI em segundo plano para atualizar aplicativos, sem abrir a interface. Usa as preferências de atualização salvas, os aplicativos selecionados, as versões ignoradas e as notificações do Windows. O UAC permanece interativo na primeira operação administrativa; após autorização, o Elevator reutiliza o cache de 5 minutos de inatividade entre os aplicativos do lote. O comando interno `--background-update` é reservado à inicialização e às tarefas agendadas. O log fica em `%LOCALAPPDATA%/WinProvisionStoreWinUI3/logs/background-update.log`.

@@ -42,6 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _updater = updater;
         _presentation = presentation;
         _isInstalledFromSetup = updater.IsCurrentProcessInstalled;
+        LoadCacheSettings();
         _isInitializing = true;
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);
         _isInitializing = false;

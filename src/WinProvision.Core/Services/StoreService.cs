@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Collections.Concurrent;
@@ -18,6 +17,7 @@ public class StoreService : IAsyncDisposable
     private const string MsStoreManifestUrl = MsStoreCatalogBaseUrl + "/manifest.json";
     private const string LegacyScreenshotBasePath = "/Store/Screenshot_Database/";
     private readonly string _cacheDirectory;
+    internal CatalogCacheService SharedCache { get; }
     private readonly string _legacyCacheFilePath;
     private readonly string _catalogManifestCacheFilePath;
     private readonly string _catalogManifestEtagPath;
@@ -59,13 +59,12 @@ public class StoreService : IAsyncDisposable
     public event Action<IReadOnlyList<AppEntry>>? CatalogUpdated;
     public event Action? CacheCleared;
 
-    public StoreService(HttpClient? httpClient = null, IconService? iconService = null)
-        : this(httpClient, iconService, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinProvisionStore"))
+    public StoreService(HttpClient? httpClient = null, IconService? iconService = null,
+        string? cacheDirectory = null, CatalogCacheService? catalogCache = null)
     {
-    }
-
-    internal StoreService(HttpClient? httpClient, IconService? iconService, string cacheDirectory)
-    {
+        SharedCache = catalogCache ?? (cacheDirectory is null ? new CatalogCacheService()
+            : new CatalogCacheService(Path.Combine(cacheDirectory, "shared"), new()));
+        cacheDirectory ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinProvisionStore");
         _ownsHttpClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler())) { Timeout = TimeSpan.FromSeconds(15) };
         _iconService = iconService ?? new IconService();
@@ -87,6 +86,7 @@ public class StoreService : IAsyncDisposable
 
     private async Task<List<AppEntry>> LoadCatalogCoreAsync(bool forceRefresh, CancellationToken cancellationToken)
     {
+        await SharedCache.MaintainAsync(false, cancellationToken).ConfigureAwait(false);
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
@@ -101,7 +101,7 @@ public class StoreService : IAsyncDisposable
                 if (!_startupRevalidationScheduled)
                 {
                     _startupRevalidationScheduled = true;
-                    _ = RefreshCacheInBackgroundAsync(CancellationToken.None, revalidateRemote: true);
+                    if (IsCacheStale()) _ = RefreshCacheInBackgroundAsync(CancellationToken.None);
                 }
                 else if (IsCacheStale())
                 {
@@ -116,7 +116,7 @@ public class StoreService : IAsyncDisposable
                 PopulateIcons(_cachedCatalog);
 
                 _startupRevalidationScheduled = true;
-                _ = RefreshCacheInBackgroundAsync(CancellationToken.None, revalidateRemote: true);
+                if (IsCacheStale()) _ = RefreshCacheInBackgroundAsync(CancellationToken.None);
 
                 return _cachedCatalog;
             }
@@ -193,7 +193,7 @@ public class StoreService : IAsyncDisposable
                 string detailBaseUrl = app.CatalogDetailBaseUrl
                     ?? (string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase) ? MsStoreCatalogBaseUrl : CatalogV2BaseUrl);
                 string url = $"{detailBaseUrl}/{relativePath}";
-                using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                using var response = await SharedCache.GetAsync(_httpClient, url, cancellationToken, expectedDetailHash);
                 response.EnsureSuccessStatusCode();
                 json = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (!HasExpectedHash(json, expectedDetailHash))
@@ -207,8 +207,7 @@ public class StoreService : IAsyncDisposable
                 if (cacheGeneration != Volatile.Read(ref _cacheGeneration))
                     return app;
 
-                Directory.CreateDirectory(Path.GetDirectoryName(detailFile)!);
-                await AtomicFile.WriteAllTextAsync(detailFile, json, cancellationToken);
+                // Raw details are persisted only by SharedCache; legacy files remain readable.
                 return CompleteDetails(downloaded, app);
             }
 
@@ -461,7 +460,7 @@ public class StoreService : IAsyncDisposable
         {
             Task<RemoteTextResult> manifestDownload = FetchTextWithCacheAsync(
                 CatalogManifestUrl, _catalogManifestCacheFilePath, _catalogManifestEtagPath,
-                _catalogManifestLastModifiedPath, forceRefresh || revalidateRemote, cancellationToken);
+                _catalogManifestLastModifiedPath, forceRefresh, cancellationToken);
             RemoteTextResult manifestResult = await manifestDownload;
             if (manifestResult.Content is null)
                 return _cachedCatalog;
@@ -490,7 +489,7 @@ public class StoreService : IAsyncDisposable
             string indexPath = GetSearchIndexCachePath(manifest!.CatalogSha256!);
             string indexUrl = $"{CatalogV2BaseUrl}/manifest/search-index.json";
             RemoteTextResult indexResult = await FetchTextWithCacheAsync(
-                indexUrl, indexPath, indexPath + ".etag", indexPath + ".lastmodified", forceRefresh, cancellationToken);
+                indexUrl, indexPath, indexPath + ".etag", indexPath + ".lastmodified", forceRefresh: false, cancellationToken, manifest.IndexSha256);
             if (indexResult.Content is null)
                 return _cachedCatalog;
             if (!string.IsNullOrWhiteSpace(manifest.IndexSha256)
@@ -747,7 +746,7 @@ public class StoreService : IAsyncDisposable
         string etagPath,
         string lastModifiedPath,
         bool forceRefresh,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? expectedSha256 = null)
     {
         string? cachedContent = null;
         string? cachedEtag = null;
@@ -761,18 +760,12 @@ public class StoreService : IAsyncDisposable
             if (File.Exists(lastModifiedPath))
                 cachedLastModified = await File.ReadAllTextAsync(lastModifiedPath, cancellationToken);
 
-            if (!forceRefresh && cachedContent is not null && !IsFileStale(cachePath))
+            if (!forceRefresh && cachedContent is not null && !IsFileStale(cachePath)
+                && (expectedSha256 is null || HasExpectedHash(cachedContent, expectedSha256)))
                 return new RemoteTextResult(cachedContent, cachedEtag, cachedLastModified, ShouldCommit: false);
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            if (!string.IsNullOrWhiteSpace(cachedEtag) && EntityTagHeaderValue.TryParse(cachedEtag, out var entityTag))
-                request.Headers.IfNoneMatch.Add(entityTag);
-            if (!string.IsNullOrWhiteSpace(cachedLastModified) &&
-                DateTimeOffset.TryParse(cachedLastModified, out DateTimeOffset modifiedSince))
-                request.Headers.IfModifiedSince = modifiedSince;
-
-            using HttpResponseMessage response = await _httpClient.SendAsync(
-                request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using HttpResponseMessage response = await SharedCache.GetAsync(_httpClient, url, cancellationToken, expectedSha256, forceRefresh,
+                maximumBytes: url.EndsWith("/manifest.json", StringComparison.OrdinalIgnoreCase) ? 256 * 1024 : CatalogCacheService.MaximumPayloadBytes);
             if (response.StatusCode == System.Net.HttpStatusCode.NotModified && cachedContent is not null)
             {
                 return new RemoteTextResult(
@@ -886,7 +879,8 @@ public class StoreService : IAsyncDisposable
     {
         try
         {
-            using var manifestResponse = await _httpClient.GetAsync(MsStoreManifestUrl, cancellationToken);
+            using var manifestResponse = await SharedCache.GetAsync(_httpClient, MsStoreManifestUrl, cancellationToken,
+                forceRefresh: forceRefresh, maximumBytes: 256 * 1024);
             manifestResponse.EnsureSuccessStatusCode();
             string manifestJson = await manifestResponse.Content.ReadAsStringAsync(cancellationToken);
             var manifest = WinProvision.Core.Services.AotJson.Deserialize<CatalogManifest>(manifestJson, _jsonOptions);
@@ -902,13 +896,13 @@ public class StoreService : IAsyncDisposable
             }
             else
             {
-                using var indexResponse = await _httpClient.GetAsync(indexUrl, cancellationToken);
+                using var indexResponse = await SharedCache.GetAsync(_httpClient, indexUrl, cancellationToken, manifest.IndexSha256);
                 indexResponse.EnsureSuccessStatusCode();
                 indexJson = await indexResponse.Content.ReadAsStringAsync(cancellationToken);
             }
             if (!HasExpectedHash(indexJson, manifest.IndexSha256))
             {
-                using var indexResponse = await _httpClient.GetAsync(indexUrl, cancellationToken);
+                using var indexResponse = await SharedCache.GetAsync(_httpClient, indexUrl, cancellationToken, manifest.IndexSha256);
                 indexResponse.EnsureSuccessStatusCode();
                 indexJson = await indexResponse.Content.ReadAsStringAsync(cancellationToken);
                 if (!HasExpectedHash(indexJson, manifest.IndexSha256))

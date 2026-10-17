@@ -9,7 +9,8 @@ internal static partial class Program
     [MTAThread]
     private static int Main(string[] args)
     {
-        Console.OutputEncoding = Encoding.UTF8;
+        if (args is ["--background-update"]) FreeConsole();
+        else Console.OutputEncoding = Encoding.UTF8;
         using var cancellation = new CancellationTokenSource();
         ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
         Console.CancelKeyPress += cancel;
@@ -39,6 +40,11 @@ internal static partial class Program
     {
         if (args.Length > 0 && args[0] == WinProvision.PackageManagement.ElevatedComProtocol.Command)
             return await RunElevatedComAsync(args, token);
+        if (args is ["--background-update"])
+        {
+            WinProvision.Core.Services.AotJson.Register(BackgroundJsonContext.Default);
+            return await BackgroundUpdateApplication.RunScheduledAsync(token);
+        }
         string version = typeof(CliApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.1.0";
         await using var backend = new ResilientCliBackend(message => Console.Error.WriteLine(CliApplication.Clean(message)));
         try { return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version, Console.IsInputRedirected).RunAsync(args, token); }
@@ -73,6 +79,10 @@ internal static partial class Program
         Console.Out.WriteLine(WinProvision.PackageManagement.ElevatedComProtocol.EncodeResult(result));
         return 0; // The complete operation result travels in the framed response.
     }
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FreeConsole();
 
     [LibraryImport("ole32.dll")]
     private static partial int CoInitializeEx(nint reserved, uint apartment);

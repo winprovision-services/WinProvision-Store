@@ -106,6 +106,17 @@ public sealed class ApplicationEngine : IAsyncDisposable
             ct => _cli.DetailsAsync(id, source, ct)
         ], _ => true, _diagnostic, token);
     }
+    public async Task<WingetExecutionResult> ExecuteUpdateAsync(UpgradablePackage package, PackageInstallOptions options,
+        Action<string> log, CancellationToken token)
+    {
+        await EnsureAsync(token);
+        if (options.Interactive || options.RequiresElevation || options.Scope is not null || options.Architecture is not null)
+            return await _executor.UpdateAppAsync(package.Id, log, token, source: package.Source,
+                scope: options.Scope, architecture: options.Architecture, interactive: options.Interactive,
+                requiresElevation: options.RequiresElevation);
+        return await _packages.UpdateAsync(package.Id, log, token, source: package.Source);
+    }
+
     public async Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
     {
         await EnsureAsync(token);

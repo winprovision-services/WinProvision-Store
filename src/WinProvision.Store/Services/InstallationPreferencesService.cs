@@ -27,7 +27,7 @@ public sealed partial class InstallationPreferencesService
         }
         catch (Exception recoveryException)
         {
-            WinProvision.Store.Services.WinProvisionLog.Warning(recoveryException, "InstallationPreferencesService.InstallationPreferencesService");
+            WinProvision.Core.Services.CoreLog.Warning(recoveryException, "InstallationPreferencesService.InstallationPreferencesService");
 
             PreferredMethod = PackageInstallMethod.Automatic;
         }

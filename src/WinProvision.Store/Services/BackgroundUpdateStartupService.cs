@@ -129,8 +129,7 @@ public sealed partial class BackgroundUpdateStartupService(
             return error is null ? (true, null) : (false, error);
         }
 
-        string executable = Environment.ProcessPath
-            ?? throw new InvalidOperationException("Não foi possível localizar o executável do WinProvision.");
+        string command = BackgroundUpdateCommand.ForDirectory(AppContext.BaseDirectory);
         string scheduleType = preferences.UpdateSchedule == BackgroundUpdateSchedule.Daily ? "DAILY" : "WEEKLY";
         var startInfo = new ProcessStartInfo
         {
@@ -144,7 +143,7 @@ public sealed partial class BackgroundUpdateStartupService(
         {
             "/Create", "/TN", ScheduledTaskName, "/SC", scheduleType,
             "/ST", preferences.UpdateScheduleTime,
-            "/TR", $"\"{executable}\" --background-update", "/IT", "/F"
+            "/TR", command, "/IT", "/F"
         })
             startInfo.ArgumentList.Add(argument);
         if (preferences.UpdateSchedule == BackgroundUpdateSchedule.Weekly)

@@ -6,6 +6,8 @@ namespace WinProvision.Store.Services;
 /// <summary>Notificações nativas do Windows para operações que terminam sem janela aberta.</summary>
 public sealed partial class WindowsAppNotificationService : IDisposable
 {
+    public Action<string> Log { get; set; } = message => System.Diagnostics.Trace.WriteLine(message);
+    public bool SuppressNotifications { get; set; }
     private bool _registered;
     private bool _activationHandlerRegistered;
     private Action? _onNotificationInvoked;
@@ -28,12 +30,12 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
             manager.Register();
             _registered = true;
-            WinProvisionLog.Write("APP NOTIFICATIONS registered=true");
+            Log("APP NOTIFICATIONS registered=true");
             return true;
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS registration failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS registration failed type={ex.GetType().Name} message={ex.Message}");
             return false;
         }
     }
@@ -42,26 +44,26 @@ public sealed partial class WindowsAppNotificationService : IDisposable
         AppNotificationManager sender,
         AppNotificationActivatedEventArgs args)
     {
-        WinProvisionLog.Write("APP NOTIFICATIONS activated=true");
+        Log("APP NOTIFICATIONS activated=true");
         try
         {
             _onNotificationInvoked?.Invoke();
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS activation failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS activation failed type={ex.GetType().Name} message={ex.Message}");
         }
     }
 
     public void ShowCollectionResult(string title, string message)
     {
-        if (App.IsSmokeTest || (!_registered && !TryRegister())) return;
+        if (SuppressNotifications || (!_registered && !TryRegister())) return;
         try
         {
             AppNotificationManager.Default.Show(new AppNotificationBuilder()
                 .AddText("WinProvision Store").AddText(title).AddText(message).BuildNotification());
         }
-        catch (Exception exception) { WinProvisionLog.Warning(exception, "CollectionNotification"); }
+        catch (Exception exception) { WinProvision.Core.Services.CoreLog.Warning(exception, "CollectionNotification"); }
     }
 
     public void ShowBackgroundUpdateSummary(int updated, int failed)
@@ -90,11 +92,11 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 .AddText(message)
                 .BuildNotification();
             AppNotificationManager.Default.Show(notification);
-            WinProvisionLog.Write($"APP NOTIFICATIONS background-update updated={updated} failed={failed}");
+            Log($"APP NOTIFICATIONS background-update updated={updated} failed={failed}");
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS show failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS show failed type={ex.GetType().Name} message={ex.Message}");
         }
     }
 
@@ -114,11 +116,11 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 .AddText(message)
                 .BuildNotification();
             AppNotificationManager.Default.Show(notification);
-            WinProvisionLog.Write($"APP NOTIFICATIONS update-check available={available}");
+            Log($"APP NOTIFICATIONS update-check available={available}");
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS check summary failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS check summary failed type={ex.GetType().Name} message={ex.Message}");
         }
     }
 
@@ -135,11 +137,11 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 .AddText("Abra o app e tente verificar as atualizações novamente.")
                 .BuildNotification();
             AppNotificationManager.Default.Show(notification);
-            WinProvisionLog.Write("APP NOTIFICATIONS background-update failure=true");
+            Log("APP NOTIFICATIONS background-update failure=true");
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS failure notification failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS failure notification failed type={ex.GetType().Name} message={ex.Message}");
         }
     }
 
@@ -152,7 +154,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 .AddText("Manutenção do Windows em segundo plano").AddText(message).BuildNotification();
             AppNotificationManager.Default.Show(notification);
         }
-        catch (Exception exception) { WinProvisionLog.Warning(exception, "Maintenance.ShowNotification"); }
+        catch (Exception exception) { WinProvision.Core.Services.CoreLog.Warning(exception, "Maintenance.ShowNotification"); }
     }
 
     public void Unregister()
@@ -169,11 +171,11 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 manager.NotificationInvoked -= OnNotificationInvoked;
                 _activationHandlerRegistered = false;
             }
-            WinProvisionLog.Write("APP NOTIFICATIONS unregistered=true");
+            Log("APP NOTIFICATIONS unregistered=true");
         }
         catch (Exception ex)
         {
-            WinProvisionLog.Write($"APP NOTIFICATIONS unregister failed type={ex.GetType().Name} message={ex.Message}");
+            Log($"APP NOTIFICATIONS unregister failed type={ex.GetType().Name} message={ex.Message}");
         }
         finally
         {

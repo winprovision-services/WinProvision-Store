@@ -22,14 +22,6 @@ public class GsudoElevationTests
         finally { File.Delete(path); }
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(1)]
-    [InlineData(60)]
-    [InlineData(int.MaxValue)]
-    public void UnsupportedCacheDurationsCannotAuthorizeAnything(int minutes)
-        => Assert.Throws<ArgumentOutOfRangeException>(() => GsudoElevationService.RequestCache(minutes));
-
     [Fact]
     public async Task CanceledElevationNeverDispatchesOrRequestsUac()
     {

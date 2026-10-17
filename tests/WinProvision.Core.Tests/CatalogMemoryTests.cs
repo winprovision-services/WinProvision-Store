@@ -45,7 +45,7 @@ public sealed class CatalogMemoryTests
             Assert.NotSame(original, Assert.Single(service.GetAll()));
             Assert.True(Assert.Single(service.GetAll()).IsInstalled);
             Assert.Equal(1, replacements);
-            Assert.Equal(1, handler.IndexRequests);
+            Assert.Equal(0, handler.IndexRequests);
         }
         finally { Directory.Delete(directory, recursive: true); }
     }

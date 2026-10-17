@@ -10,17 +10,10 @@ namespace WinProvision.Core.Services;
 public static class GsudoElevationService
 {
     private static readonly SemaphoreSlim CacheGate = new(1, 1);
-    private static int _cacheMinutes;
     private static bool _cacheStarted;
-    public static int CacheMinutes => Volatile.Read(ref _cacheMinutes);
+    public const int CacheMinutes = 5;
     public static string HelperPath => Path.Combine(AppContext.BaseDirectory, "Tool", "gsudo", "WinProvision Elevator.exe");
     public static bool IsBundled => File.Exists(HelperPath);
-
-    public static void RequestCache(int minutes)
-    {
-        if (minutes is not (0 or 2 or 5 or 10 or 15)) throw new ArgumentOutOfRangeException(nameof(minutes));
-        Volatile.Write(ref _cacheMinutes, minutes);
-    }
 
     public static void VerifyHelper(string path, string expectedSha256)
     {
@@ -31,26 +24,18 @@ public static class GsudoElevationService
 
     private static void VerifyBundledHelper() => VerifyHelper(HelperPath, GsudoBinary.Sha256);
 
-    public static async Task AuthorizeCacheAsync(int minutes, CancellationToken token)
+    public static async Task AuthorizeCacheAsync(CancellationToken token)
     {
-        if (CacheMinutes != minutes) await StopCacheAsync().ConfigureAwait(false);
-        RequestCache(minutes);
-        try
-        {
-            await EnsureCacheAsync(token).ConfigureAwait(false);
-            WinProvisionElevationState.MarkAuthorized();
-        }
-        catch { RequestCache(0); throw; }
+        await EnsureCacheAsync(token).ConfigureAwait(false);
+        WinProvisionElevationState.MarkAuthorized();
     }
 
     private static async Task EnsureCacheAsync(CancellationToken token)
     {
-        if (CacheMinutes == 0) return;
         await CacheGate.WaitAsync(token).ConfigureAwait(false);
         try
         {
             int minutes = CacheMinutes;
-            if (minutes == 0) return;
             if (_cacheStarted)
             {
                 var status = await RunControlAsync(["status", "CacheAvailable"], token).ConfigureAwait(false);
@@ -61,7 +46,6 @@ public static class GsudoElevationService
                 "--duration", TimeSpan.FromMinutes(minutes).ToString("c", CultureInfo.InvariantCulture)], token).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
-                RequestCache(0);
                 WinProvisionElevationState.MarkFailed();
                 throw new Win32Exception(1223, "A autorização do cache de elevação não foi concluída.");
             }
@@ -72,7 +56,6 @@ public static class GsudoElevationService
 
     public static async Task StopCacheAsync()
     {
-        RequestCache(0);
         await CacheGate.WaitAsync().ConfigureAwait(false);
         try
         {

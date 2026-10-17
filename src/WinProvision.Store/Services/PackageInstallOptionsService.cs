@@ -26,7 +26,7 @@ public sealed partial class PackageInstallOptionsService
         }
         catch (Exception recoveryException)
         {
-            WinProvision.Store.Services.WinProvisionLog.Warning(recoveryException, "PackageInstallOptionsService.PackageInstallOptionsService");
+            WinProvision.Core.Services.CoreLog.Warning(recoveryException, "PackageInstallOptionsService.PackageInstallOptionsService");
 
             // Um arquivo de preferências inválido não deve impedir a inicialização da Store.
             _options = new Dictionary<string, PackageInstallOptions>(StringComparer.OrdinalIgnoreCase);

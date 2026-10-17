@@ -167,6 +167,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
     private readonly string _cacheDir;
+    private readonly CatalogCacheService _catalogCache;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
     private readonly SemaphoreSlim _manifestCacheLock = new(1, 1);
     private readonly SemaphoreSlim _installRecordsLock = new(1, 1);
@@ -193,15 +194,16 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         public TimeSpan RetryDelay { get; } = retryDelay;
     }
 
-    public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null)
+    public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null, CatalogCacheService? catalogCache = null)
     {
+        _catalogCache = catalogCache ?? (cacheDir is null ? new CatalogCacheService() : new CatalogCacheService(Path.Combine(cacheDir, "shared"), new()));
         _ownsHttpClient = http is null;
-        _http = http ?? new HttpClient(new SocketsHttpHandler
+        _http = http ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler
         {
             ConnectTimeout = TimeSpan.FromSeconds(25),
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             MaxConnectionsPerServer = 8
-        })
+        }))
         { Timeout = Timeout.InfiniteTimeSpan };
         if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("WinProvisionStore/1.0");
@@ -221,8 +223,15 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         return identity.User?.IsWellKnown(System.Security.Principal.WellKnownSidType.LocalSystemSid) == true;
     }
 
-    public async Task<PackageIndex> GetIndexAsync(bool forceRefresh = false, CancellationToken ct = default)
+    public Task<PackageIndex> GetIndexAsync(bool forceRefresh = false, CancellationToken ct = default)
+        => GetIndexCoreAsync(forceRefresh, forceRefresh, ct);
+
+    internal Task<PackageIndex> RefreshFromSharedCacheAsync(CancellationToken ct)
+        => GetIndexCoreAsync(true, false, ct);
+
+    private async Task<PackageIndex> GetIndexCoreAsync(bool forceRefresh, bool forceRemote, CancellationToken ct)
     {
+        await _catalogCache.MaintainAsync(false, ct).ConfigureAwait(false);
         await _indexLock.WaitAsync(ct);
         try
         {
@@ -261,8 +270,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             try
             {
                 var sourceIndexes = await Task.WhenAll(
-                    LoadSourceIndexAsync("winget", CatalogBaseUrl, _indexCache, ct),
-                    LoadSourceIndexAsync("msstore", MsStoreCatalogBaseUrl, _indexCache, ct));
+                    LoadSourceIndexAsync("winget", CatalogBaseUrl, _indexCache, ct, forceRemote),
+                    LoadSourceIndexAsync("msstore", MsStoreCatalogBaseUrl, _indexCache, ct, forceRemote));
                 var combined = sourceIndexes.SelectMany(result => result.Entries).ToList();
                 DateTimeOffset generatedAt = sourceIndexes.Max(result => result.Manifest.GeneratedUtc);
 
@@ -360,7 +369,12 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         sourceTimeout.CancelAfter(TimeSpan.FromSeconds(45));
         try
         {
-            var (_, manifest, _) = await LoadSourceIndexAsync(source, baseUrl, cachedIndex: null, sourceTimeout.Token).ConfigureAwait(false);
+            using var response = await _catalogCache.GetAsync(_http, baseUrl + "manifest.json", sourceTimeout.Token,
+                forceRefresh: true, allowStale: false, maximumBytes: 256 * 1024).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var manifest = AotJson.Deserialize<CatalogIndexManifest>(await response.Content.ReadAsByteArrayAsync(sourceTimeout.Token).ConfigureAwait(false))
+                ?? throw new InvalidDataException("Manifesto vazio.");
+            ValidateSourceManifest(manifest, source);
             stopwatch.Stop();
             return new CatalogSourceHealth(displayName, true, manifest.AppCount, manifest.GeneratedUtc, stopwatch.Elapsed, null);
         }
@@ -386,9 +400,9 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     }
 
     private async Task<(string Source, CatalogIndexManifest Manifest, List<PackageIndexEntry> Entries)>
-        LoadSourceIndexAsync(string source, string baseUrl, PackageIndex? cachedIndex, CancellationToken ct)
+        LoadSourceIndexAsync(string source, string baseUrl, PackageIndex? cachedIndex, CancellationToken ct, bool forceRemote = false)
     {
-        var manifest = await GetJsonWithRetryAsync<CatalogIndexManifest>(baseUrl + "manifest.json", ct)
+        var manifest = await GetJsonWithRetryAsync<CatalogIndexManifest>(baseUrl + "manifest.json", ct, forceRemote: forceRemote)
             ?? throw new InvalidDataException($"Manifesto da origem {source} vazio.");
         ValidateSourceManifest(manifest, source);
 
@@ -418,6 +432,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         lock (_lifecycleGate)
         {
             if (_startupRevalidationScheduled || _disposed) return;
+            if (File.Exists(IndexCachePath) && DateTime.UtcNow - File.GetLastWriteTimeUtc(IndexCachePath) < _catalogCache.RevalidationInterval) return;
             _startupRevalidationScheduled = true;
             _revalidationTask = RevalidateIndexInBackgroundAsync();
         }
@@ -427,7 +442,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     {
         try
         {
-            await GetIndexAsync(forceRefresh: true, _lifetime.Token).ConfigureAwait(false);
+            await GetIndexCoreAsync(true, false, _lifetime.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (Exception exception) { CoreLog.Warning(exception, "RevalidateCatalogIndex"); }
@@ -493,8 +508,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
         try
         {
-            var manifest = await GetJsonWithRetryAsync<PackageManifest>(manifestUrl, ct, entry.ManifestSha256,
-                (payload, token) => WriteCacheBytesAsync(cachePath, payload, token));
+            var manifest = await GetJsonWithRetryAsync<PackageManifest>(manifestUrl, ct, entry.ManifestSha256);
             if (manifest is not null)
             {
                 ValidateManifest(manifest, entry);
@@ -610,7 +624,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         return Path.Combine(_cacheDir, $"catalog-app-{key}.json");
     }
 
-    private async Task<T?> GetJsonWithRetryAsync<T>(string url, CancellationToken ct, string? expectedSha256 = null, Func<byte[], CancellationToken, Task>? onPayloadReceived = null)
+    private async Task<T?> GetJsonWithRetryAsync<T>(string url, CancellationToken ct, string? expectedSha256 = null, Func<byte[], CancellationToken, Task>? onPayloadReceived = null, bool forceRemote = false)
     {
         using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         operationTimeout.CancelAfter(RequestTimeout);
@@ -619,7 +633,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         {
             try
             {
-                using var response = await SendAsync(url, operationTimeout.Token, metadata: true).ConfigureAwait(false);
+                using var response = await _catalogCache.GetAsync(_http, url, operationTimeout.Token, expectedSha256, forceRemote,
+                    maximumBytes: typeof(T) == typeof(CatalogIndexManifest) ? 256 * 1024 : CatalogCacheService.MaximumPayloadBytes).ConfigureAwait(false);
                 if (response.StatusCode == HttpStatusCode.NotFound) return default;
                 if (IsTransientStatus(response.StatusCode) && attempt < MaxRequestAttempts)
                 {
@@ -1446,6 +1461,32 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 await Task.Delay(delay, timeout.Token);
             }
         }
+    }
+
+    internal static async Task MaintainInstallerCacheAsync(CancellationToken token)
+    {
+        await InstallerCacheGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            string directory = GetInstallerCacheDirectory();
+            if (!Directory.Exists(directory)) return;
+            var files = new DirectoryInfo(directory).EnumerateFiles().Where(file =>
+                (file.Attributes & FileAttributes.ReparsePoint) == 0
+                && Path.GetFileNameWithoutExtension(file.Name) is { Length: 64 } name && name.All(char.IsAsciiHexDigit))
+                .OrderBy(file => file.LastWriteTimeUtc).ToList();
+            long total = files.Sum(file => file.Length);
+            foreach (var file in files)
+            {
+                token.ThrowIfCancellationRequested();
+                // Recently verified/copying payloads belong to active operations.
+                if (DateTime.UtcNow - file.LastWriteTimeUtc < TimeSpan.FromMinutes(10)) continue;
+                if (DateTime.UtcNow - file.LastWriteTimeUtc <= InstallerCacheRetention && total <= MaxInstallerCacheBytes) continue;
+                try { long bytes = file.Length; file.Delete(); total -= bytes; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { CoreLog.Warning(ex, "InstallerCache.MaintainFile"); }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { CoreLog.Warning(ex, "InstallerCache.Maintain"); }
+        finally { InstallerCacheGate.Release(); }
     }
 
     private static string GetInstallerCacheDirectory() => Path.Combine(

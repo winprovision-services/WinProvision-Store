@@ -83,7 +83,7 @@ public sealed partial class ApplicationPreferencesService
         }
         catch (Exception recoveryException)
         {
-            WinProvision.Store.Services.WinProvisionLog.Warning(recoveryException, "ApplicationPreferencesService.ApplicationPreferencesService");
+            WinProvision.Core.Services.CoreLog.Warning(recoveryException, "ApplicationPreferencesService.ApplicationPreferencesService");
 
             Theme = AppThemePreference.System;
         }
@@ -99,32 +99,32 @@ public sealed partial class ApplicationPreferencesService
             using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryPath);
             string? appCommand = key?.GetValue(StartupValueName) as string;
             string? updateCommand = key?.GetValue(BackgroundUpdateValueName) as string;
-            bool legacyBackgroundOnly = HasArgument(appCommand, "--background-update");
+            bool cliStartup = HasArgument(appCommand, "cli\\winprovision.exe") || HasArgument(appCommand, "cli/winprovision.exe");
+            bool legacyBackgroundOnly = HasArgument(appCommand, "--background-update") && !cliStartup;
             bool legacyCombined = HasArgument(appCommand, "--update-at-startup");
 
             LaunchAtStartup = !string.IsNullOrWhiteSpace(appCommand) && !legacyBackgroundOnly;
             bool registeredForBackgroundUpdates = !string.IsNullOrWhiteSpace(updateCommand)
                 || legacyBackgroundOnly
                 || legacyCombined;
-            AutoUpdateAtStartup = _savedAutoUpdateEnabled ?? registeredForBackgroundUpdates;
-            migrateLegacyRegistration = legacyBackgroundOnly || legacyCombined;
+            AutoUpdateAtStartup = LaunchAtStartup || (_savedAutoUpdateEnabled ?? registeredForBackgroundUpdates);
+            migrateLegacyRegistration = legacyBackgroundOnly || legacyCombined
+                || LaunchAtStartup || registeredForBackgroundUpdates;
         }
         catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
-            WinProvisionLog.Error(exception, "ReadStartupPreferences");
+            WinProvision.Core.Services.CoreLog.Warning(exception, "ReadStartupPreferences");
             LaunchAtStartup = false;
             AutoUpdateAtStartup = false;
         }
 
-        // Versões anteriores combinavam a inicialização do app e do atualizador em um único
-        // comando. Se ambas as opções estavam ligadas, isso abria a interface em vez de rodar
-        // apenas o processo de atualização. Migra para duas entradas independentes no Run.
+        // Reconcile existing registrations with the CLI command after updates.
         if (migrateLegacyRegistration)
         {
-            try { UpdateStartupRegistration(); }
+            try { Save(); UpdateStartupRegistration(); }
             catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
             {
-                WinProvisionLog.Error(exception, "MigrateStartupPreferences");
+                WinProvision.Core.Services.CoreLog.Warning(exception, "MigrateStartupPreferences");
             }
         }
     }
@@ -132,12 +132,15 @@ public sealed partial class ApplicationPreferencesService
     public void SetLaunchAtStartup(bool enabled)
     {
         LaunchAtStartup = enabled;
+        AutoUpdateAtStartup = enabled;
+        Save();
         UpdateStartupRegistration();
     }
 
     public void SetAutoUpdateAtStartup(bool enabled)
     {
         AutoUpdateAtStartup = enabled;
+        if (!enabled) LaunchAtStartup = false;
         Save();
         UpdateStartupRegistration();
     }
@@ -211,16 +214,15 @@ public sealed partial class ApplicationPreferencesService
         if (!_persistStartup) return;
         using var key = Registry.CurrentUser.CreateSubKey(StartupRegistryPath, writable: true)
             ?? throw new InvalidOperationException("Não foi possível abrir a configuração de inicialização do usuário.");
-        string executable = Environment.ProcessPath
-            ?? throw new InvalidOperationException("Não foi possível localizar o executável do WinProvision.");
+        string command = BackgroundUpdateCommand.ForDirectory(AppContext.BaseDirectory);
 
         if (LaunchAtStartup)
-            key.SetValue(StartupValueName, $"\"{executable}\"", RegistryValueKind.String);
+            key.SetValue(StartupValueName, command, RegistryValueKind.String);
         else
             key.DeleteValue(StartupValueName, throwOnMissingValue: false);
 
-        if (BackgroundUpdatesEnabled && UpdateSchedule == BackgroundUpdateSchedule.AtLogon)
-            key.SetValue(BackgroundUpdateValueName, $"\"{executable}\" --background-update", RegistryValueKind.String);
+        if (!LaunchAtStartup && BackgroundUpdatesEnabled && UpdateSchedule == BackgroundUpdateSchedule.AtLogon)
+            key.SetValue(BackgroundUpdateValueName, command, RegistryValueKind.String);
         else
             key.DeleteValue(BackgroundUpdateValueName, throwOnMissingValue: false);
     }

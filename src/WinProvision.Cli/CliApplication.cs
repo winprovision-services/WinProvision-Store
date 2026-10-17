@@ -28,7 +28,7 @@ public interface ICliPackageBackend
         => throw new NotSupportedException();
 }
 
-public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version, bool inputRedirected = false)
+public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version, bool inputRedirected = false, CatalogCacheService? catalogCache = null)
 {
     private readonly TextWriter _output = TextWriter.Synchronized(output);
     private readonly TextWriter _error = TextWriter.Synchronized(error);
@@ -40,10 +40,20 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         token.ThrowIfCancellationRequested();
         if (request.Command == "help") { _output.WriteLine(Help(request.Query)); return 0; }
         if (request.Command == "version") { _output.WriteLine($"WinProvision Store {version}"); return 0; }
+        if (request.Command == "cache")
+        {
+            var cache = catalogCache ?? new CatalogCacheService();
+            if (request.Query == "clear") await cache.ClearAsync(token);
+            else if (request.Query == "prune") await cache.MaintainAsync(true, token);
+            var usage = await cache.GetUsageAsync(token);
+            Write($"Cache local do catálogo: {usage.Bytes / (1024d * 1024):N1} MB; {usage.Files:N0} arquivos.");
+            Write($"Pasta: {cache.LocalRoot}");
+            if (cache.SharedRoot is not null) Write($"Pasta compartilhada: {cache.SharedRoot}");
+            return 0;
+        }
         if (inputRedirected && !request.Yes && (request.Command is "install" or "uninstall" or "import"
             || request.InstallOffice || (request.Command == "update" && !request.Json && !request.NoInput)))
             throw new ArgumentException("Entrada redirecionada: use --yes para executar sem confirmação; em upgrade informe --id ou --all. Use --no-input ou --json para apenas consultar.");
-        if (request.ElevationCache) GsudoElevationService.RequestCache(5);
         if (request.Command == "office")
         {
             Write("Microsoft 365 Família — 64 bits, pt-br, canal Current; Access e Publisher excluídos.");
@@ -216,6 +226,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: Downloads do usuário.",
         "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato; use --yes (-y) para executar sem confirmação. Use list para encontrar o ID.",
         "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista; use --yes (-y) para executar sem confirmação. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
+        "cache" => "Uso: winprovision cache [list|prune|clear]\nConsulta o catálogo em cache, remove antigos/excedentes ou limpa somente sua cópia local. Não consulta o R2.",
         "export" => "Uso: winprovision export [--output arquivo.json]\nExporta os pacotes reconhecidos pelo WinGet em formato compatível com import. Padrão: winprovision-apps.json no diretório atual. Não sobrescreve arquivos.",
         _ => """
             WinProvision Store — CLI
@@ -227,6 +238,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
               show         Exibir detalhes por ID
               list         Listar aplicativos instalados
               export       Exportar lista de pacotes para JSON
+              cache        Consultar ou limpar o cache do catálogo
 
             Operações:
               install      Instalar por ID, com confirmação
@@ -242,7 +254,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
               -q, --query       Consulta por nome
               -e, --exact       Correspondência exata
               --json            JSON em search/list/upgrade; apenas consulta
-              --elevation-cache Reutilizar autorização do helper neste processo (5 min de inatividade)
+              --elevation-cache Alias compatível: cache de 5 min já habilitado por padrão
               --yes, -y         Executar operação sem confirmação (upgrade exige --id ou --all)
               --no-input        Consultar sem menus; com --yes executa sem interação
               -i, --input       Arquivo JSON ou URL HTTPS para import

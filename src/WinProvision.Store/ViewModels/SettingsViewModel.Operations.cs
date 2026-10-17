@@ -178,7 +178,8 @@ public sealed partial class SettingsViewModel
         {
             await _cache.ClearAsync();
             AsyncImage.ClearCache();
-            StatusText = "Caches locais de busca, instalação e imagens limpos.";
+            await RefreshCacheUsageAsync(CancellationToken.None);
+            StatusText = "Cópias locais de busca, instalação e imagens limpas. O cache compartilhado foi preservado.";
         }
         catch (Exception ex) { WinProvisionLog.Error(ex, "Settings.ClearCache"); StatusText = "Não foi possível limpar os caches."; }
     }
@@ -206,7 +207,7 @@ public sealed partial class SettingsViewModel
     private void NotifyPreferences() { OnPropertyChanged(nameof(LaunchAtStartup)); OnPropertyChanged(nameof(SelectedMethodName)); OnPropertyChanged(nameof(InstallMethodDescription)); }
     public async Task ShutdownAsync()
     {
-        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand, AuthorizeElevationCommand, StopElevationCommand };
+        var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand, AuthorizeElevationCommand, PickCacheDirectoryCommand, CacheUsageCommand, PruneCacheCommand };
         foreach (var command in commands) command.Cancel();
         foreach (var command in commands) if (command.ExecutionTask is { } task) await task;
     }

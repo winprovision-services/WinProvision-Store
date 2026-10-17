@@ -156,16 +156,9 @@
             <Border x:Name="ElevationCacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
               <StackPanel Spacing="12">
                 <TextBlock Text="Reutilizar autorização de administrador" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Text="Opcional. Reutiliza sua autorização nos instaladores iniciados pelo auxiliar do aplicativo. Algumas operações podem solicitar confirmação própria. A interface continua sem privilégios de administrador." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                <ComboBox Header="Expirar após inatividade" SelectedValuePath="Tag" SelectedValue="{Binding ElevationCacheDuration, Mode=TwoWay}" Width="220" HorizontalAlignment="Left" AutomationProperties.Name="Prazo do cache de elevação">
-                  <ComboBoxItem Content="2 minutos" Tag="2" />
-                  <ComboBoxItem Content="5 minutos" Tag="5" />
-                  <ComboBoxItem Content="10 minutos" Tag="10" />
-                  <ComboBoxItem Content="15 minutos" Tag="15" />
-                </ComboBox>
+                <TextBlock Text="Sua autorização é reutilizada automaticamente por 5 minutos de inatividade nos instaladores iniciados pelo aplicativo. Algumas operações podem solicitar confirmação própria. A interface continua sem privilégios de administrador." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button x:Name="AuthorizeElevationButton" Content="Autorizar nesta sessão" Command="{Binding AuthorizeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="AuthorizeElevationButton" />
-                  <Button Content="Encerrar autorização" Command="{Binding StopElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" />
                 </StackPanel>
                 <TextBlock Text="{Binding ElevationCacheMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
               </StackPanel>
@@ -243,7 +236,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                   <TextBlock Text="Iniciar com o Windows" FontWeight="SemiBold" />
-                  <TextBlock Text="Abre o WinProvision automaticamente ao entrar nesta conta do Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                  <TextBlock Text="Executa atualizações automáticas pela CLI ao entrar nesta conta do Windows, sem abrir a interface." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
                 <ToggleSwitch x:Name="LaunchAtStartupSwitch" AutomationProperties.AutomationId="LaunchAtStartupSwitch" IsOn="{Binding LaunchAtStartup, Mode=OneWay}" Grid.Column="1" OnContent="Ativado" OffContent="Desativado" Toggled="LaunchAtStartupSwitch_Toggled" AutomationProperties.Name="Iniciar com o Windows" />
               </Grid>
@@ -264,18 +257,24 @@
             </Border>
             <TextBlock Text="Armazenamento e cache" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="CacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                  <TextBlock Text="Caches locais do WinProvision" FontWeight="SemiBold" />
-                  <TextBlock Text="Remove índices de busca, detalhes de pacotes e instaladores guardados. Eles serão baixados novamente quando necessário." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                </StackPanel>
-                <Button Grid.Column="1" Content="Limpar cache" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding ClearCacheCommand}">
-                                    </Button>
-              </Grid>
+              <StackPanel Spacing="12">
+                <TextBlock Text="Cache compartilhado do catálogo" FontWeight="SemiBold" />
+                <TextBlock Text="A interface e a CLI reutilizam os mesmos dados verificados. A limpeza diária remove arquivos sem uso há 30 dias e libera espaço conforme o limite. Imagens e instaladores têm caches locais separados." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBox x:Name="CacheSharedDirectoryBox" Header="Pasta adicional ou de rede (opcional)" Text="{Binding CacheSharedDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Vazio: usar apenas o cache local" AutomationProperties.Name="Pasta compartilhada do cache" />
+                <TextBlock Text="Uma cópia local é mantida quando a pasta compartilhada estiver indisponível. A limpeza manual local preserva o cache da rede." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button Content="Selecionar pasta" Command="{Binding PickCacheDirectoryCommand}" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" />
+                <ComboBox Header="Limite do catálogo em cada cópia" SelectedValuePath="Tag" SelectedValue="{Binding CacheMaximumMegabytes, Mode=TwoWay}" MinWidth="210" HorizontalAlignment="Left" AutomationProperties.Name="Limite de espaço do catálogo">
+                  <ComboBoxItem Content="128 MB" Tag="128" /><ComboBoxItem Content="256 MB" Tag="256" /><ComboBoxItem Content="512 MB" Tag="512" /><ComboBoxItem Content="1 GB" Tag="1024" /><ComboBoxItem Content="2 GB" Tag="2048" />
+                </ComboBox>
+                <ComboBox Header="Conferir novas versões do catálogo" SelectedValuePath="Tag" SelectedValue="{Binding CacheRevalidationHours, Mode=TwoWay}" MinWidth="210" HorizontalAlignment="Left" AutomationProperties.Name="Prazo de revalidação do catálogo">
+                  <ComboBoxItem Content="A cada 6 horas" Tag="6" /><ComboBoxItem Content="A cada 12 horas" Tag="12" /><ComboBoxItem Content="A cada 24 horas" Tag="24" />
+                </ComboBox>
+                <Button x:Name="SaveCacheSettingsButton" Content="Salvar configuração do cache" Command="{Binding SaveCacheSettingsCommand}" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" />
+                <TextBlock Text="{Binding CacheUsageSummary}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button Content="Consultar espaço local" Command="{Binding CacheUsageCommand}" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" />
+                <Button x:Name="PruneCacheButton" Content="Limpar antigos e excedentes" Command="{Binding PruneCacheCommand}" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" />
+                <Button Content="Limpar todo o cache local" Command="{Binding ClearCacheCommand}" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" />
+              </StackPanel>
             </Border>
           </StackPanel>
         </StackPanel>
