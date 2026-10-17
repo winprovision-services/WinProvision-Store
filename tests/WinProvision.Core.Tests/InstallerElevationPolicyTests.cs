@@ -6,6 +6,18 @@ namespace WinProvision.Core.Tests;
 public class InstallerElevationPolicyTests
 {
     [Theory]
+    [InlineData("winget", "machine", false, false, true, true)]
+    [InlineData("WINGET", "user", true, false, true, true)]
+    [InlineData("winget", null, true, false, true, true)]
+    [InlineData("winget", "user", false, false, true, false)]
+    [InlineData("winget", "machine", true, true, true, false)]
+    [InlineData("msstore", "machine", true, false, true, false)]
+    [InlineData("winget", "machine", true, false, false, false)]
+    public void OutOfProcessComMustDelegateBeforeAdministrativeInstall(string source, string? scope,
+        bool required, bool prohibited, bool helper, bool expected)
+        => Assert.Equal(expected, InstallerElevationPolicy.DelegateComExecutionToCli(source, scope, required, prohibited, helper));
+
+    [Theory]
     [InlineData("machine", false, false, true)]
     [InlineData("SYSTEM", false, false, true)]
     [InlineData(null, true, false, true)]

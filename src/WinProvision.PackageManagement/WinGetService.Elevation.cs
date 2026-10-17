@@ -7,48 +7,6 @@ namespace WinProvision.PackageManagement;
 
 public sealed partial class WinGetService
 {
-    private static async Task<WingetExecutionResult> RunElevatedComWorkerAsync(ComOperationKind operation,
-        string packageId, string? installLocation, Action<string>? log, Action<InstallProgressUpdate>? progress,
-        CancellationToken token, InstallAttemptState state)
-    {
-        string worker = Path.Combine(AppContext.BaseDirectory, "cli", "winprovision.exe");
-        if (!File.Exists(worker)) worker = Path.Combine(AppContext.BaseDirectory, "winprovision.exe");
-        if (!File.Exists(worker)) throw new FileNotFoundException("Worker COM ausente. Reinstale o WinProvision Store.", worker);
-        string request = ElevatedComProtocol.EncodeRequest(new(operation == ComOperationKind.Install ? "install" : "update",
-            packageId, installLocation));
-        WingetExecutionResult? result = null;
-        Exception? protocolError = null;
-        int code = await GsudoElevationService.RunElevatedAsync(worker, $"{ElevatedComProtocol.Command} {request}", token,
-            onStarted: () => state.Started = true,
-            onLog: line =>
-            {
-                try
-                {
-                    if (line.StartsWith(ElevatedComProtocol.ResultPrefix, StringComparison.Ordinal))
-                        result = result is null ? ElevatedComProtocol.DecodeResult(line)
-                            : throw new InvalidDataException("Resposta COM duplicada.");
-                    else if (line.StartsWith(ElevatedComProtocol.ProgressPrefix, StringComparison.Ordinal))
-                        progress?.Invoke(ElevatedComProtocol.DecodeProgress(line));
-                    else log?.Invoke(line);
-                }
-                catch (Exception ex) { protocolError = ex; }
-            }).ConfigureAwait(false);
-        if (code == 0 && result is not null && protocolError is null)
-        {
-            result.WasElevated = true;
-            state.InstallerStarted = result.InstallerStarted;
-            return result;
-        }
-        // The elevated worker may have dispatched the installer; never start another backend.
-        return new WingetExecutionResult
-        {
-            Success = false, ExitCode = code == 0 ? -1 : code, WasElevated = true, InstallerStarted = state.Started,
-            FailureReason = code == 999 ? WingetFailureReason.ElevationCanceled : WingetFailureReason.InternalError,
-            Output = code == 999 ? "Elevação não concluída pelo WinProvision Elevator."
-                : "O worker COM não retornou um resultado válido; não haverá outra tentativa automática."
-        };
-    }
-
     private async Task<InstallerPreferences?> ResolveInstallerElevationAsync(string id, string source, CancellationToken token)
     {
         if (!source.Equals("winget", StringComparison.OrdinalIgnoreCase)) return null;

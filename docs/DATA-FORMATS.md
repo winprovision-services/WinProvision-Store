@@ -26,7 +26,7 @@ A CLI aceita `--yes`/`-y` para confirmar operações em automações; os comando
 
 O helper de elevação acompanha cada host em `Tool/gsudo`, com licença e inventário; a CLI portátil precisa preservar também essa pasta. O cache de autorização é temporário e não altera preferências persistidas nem o formato das coleções.
 
-Na 1.0.5, o executável do helper passa a `WinProvision Elevator.exe`. A pasta `cli` da distribuição também fornece o worker COM da interface e deve ser preservada. O campo opcional `installers[].elevationRequirement` aceita os requisitos WinGet `elevationRequired`, `elevatesSelf` e `elevationProhibited`; sua ausência mantém a leitura dos catálogos anteriores e a consulta de metadados COM quando disponível.
+Na 1.0.5, o executável do helper passa a `WinProvision Elevator.exe`. A pasta `cli` da distribuição deve ser preservada para a CLI autônoma. O campo opcional `installers[].elevationRequirement` aceita os requisitos WinGet `elevationRequired`, `elevatesSelf` e `elevationProhibited`; sua ausência mantém a leitura dos catálogos anteriores e a consulta de metadados COM quando disponível. Na 1.0.6, a COM delega a execução administrativa ao WinGet CLI elevado pelo helper; o worker privado da 1.0.5 é removido, sem alterar os comandos públicos ou dados salvos.
 
 ## Catálogo remoto
 

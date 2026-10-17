@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 1.0.6 - 16 de outubro de 2026
+
+- Corrigida a rota que elevava o cliente COM, mas deixava o Windows Installer pedir outro UAC pelo servidor externo do WinGet.
+- Para instaladores administrativos, a COM consulta o pacote e delega a execução ao WinGet CLI elevado pelo Elevator, preservando escopo e arquitetura e mostrando o método real no progresso e log.
+- Removido o worker COM privado da 1.0.5. O modo diagnóstico COM exclusivo informa a limitação em vez de executar silenciosamente outro backend.
+- O teste de instalação real verifica a delegação COM para CLI. Sucesso em um runner não comprova a ausência de prompts em uma sessão de usuário com UAC habilitado.
+
 ## 1.0.5 - 16 de outubro de 2026
 
 - WinProvision Elevator com nome de arquivo legível, ícone próprio, licença MIT e verificação de integridade na interface e CLI.

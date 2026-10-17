@@ -33,7 +33,7 @@ O Core integra o WinProvision Elevator, variante do gsudo distribuída em `Tool/
 
 ## Validação
 
-A COM que exige administração executa pelo worker privado `--internal-elevated-com-v1` da CLI, iniciado pelo Elevator. O protocolo é estruturado e compatível com Native AOT, preserva progresso, falha, reinicialização e estado do instalador. O host aguarda a conclusão e não inicia outro backend se perder a resposta após o despacho. O worker só aceita instalação/atualização de um ID exato na origem WinGet e exige um token já elevado.
+A COM consulta os metadados do instalador. Quando eles exigem administração, a execução é encaminhada ao WinGet CLI elevado pelo Elevator antes do despacho COM, com escopo e arquitetura preservados. Elevar apenas um cliente COM não garante a elevação do servidor externo e pode causar outro UAC do Windows Installer. O log e o progresso identificam a execução pela CLI. O modo diagnóstico COM exclusivo recusa essa operação em vez de mudar de backend; pacotes de usuário continuam pela COM quando aplicável.
 
 Os testes de regressão ficam em `tests/WinProvision.Core.Tests`. O smoke da interface fica em `tests/WinProvision.Store.Smoke` e é habilitado apenas em compilações de validação.
 

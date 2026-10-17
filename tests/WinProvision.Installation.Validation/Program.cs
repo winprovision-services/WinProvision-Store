@@ -43,14 +43,15 @@ internal static partial class Program
                 throw new InvalidOperationException($"Instalação real {method} falhou: {result.ExitCode} {result.Output}");
             var expectedMethod = method switch
             {
-                PackageInstallMethod.ComApi => WingetMethod.ComApi,
+                // COM resolves the manifest, but administrative execution must leave the COM server.
+                PackageInstallMethod.ComApi => WingetMethod.WingetExe,
                 PackageInstallMethod.WingetCli => WingetMethod.WingetExe,
                 _ => WingetMethod.OwnApi
             };
             if (actualMethod != expectedMethod) throw new InvalidOperationException($"O teste de {method} mudou para {actualMethod}.");
             if (method != PackageInstallMethod.WinProvisionApi && !result.WasElevated)
                 throw new InvalidOperationException($"O método {method} não confirmou elevação pelo helper.");
-            Console.WriteLine($"REAL INSTALL PASSED: {method}; exit={result.ExitCode}; binary={binary}");
+            Console.WriteLine($"REAL INSTALL PASSED: selected={method}; executed={actualMethod}; exit={result.ExitCode}; binary={binary}");
         }
         return 0;
     }

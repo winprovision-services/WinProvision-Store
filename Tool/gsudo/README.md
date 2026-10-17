@@ -15,7 +15,7 @@ O executável atual não tem assinatura Authenticode. O hash fixado no Core conf
 
 ## Uso no WinProvision
 
-O helper acompanha a interface e a CLI, cada uma com sua pasta `Tool/gsudo`. Não modifica o PATH nem instala um serviço permanente. Para instalações WinGet com elevação conhecida, a COM executa em um worker da CLI elevado pelo helper, preservando o backend escolhido, o resultado e o progresso. O modo CLI consulta os requisitos antes do despacho; instaladores da API própria, fallback WinGet e ODT também usam o helper. A interface permanece sem elevação. Pacotes de usuário e instaladores que proíbem elevação preservam seu contexto; operações da Microsoft Store continuam pelo serviço oficial.
+O helper acompanha a interface e a CLI, cada uma com sua pasta `Tool/gsudo`. Não modifica o PATH nem instala um serviço permanente. Para instalações WinGet com elevação conhecida, a COM resolve os metadados e encaminha a execução ao WinGet CLI elevado pelo helper, identificando o método real no log e progresso. O servidor COM externo não herda necessariamente a elevação do cliente; o worker da 1.0.5 não evitava o UAC secundário de MSI e foi removido. O modo CLI consulta os requisitos antes do despacho; instaladores da API própria, fallback WinGet e ODT também usam o helper. A interface permanece sem elevação. Pacotes de usuário e instaladores que proíbem elevação preservam seu contexto; operações da Microsoft Store continuam pelo serviço oficial.
 
 O arquivo distribuído usa o nome `WinProvision Elevator.exe`, com espaços, para preservar uma identificação legível inclusive quando o UAC apresenta o nome do arquivo sem assinatura. É uma renomeação dos mesmos bytes produzidos pelo fork; o SHA-256 permanece o do inventário.
 
