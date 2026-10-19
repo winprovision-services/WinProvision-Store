@@ -10,7 +10,10 @@ public sealed record ElevatedComRequest(string Operation, string PackageId, stri
 
 public static class ElevatedComProtocol
 {
-    public const string Command = "--internal-elevated-com-v2";
+    public const string Command = "--internal-elevated-com-v3";
+    public const string ProbeCommand = "--internal-elevated-com-probe-v3";
+    public const string LoadProbeCommand = "--internal-elevated-com-load-probe-v3";
+    public const string ReadyMarker = "WINPROVISION-COM-READY-V3";
     public const string ResultPrefix = "WINPROVISION-COM-RESULT-V1:";
     public const string ProgressPrefix = "WINPROVISION-COM-PROGRESS-V1:";
 

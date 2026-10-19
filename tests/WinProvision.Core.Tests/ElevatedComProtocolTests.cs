@@ -50,4 +50,23 @@ public class ElevatedComProtocolTests
         Assert.Equal(progress, ElevatedComProtocol.DecodeProgress(ElevatedComProtocol.EncodeProgress(progress)));
         Assert.Throws<FormatException>(() => ElevatedComProtocol.DecodeRequest("not base64"));
     }
+
+    [Fact]
+    public void WorkerInitializationFailureCanFallbackButDispatchedOrCanceledOperationCannot()
+    {
+        var startupFailure = new WingetExecutionResult
+        {
+            Success = false, InstallerStarted = false, FailureReason = WingetFailureReason.InternalError
+        };
+        Assert.True(WinGetService.CanFallbackFromElevatedWorker(startupFailure, false, default));
+        Assert.False(WinGetService.CanFallbackFromElevatedWorker(startupFailure, true, default));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.False(WinGetService.CanFallbackFromElevatedWorker(startupFailure, false, cancellation.Token));
+        startupFailure.InstallerStarted = true;
+        Assert.False(WinGetService.CanFallbackFromElevatedWorker(startupFailure, false, default));
+        startupFailure.InstallerStarted = false;
+        startupFailure.FailureReason = WingetFailureReason.ElevationCanceled;
+        Assert.False(WinGetService.CanFallbackFromElevatedWorker(startupFailure, false, default));
+    }
 }

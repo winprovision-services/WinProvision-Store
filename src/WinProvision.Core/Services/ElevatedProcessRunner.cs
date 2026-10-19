@@ -26,13 +26,13 @@ public static class ElevatedProcessRunner
                 onLog: line => { lock (captured) captured.AppendLine(line); }).ConfigureAwait(false);
             bool ok = useWingetExitCodes ? InstallerExitCodes.IsWingetSuccess(code) : code == 0;
             string details = captured.ToString();
-            if (code == 999) details = "Elevação não concluída pelo helper. " + details;
-            WingetCliAudit.Result($"{fileName} (gsudo)", code, ok, auditTimer, arguments);
+            // Recusa/credencial inválida do UAC chegam como Win32Exception (ver GsudoElevationService);
+            // aqui o código é sempre o do processo elevado, inclusive um eventual 999 do instalador.
+            WingetCliAudit.Result($"{fileName} (elevado)", code, ok, auditTimer, arguments);
             return new WingetExecutionResult
             {
                 Success = ok, ExitCode = code, Output = details, WasElevated = true, InstallerStarted = true,
-                FailureReason = code == 999 ? WingetFailureReason.ElevationCanceled
-                    : ok ? WingetFailureReason.Unknown : WingetErrorTranslator.Classify(code, details)
+                FailureReason = ok ? WingetFailureReason.Unknown : WingetErrorTranslator.Classify(code, details)
             };
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) // ERROR_CANCELLED — usuário clicou "Não" no UAC.
@@ -54,6 +54,7 @@ public static class ElevatedProcessRunner
         catch (Win32Exception ex)
         {
             CoreLog.Warning(ex, "StartElevatedProcess");
+            WingetCliAudit.Result($"{fileName} (elevado)", ex.NativeErrorCode, success: false, auditTimer, arguments);
             return new WingetExecutionResult
             {
                 ExitCode = ex.NativeErrorCode,

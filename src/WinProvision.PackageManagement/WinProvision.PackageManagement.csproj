@@ -11,6 +11,7 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="WinProvision.Core.Tests" />
     <!-- Native DLLs only; the legacy managed target/metadata is deliberately excluded. -->
     <PackageReference Include="Microsoft.WindowsPackageManager.InProcCom" Version="1.29.380" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all" NoWarn="NU1701" />
     <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />

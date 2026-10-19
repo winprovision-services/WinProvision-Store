@@ -1326,8 +1326,16 @@ public sealed partial class WinGetService
                 preferences.RequiresElevation, preferences.ElevationProhibited))
         {
             onLogReceived?.Invoke("A operação COM será executada no host local elevado pelo WinProvision Elevator.");
-            return await RunElevatedComWorkerAsync(opKind, packageId, installLocation, onLogReceived,
+            var elevatedResult = await RunElevatedComWorkerAsync(opKind, packageId, installLocation, onLogReceived,
                 onProgress, cancellationToken, attemptState).ConfigureAwait(false);
+            if (CanFallbackFromElevatedWorker(elevatedResult, forceComOnly, cancellationToken))
+            {
+                onLogReceived?.Invoke("O host COM elevado falhou antes de iniciar o instalador; usando a API própria da WinProvision Store.");
+                return await RunApiThenCliFallbackAsync(opKind, packageId, onLogReceived, onProgress,
+                    cancellationToken, installLocation, source, "host-COM-elevado-inicializacao",
+                    attemptState.Preferences).ConfigureAwait(false);
+            }
+            return elevatedResult;
         }
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
         attemptState.Started = true;

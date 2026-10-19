@@ -133,18 +133,26 @@ public sealed class ApplicationEngine : IAsyncDisposable
         { log("Catálogo próprio indisponível; tentando download pelo WinGet."); manifest = null; }
         if (manifest is not null && package.Source != "msstore" && WinProvisionApiService.PickInstaller(manifest) is { } installer)
         {
-            string folder = Path.GetFullPath(directory ?? WinProvision.Core.Services.Office.OfficeCliDownloadService.GetDownloadsFolder());
+            string folder = InstallerDownloadPolicy.ResolveDirectory(directory);
             Directory.CreateDirectory(folder);
             string extension = Path.GetExtension(new Uri(installer.Url).AbsolutePath);
             if (extension.Length > 12 || extension.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.')) extension = ".bin";
-            string file = Path.Combine(folder, $"{SafeFileName(package.Id)}-{SafeFileName(manifest.Version)}{extension}");
-            await _api.DownloadVerifiedInstallerAsync(installer, file, ct: token);
+            string original = Path.GetFileName(new Uri(installer.Url).AbsolutePath);
+            string name = InstallerDownloadPolicy.FileName(new OperationPreferencesService().Load().InstallerNames, package.Id, manifest.Version, installer.Architecture, original);
+            string staging = Path.Combine(folder, ".winprovision-" + Guid.NewGuid().ToString("N") + extension);
+            string file;
+            try
+            {
+                await _api.DownloadVerifiedInstallerAsync(installer, staging, ct: token);
+                token.ThrowIfCancellationRequested();
+                file = InstallerDownloadPolicy.Publish(staging, folder, name);
+            }
+            finally { if (File.Exists(staging)) File.Delete(staging); }
             log($"Arquivo verificado: {file}");
             return new() { Success = true, ExitCode = 0, Output = file };
         }
-        return await _cli.DownloadAsync(package, directory ?? WinProvision.Core.Services.Office.OfficeCliDownloadService.GetDownloadsFolder(), log, token);
+        return await _cli.DownloadAsync(package, InstallerDownloadPolicy.ResolveDirectory(directory), log, token);
     }
-    private static string SafeFileName(string value) => string.Concat(value.Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_'));
     public async Task<WingetExecutionResult> ExportAsync(string path, Action<string> log, CancellationToken token)
     {
         await EnsureAsync(token);
@@ -205,7 +213,7 @@ public sealed class ApplicationEngine : IAsyncDisposable
         if (app.PinnedVersion is { } version)
         {
             await EnsureAsync(token);
-            return await _executor.DownloadPackageAsync(app.Id, app.Source!, directory ?? WinProvision.Core.Services.Office.OfficeCliDownloadService.GetDownloadsFolder(), log, token, version);
+            return await _executor.DownloadPackageAsync(app.Id, app.Source!, InstallerDownloadPolicy.ResolveDirectory(directory), log, token, version);
         }
         return await DownloadAsync(new() { Id = app.Id, Name = app.Name ?? app.Id, Source = app.Source! }, directory, log, token);
     }
