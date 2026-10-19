@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace WinProvision.Core.Services.Office;
@@ -9,17 +8,43 @@ public static class OfficeOfflinePayload
     public const string IndexFileName = "payload-sha256.txt";
     private const int MaximumFiles = 20000;
 
-    public static string GetVersion(string root)
+    public static string GetVersion(string root) => GetVersionCore(root, null, Array.Empty<string>());
+
+    public static string GetVersion(string root, int architecture, IEnumerable<string> languages)
     {
-        CheckDirectory(Path.Combine(root, "Office", "Data"));
-        return Directory.EnumerateDirectories(Path.Combine(root, "Office", "Data"))
-            .Select(path => Version.TryParse(Path.GetFileName(path), out var version) && version.Revision >= 0 ? version : null)
-            .Where(version => version is not null).OrderDescending().FirstOrDefault()?.ToString()
-            ?? throw new InvalidDataException("A versão dos arquivos locais do Office não foi encontrada.");
+        if (architecture is not (32 or 64)) throw new ArgumentOutOfRangeException(nameof(architecture));
+        return GetVersionCore(root, architecture, languages.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
+
+    private static string GetVersionCore(string root, int? architecture, IReadOnlyList<string> languages)
+    {
+        root = Path.GetFullPath(root);
+        string data = Path.Combine(root, "Office", "Data");
+        CheckDirectory(data);
+        var candidates = Directory.EnumerateDirectories(data)
+            .Select(path => (Path: path, Version: Version.TryParse(Path.GetFileName(path), out var version) && version.Revision >= 0 ? version : null))
+            .Where(entry => entry.Version is not null).OrderByDescending(entry => entry.Version);
+        foreach (var candidate in candidates)
+        {
+            CheckDirectory(candidate.Path);
+            foreach (int bits in architecture is int selected ? new[] { selected } : new[] { 64, 32 })
+            {
+                string arch = bits == 64 ? "x64" : "x86";
+                if (IsNonemptyFile(Path.Combine(candidate.Path, $"stream.{arch}.x-none.dat"))
+                    && IsNonemptyFile(Path.Combine(data, $"v{bits}_{candidate.Version}.cab"))
+                    && languages.All(language => IsNonemptyFile(Path.Combine(candidate.Path, $"stream.{arch}.{language.ToLowerInvariant()}.dat"))))
+                    return candidate.Version!.ToString();
+            }
+        }
+        throw new InvalidDataException("Não há uma versão local completa do Office para a arquitetura e os idiomas solicitados.");
+    }
+
+    private static bool IsNonemptyFile(string path) => File.Exists(path)
+        && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0 && new FileInfo(path).Length > 0;
 
     public static IReadOnlyList<string> GetFiles(string root, CancellationToken token = default)
     {
+        root = Path.GetFullPath(root);
         string data = Path.Combine(root, "Office", "Data");
         CheckDirectory(root);
         CheckDirectory(Path.Combine(root, "Office"));
@@ -73,6 +98,7 @@ public static class OfficeOfflinePayload
 
     public static async Task VerifyAsync(string root, CancellationToken token)
     {
+        root = Path.GetFullPath(root);
         token.ThrowIfCancellationRequested();
         string index = Path.Combine(root, IndexFileName);
         if (new FileInfo(index).Length > 8 * 1024 * 1024 || (File.GetAttributes(index) & FileAttributes.ReparsePoint) != 0)
@@ -111,8 +137,5 @@ public static class OfficeOfflinePayload
     }
 
     private static async Task<string> HashAsync(string path, CancellationToken token)
-    {
-        await using var stream = File.OpenRead(path);
-        return Convert.ToHexString(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false));
-    }
+        => (await WinProvision.Viper.ViperFileIntegrity.ComputeSha256Async(path, token).ConfigureAwait(false)).ToUpperInvariant();
 }

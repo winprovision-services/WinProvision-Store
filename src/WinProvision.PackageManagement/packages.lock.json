@@ -71,8 +71,12 @@
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "System.Drawing.Common": "[10.0.12, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
+          "WinProvision.Viper": "[0.1.0, )",
           "WixToolset.Dtf.Compression.Cab": "[5.0.2, )"
         }
+      },
+      "winprovision.viper": {
+        "type": "Project"
       }
     }
   }

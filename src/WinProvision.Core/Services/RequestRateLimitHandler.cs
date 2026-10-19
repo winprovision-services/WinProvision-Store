@@ -2,14 +2,27 @@ using System.Net;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Spaces outgoing application requests and observes server backoff without retrying writes.</summary>
+/// <summary>Spaces application requests, configures dual-stack connections and observes server backoff without retrying writes.</summary>
 public sealed class RequestRateLimitHandler : DelegatingHandler
 {
     internal static readonly RequestRateLimitPolicy SharedPolicy = new(TimeSpan.FromMilliseconds(250), 64);
     private readonly RequestRateLimitPolicy _policy;
 
     public RequestRateLimitHandler(HttpMessageHandler transport) : this(transport, SharedPolicy) { }
-    internal RequestRateLimitHandler(HttpMessageHandler transport, RequestRateLimitPolicy policy) : base(transport) => _policy = policy;
+    internal RequestRateLimitHandler(HttpMessageHandler transport, RequestRateLimitPolicy policy) : base(ConfigureTransport(transport)) => _policy = policy;
+
+    private static HttpMessageHandler ConfigureTransport(HttpMessageHandler transport)
+    {
+        if (transport is SocketsHttpHandler sockets)
+        {
+            // Startup clients (catalogs, featured apps and images) must not wait for
+            // an unreachable IPv6 route before trying an available IPv4 address.
+            sockets.ConnectCallback ??= WinProvision.Viper.ViperHttpConnection.ConnectAsync;
+            if (sockets.ConnectTimeout == Timeout.InfiniteTimeSpan)
+                sockets.ConnectTimeout = TimeSpan.FromSeconds(15);
+        }
+        return transport;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {

@@ -61,6 +61,9 @@
         "type": "Transitive",
         "resolved": "5.0.2",
         "contentHash": "1GgYXKC7a9nS8wLfwdTRVhyRy/YmZ69MjBCTjjHSVGfwnN6ZxnnuJ+xCjZvQHB3A4h/qFe+RCIEzmHgg3KeCpQ=="
+      },
+      "winprovision.viper": {
+        "type": "Project"
       }
     },
     "net10.0/win-x64": {
@@ -150,6 +153,9 @@
         "type": "Transitive",
         "resolved": "5.0.2",
         "contentHash": "1GgYXKC7a9nS8wLfwdTRVhyRy/YmZ69MjBCTjjHSVGfwnN6ZxnnuJ+xCjZvQHB3A4h/qFe+RCIEzmHgg3KeCpQ=="
+      },
+      "winprovision.viper": {
+        "type": "Project"
       }
     },
     "net10.0-windows7.0/win-x64": {

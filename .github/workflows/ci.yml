@@ -30,6 +30,10 @@ jobs:
         run: dotnet restore WinProvision.Store.sln --locked-mode
       - name: Testes de regressão do Core
         run: dotnet test tests\WinProvision.Core.Tests\WinProvision.Core.Tests.csproj --configuration Release
+      - name: Testes HTTP do WinProvision Viper independente
+        run: dotnet test tests\WinProvision.Viper.Tests\WinProvision.Viper.Tests.csproj --configuration Release
+      - name: Compilar CLI independente do Viper
+        run: .\scripts\build-viper.ps1
       - name: Compilar aplicativo
         shell: pwsh
         run: .\scripts\build.ps1

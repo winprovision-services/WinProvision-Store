@@ -161,11 +161,6 @@
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "1.8.260708001"
         }
       },
-      "Microsoft.WindowsPackageManager.InProcCom": {
-        "type": "Transitive",
-        "resolved": "1.29.380",
-        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
-      },
       "System.Drawing.Common": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -204,6 +199,7 @@
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "System.Drawing.Common": "[10.0.12, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
+          "WinProvision.Viper": "[0.1.0, )",
           "WixToolset.Dtf.Compression.Cab": "[5.0.2, )"
         }
       },
@@ -212,9 +208,11 @@
         "dependencies": {
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "Microsoft.WindowsPackageManager.ComInterop": "[1.29.380, )",
-          "Microsoft.WindowsPackageManager.InProcCom": "[1.29.380, )",
           "WinProvision.Core": "[1.0.0, )"
         }
+      },
+      "winprovision.viper": {
+        "type": "Project"
       }
     },
     "net10.0-windows10.0.26100/win-arm64": {
@@ -237,11 +235,6 @@
           "Microsoft.WindowsAppSDK.Base": "1.8.251216001",
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "1.8.260708001"
         }
-      },
-      "Microsoft.WindowsPackageManager.InProcCom": {
-        "type": "Transitive",
-        "resolved": "1.29.380",
-        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
       }
     },
     "net10.0-windows10.0.26100/win-x64": {
@@ -264,11 +257,6 @@
           "Microsoft.WindowsAppSDK.Base": "1.8.251216001",
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "1.8.260708001"
         }
-      },
-      "Microsoft.WindowsPackageManager.InProcCom": {
-        "type": "Transitive",
-        "resolved": "1.29.380",
-        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
       }
     }
   }

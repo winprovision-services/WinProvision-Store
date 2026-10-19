@@ -41,6 +41,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../WinProvision.Viper/WinProvision.Viper.csproj" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.12" />

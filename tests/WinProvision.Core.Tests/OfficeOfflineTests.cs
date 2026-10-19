@@ -8,6 +8,8 @@ using WinProvision.Core.Services;
 using WinProvision.Core.Services.Office;
 using WinProvision.Core.Services.Profile;
 using Xunit;
+using WinProvision.Viper;
+using WinProvision.Viper.Tests;
 
 namespace WinProvision.Core.Tests;
 
@@ -28,6 +30,48 @@ public sealed class OfficeOfflineTests : IDisposable
     }
 
     [Fact]
+    public async Task LocalConfigurationPinsSourceVersionEvenWhenXmlIsWrittenElsewhere()
+    {
+        await FixtureOfficeSource.CreatePayloadAsync(_root, default);
+        var request = new OfficeInstallRequest(OfficePlanCatalog.ByProductId("O365HomePremRetail")!, 64, "pt-br", [], SourcePath: _root);
+        string configuration = await OfficeConfigXmlBuilder.WriteToFolderAsync(request, Path.Combine(_root, "config"));
+        var add = XDocument.Load(configuration).Root!.Element("Add")!;
+        Assert.Equal(_root, (string?)add.Attribute("SourcePath"));
+        Assert.Equal("16.0.1.2", (string?)add.Attribute("Version"));
+        Assert.Equal("FALSE", (string?)add.Attribute("AllowCdnFallback"));
+    }
+
+    [Fact]
+    public async Task LocalInventoryAcceptsEquivalentWindowsPathSeparators()
+    {
+        await FixtureOfficeSource.CreatePayloadAsync(_root, default);
+        await OfficeOfflinePayload.WriteIndexAsync(_root, default);
+        await OfficeOfflinePayload.VerifyAsync(_root.Replace('\\', '/'), default);
+    }
+
+    [Fact]
+    public async Task LocalSourceSelectionIgnoresNewerIncompleteVersion()
+    {
+        await FixtureOfficeSource.CreatePayloadAsync(_root, default);
+        string newer = Path.Combine(_root, "Office", "Data", "16.0.9.9");
+        Directory.CreateDirectory(newer);
+        await File.WriteAllTextAsync(Path.Combine(_root, "Office", "Data", "v64_16.0.9.9.cab"), "Version CAB without language");
+        await File.WriteAllTextAsync(Path.Combine(newer, "stream.x64.x-none.dat"), "main stream without language");
+        Assert.Equal("16.0.1.2", OfficeOfflinePayload.GetVersion(_root, 64, ["pt-br"]));
+        Assert.Throws<InvalidDataException>(() => OfficeOfflinePayload.GetVersion(_root, 64, ["en-us"]));
+    }
+
+    [Fact]
+    public void AutomaticMediaReuseDoesNotDowngradeInstalledOffice()
+    {
+        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", []));
+        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.2.0"]));
+        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.1.0"]));
+        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.3.0"]));
+        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", [null]));
+    }
+
+    [Fact]
     public void MixedOfficeModesCannotCreateAmbiguousZip() =>
         Assert.Throws<InvalidDataException>(() => OfflineOfficeModuleBuilder.BuildConfiguration([Request(false), Request(true)]));
 
@@ -44,6 +88,106 @@ public sealed class OfficeOfflineTests : IDisposable
     {
         var options = AotJson.Deserialize<OfficeInstallOptions>("{\"productId\":\"O365HomePremRetail\"}", WinProvisionJsonOptions.Profile)!;
         Assert.False(options.DownloadBeforeInstall);
+        Assert.False(options.UseViperDownload);
+    }
+
+    [Fact]
+    public void ViperChoiceRoundTripsIntoInstallRequest()
+    {
+        var options = AotJson.Deserialize<OfficeInstallOptions>(
+            "{\"productId\":\"O365HomePremRetail\",\"downloadBeforeInstall\":true,\"useViperDownload\":true}",
+            WinProvisionJsonOptions.Profile)!;
+        OfficeInstallRequest request = OfficeProfileConfiguration.Build(options);
+        Assert.True(request.DownloadBeforeInstall);
+        Assert.True(request.UseViperDownload);
+    }
+
+    [Fact]
+    public void OfficeFileListUrlsArePinnedToMicrosoftCdnAndUpgradedToHttps()
+    {
+        var baseUri = new Uri("http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60");
+        Uri result = OfficeDeploymentToolService.RequireOfficeCdnUri(
+            "http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60/office/data/16.0.1.2/stream.x64.x-none.dat", baseUri);
+        Assert.Equal("https", result.Scheme);
+        Assert.Equal("officecdn.microsoft.com", result.Host);
+        Assert.Throws<InvalidDataException>(() => OfficeDeploymentToolService.RequireOfficeCdnUri(
+            "https://evil.example/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60/stream.dat", baseUri));
+        Assert.Throws<InvalidDataException>(() => OfficeDeploymentToolService.RequireOfficeCdnUri(
+            "https://officecdn.microsoft.com/pr/other-guid/stream.dat", baseUri));
+    }
+
+    [Theory]
+    [InlineData("stream.x64.x-none.dat", true)]
+    [InlineData("v64_16.0.1.2.cab", true)]
+    [InlineData("../escape.dat", false)]
+    [InlineData("C:\\escape.dat", false)]
+    [InlineData("CON.txt", false)]
+    public void OfficeFileNamesRejectPathTraversalAndWindowsDevices(string name, bool expected) =>
+        Assert.Equal(expected, OfficeDeploymentToolService.IsSafeOfficeFileName(name));
+
+    [Fact]
+    public void OfficeFileListPathsUseC2rLocalPayloadLayout()
+    {
+        string result = OfficeDeploymentToolService.GetOfficePayloadRelativePath(
+            "/office/data/16.0.20430.20092/", "stream.x64.pt-br.dat");
+
+        Assert.Equal(Path.Combine("Office", "data", "16.0.20430.20092", "stream.x64.pt-br.dat"), result);
+        Assert.DoesNotContain(Path.Combine("Office", "office"), result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ViperFallbackPreservesCompletedMediaAndRemovesOnlyUnpublishedWork()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "Office", "Data"));
+        await File.WriteAllTextAsync(Path.Combine(_root, "Office", "Data", "partial.dat"), "partial");
+        await File.WriteAllTextAsync(Path.Combine(_root, "Office", "Data", "pending.dat.viper.part"), "unpublished");
+        await File.WriteAllTextAsync(Path.Combine(_root, "Office", "Data", "pending.dat.viper.json"), "checkpoint");
+        await File.WriteAllTextAsync(Path.Combine(_root, "setup.exe"), "setup");
+        await File.WriteAllTextAsync(Path.Combine(_root, "download-configuration.xml"), "config");
+
+        OfficeDeploymentToolService.ClearOfficePayloadForRetry(_root);
+
+        Assert.Equal("partial", await File.ReadAllTextAsync(Path.Combine(_root, "Office", "Data", "partial.dat")));
+        Assert.Single(Directory.GetFiles(Path.Combine(_root, "Office", "Data")));
+        Assert.Equal("setup", await File.ReadAllTextAsync(Path.Combine(_root, "setup.exe")));
+        Assert.Equal("config", await File.ReadAllTextAsync(Path.Combine(_root, "download-configuration.xml")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OfficeStreamReusesVerifiedFileAndRepairsCorruptFile(bool corrupt)
+    {
+        Directory.CreateDirectory(_root);
+        await using var server = new ViperTestServer();
+        string target = Path.Combine(_root, "stream.dat");
+        await File.WriteAllBytesAsync(target, corrupt ? [1, 2, 3] : server.Payload);
+        await using var viper = new ViperEngine(new() { AllowHttp = true, ConnectionsPerFile = 1 });
+        var request = new ViperRequest(server.Url, target)
+        {
+            Sha256 = Convert.ToHexString(SHA256.HashData(server.Payload)),
+            ExistingFilePolicy = ViperExistingFilePolicy.ReuseIfVerified
+        };
+
+        await OfficeDeploymentToolService.DownloadOfficeStreamAsync(viper, request, default);
+
+        Assert.Equal(server.Payload, await File.ReadAllBytesAsync(target));
+        Assert.Equal(corrupt, !server.Requests.IsEmpty);
+        Assert.Single(Directory.GetFiles(_root));
+    }
+
+    [Fact]
+    public async Task FailedOfficeStreamRepairPreservesExistingFile()
+    {
+        Directory.CreateDirectory(_root);
+        await using var server = new ViperTestServer();
+        string target = Path.Combine(_root, "stream.dat");
+        await File.WriteAllTextAsync(target, "previous");
+        await using var viper = new ViperEngine(new() { AllowHttp = true, ConnectionsPerFile = 1 });
+        await Assert.ThrowsAsync<ViperIntegrityException>(() => OfficeDeploymentToolService.DownloadOfficeStreamAsync(viper,
+            new(server.Url, target) { Sha256 = new string('0', 64), ExistingFilePolicy = ViperExistingFilePolicy.ReuseIfVerified }, default));
+        Assert.Equal("previous", await File.ReadAllTextAsync(target));
+        Assert.Single(Directory.GetFiles(_root));
     }
 
     [Theory]
@@ -166,7 +310,7 @@ public sealed class OfficeOfflineTests : IDisposable
     {
         var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"))
         { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Path.GetTempPath() };
-        foreach (string argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-VerifyOnly" }) start.ArgumentList.Add(argument);
+        foreach (string argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-VerifyOnly", "-LogPath", Path.Combine(Path.GetDirectoryName(script)!, "verification-test.log") }) start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
@@ -217,7 +361,9 @@ public sealed class OfficeOfflineTests : IDisposable
             string data = Path.Combine(root, "Office", "Data");
             Directory.CreateDirectory(Path.Combine(data, "16.0.1.2"));
             await File.WriteAllTextAsync(Path.Combine(data, "v64.cab"), "CAB fixture", token);
+            await File.WriteAllTextAsync(Path.Combine(data, "v64_16.0.1.2.cab"), "Version CAB fixture", token);
             await File.WriteAllTextAsync(Path.Combine(data, "16.0.1.2", "stream.x64.x-none.dat"), "DAT fixture", token);
+            await File.WriteAllTextAsync(Path.Combine(data, "16.0.1.2", "stream.x64.pt-br.dat"), "Language DAT fixture", token);
         }
     }
 }

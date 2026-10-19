@@ -11,6 +11,30 @@ public sealed class RequestRateLimitTests
     private static readonly Uri Endpoint = new("https://api.example.test/resource");
 
     [Fact]
+    public async Task StartupTransportConnectsToIpv4ServerThroughLocalhost()
+    {
+        await using var server = new WinProvision.Viper.Tests.ViperTestServer();
+        var transport = new SocketsHttpHandler { AllowAutoRedirect = false };
+        using var client = new HttpClient(new RequestRateLimitHandler(transport)) { Timeout = TimeSpan.FromSeconds(10) };
+        var endpoint = new UriBuilder(server.Url) { Host = "localhost" }.Uri;
+        Assert.NotNull(transport.ConnectCallback);
+        Assert.False(transport.AllowAutoRedirect);
+        Assert.Equal(TimeSpan.FromSeconds(15), transport.ConnectTimeout);
+        Assert.Equal(server.Payload, await client.GetByteArrayAsync(endpoint));
+    }
+
+    [Fact]
+    public void StartupTransportPreservesExplicitConnectionPolicy()
+    {
+        Func<SocketsHttpConnectionContext, CancellationToken, ValueTask<Stream>> callback =
+            (_, _) => throw new NotSupportedException();
+        var transport = new SocketsHttpHandler { ConnectCallback = callback, ConnectTimeout = TimeSpan.FromSeconds(3) };
+        using var handler = new RequestRateLimitHandler(transport);
+        Assert.Same(callback, transport.ConnectCallback);
+        Assert.Equal(TimeSpan.FromSeconds(3), transport.ConnectTimeout);
+    }
+
+    [Fact]
     public async Task ParallelStartsAreSpacedAndSharedAcrossClients()
     {
         var policy = new RequestRateLimitPolicy(TimeSpan.FromMilliseconds(25), 64);

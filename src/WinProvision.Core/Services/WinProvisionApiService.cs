@@ -24,6 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using WinProvision.Core.Models;
+using WinProvision.Viper;
 
 namespace WinProvision.Core.Services;
 
@@ -184,20 +185,18 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private const int MaxRequestAttempts = 4;
     private const long MaxInstallerBytes = 4L * 1024 * 1024 * 1024;
     private const long MaxInstallerCacheBytes = 2L * 1024 * 1024 * 1024;
+    private const int MaxCatalogJsonBytes = 64 * 1024 * 1024;
+    private const int MaxHttpRedirects = 5;
     private static readonly TimeSpan InstallerCacheRetention = TimeSpan.FromDays(30);
     private static readonly SemaphoreSlim InstallerCacheGate = new(1, 1);
-
-    private sealed class RetryableDownloadException(string message, HttpStatusCode statusCode, TimeSpan retryDelay)
-        : HttpRequestException(message, null, statusCode)
-    {
-        public TimeSpan RetryDelay { get; } = retryDelay;
-    }
 
     public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null)
     {
         _ownsHttpClient = http is null;
         _http = http ?? new HttpClient(new SocketsHttpHandler
         {
+            AllowAutoRedirect = false,
+            ConnectCallback = ViperHttpConnection.ConnectAsync,
             ConnectTimeout = TimeSpan.FromSeconds(25),
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             MaxConnectionsPerServer = 8
@@ -317,6 +316,12 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     /// <summary>Remove os índices, detalhes e instaladores em cache local, sem tocar nos catálogos remotos.</summary>
     public async Task ClearLocalCacheAsync(CancellationToken ct = default)
     {
+        await ClearCatalogCacheAsync(ct).ConfigureAwait(false);
+        await ClearInstallerCacheAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task ClearCatalogCacheAsync(CancellationToken ct = default)
+    {
         await _indexLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -339,6 +344,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             _indexLock.Release();
         }
 
+    }
+
+    public async Task ClearInstallerCacheAsync(CancellationToken ct = default)
+    {
         await InstallerCacheGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -629,7 +638,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                     continue;
                 }
                 response.EnsureSuccessStatusCode();
-                byte[] payload = await response.Content.ReadAsByteArrayAsync(operationTimeout.Token).ConfigureAwait(false);
+                byte[] payload = await ReadBoundedPayloadAsync(response.Content, MaxCatalogJsonBytes, operationTimeout.Token).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(expectedSha256))
                 {
                     byte[] expected = Convert.FromHexString(expectedSha256);
@@ -657,11 +666,68 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     private async Task<HttpResponseMessage> SendAsync(string url, CancellationToken ct, bool metadata = false)
     {
-        Uri uri = new(url);
-        if (metadata) await MetadataRateLimit.WaitAsync(uri, ct).ConfigureAwait(false);
-        var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        if (metadata) MetadataRateLimit.Observe(uri, response);
-        return response;
+        Uri origin = new(url);
+        if (origin.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(origin.UserInfo))
+            throw new InvalidDataException("A origem HTTP precisa usar HTTPS e não pode conter credenciais na URL.");
+        if (metadata) await MetadataRateLimit.WaitAsync(origin, ct).ConfigureAwait(false);
+        Uri current = origin;
+        for (int redirect = 0; ; redirect++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, current);
+            HttpResponseMessage response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            if (IsRedirect(response.StatusCode))
+            {
+                Uri? location = response.Headers.Location is { } value
+                    ? value.IsAbsoluteUri ? value : new Uri(current, value)
+                    : null;
+                response.Dispose();
+                if (redirect >= MaxHttpRedirects || location is null || location.Scheme != Uri.UriSchemeHttps
+                    || !string.IsNullOrEmpty(location.UserInfo) || metadata && !SameOrigin(origin, location))
+                    throw new InvalidDataException("O redirecionamento HTTP é inválido, inseguro ou excedeu o limite permitido.");
+                current = location;
+                continue;
+            }
+
+            Uri finalUri = response.RequestMessage?.RequestUri ?? current;
+            if (finalUri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(finalUri.UserInfo)
+                || metadata && !SameOrigin(origin, finalUri))
+            {
+                response.Dispose();
+                throw new InvalidDataException("A resposta HTTP terminou em uma origem não permitida.");
+            }
+            if (metadata) MetadataRateLimit.Observe(origin, response);
+            return response;
+        }
+    }
+
+    private static bool IsRedirect(HttpStatusCode status) =>
+        status is HttpStatusCode.MovedPermanently or HttpStatusCode.Redirect or HttpStatusCode.RedirectMethod
+            or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+
+    private static bool SameOrigin(Uri left, Uri right) =>
+        left.Scheme.Equals(right.Scheme, StringComparison.OrdinalIgnoreCase)
+        && left.IdnHost.Equals(right.IdnHost, StringComparison.OrdinalIgnoreCase)
+        && left.Port == right.Port;
+
+    internal static async Task<byte[]> ReadBoundedPayloadAsync(HttpContent content, int maximumBytes, CancellationToken token)
+    {
+        long? contentLength = content.Headers.ContentLength;
+        if (contentLength is { } declaredLength && declaredLength > maximumBytes)
+            throw new InvalidDataException($"A resposta JSON excede o limite de {maximumBytes} bytes.");
+        int initialCapacity = contentLength is { } capacity && capacity >= 0 && capacity <= int.MaxValue
+            ? (int)capacity : 0;
+        await using Stream input = await content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        using var payload = new MemoryStream(initialCapacity);
+        byte[] buffer = new byte[64 * 1024];
+        while (true)
+        {
+            int count = await input.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false);
+            if (count == 0) break;
+            if (payload.Length > maximumBytes - count)
+                throw new InvalidDataException($"A resposta JSON excede o limite de {maximumBytes} bytes.");
+            await payload.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
+        }
+        return payload.ToArray();
     }
     private static bool IsTransientStatus(HttpStatusCode status) =>
         status is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
@@ -879,13 +945,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             else
             {
                 onLog?.Report($"[WinProvisionAPI] Baixando {installer.Url}...");
-                await DownloadFileWithRetryAsync(installer.Url, tempFile, onLog, onProgress, ct);
+                await DownloadFileWithViperAsync(installer.Url, installer.Sha256, tempFile, onLog, onProgress, ct);
 
                 onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.OwnApi));
-                onLog?.Report("[WinProvisionAPI] Verificando SHA-256...");
-                if (!await VerifySha256Async(tempFile, installer.Sha256, ct))
-                    return new WinProvisionInstallResult(WinProvisionInstallOutcome.HashMismatch,
-                        Message: "Hash do instalador baixado não confere com o manifest.");
+                onLog?.Report("[WinProvisionAPI] SHA-256 validado pelo Viper antes da publicação.");
 
                 await SaveVerifiedInstallerCacheAsync(tempFile, installer.Sha256, extension, onLog, ct)
                     .ConfigureAwait(false);
@@ -958,6 +1021,11 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 ? new WinProvisionInstallResult(WinProvisionInstallOutcome.Success, exitCode)
                 : new WinProvisionInstallResult(WinProvisionInstallOutcome.InstallProcessFailed, exitCode,
                     $"{InstallerExitCodes.Describe(exitCode)} Código {exitCode}.", InstallerStarted: installerStarted);
+        }
+        catch (ViperIntegrityException ex)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.HashMismatch, Message: ex.Message,
+                InstallerStarted: installerStarted);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -1328,8 +1396,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous);
                 await input.CopyToAsync(output, ct).ConfigureAwait(false);
             }
-            else await DownloadFileWithRetryAsync(installer.Url, destination, null, onProgress, ct).ConfigureAwait(false);
-            if (!await VerifySha256Async(destination, installer.Sha256!, ct).ConfigureAwait(false))
+            else await DownloadFileWithViperAsync(uri.AbsoluteUri, installer.Sha256!, destination, null, null, ct).ConfigureAwait(false);
+            // Viper hashes and compares the complete file before publishing it. Avoid a second
+            // full-file read on a fresh download; cache hits still need local verification.
+            if (cached is not null && !await VerifySha256Async(destination, installer.Sha256!, ct).ConfigureAwait(false))
                 throw new InvalidDataException("O SHA-256 do instalador difere do manifesto.");
             if (cached is null)
                 await SaveVerifiedInstallerCacheAsync(destination, installer.Sha256!, extension, null, ct).ConfigureAwait(false);
@@ -1341,112 +1411,55 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
     }
 
-    private async Task DownloadFileAsync(
+    private async Task DownloadFileWithViperAsync(
         string url,
-        string destination,
-        Action<InstallProgressUpdate>? onProgress,
-        CancellationToken ct)
-    {
-        using var response = await SendAsync(url, ct).ConfigureAwait(false);
-        if (response.RequestMessage?.RequestUri is not { Scheme: "https" } finalUri || !string.IsNullOrEmpty(finalUri.UserInfo))
-            throw new InvalidDataException("O download foi redirecionado para uma URL insegura.");
-        if (!response.IsSuccessStatusCode)
-        {
-            string message = $"O servidor recusou o download (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).";
-            if (IsTransientStatus(response.StatusCode))
-                throw new RetryableDownloadException(message, response.StatusCode, GetRetryDelay(response, 1));
-            throw new HttpRequestException(message, null, response.StatusCode);
-        }
-
-        long? expectedLength = response.Content.Headers.ContentLength;
-        if (expectedLength is <= 0 || expectedLength > MaxInstallerBytes)
-            throw new InvalidDataException($"Tamanho de download inválido ou acima do limite ({expectedLength} bytes).");
-
-        await using var input = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await AtomicFile.WriteAsync(destination, async (output, token) =>
-        {
-            bool canReportPercentage = expectedLength is > 0
-                && !response.Content.Headers.ContentEncoding.Any();
-            long bytesRead = 0;
-            double lastPercent = -1;
-            var buffer = new byte[128 * 1024];
-
-            onProgress?.Invoke(new InstallProgressUpdate(
-                InstallProgressPhase.Downloading,
-                canReportPercentage ? 0 : null,
-                WingetMethod.OwnApi));
-
-            while (true)
-            {
-                int count = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
-                if (count == 0) break;
-
-                bytesRead += count;
-                if (bytesRead > MaxInstallerBytes)
-                    throw new InvalidDataException($"O download excedeu o limite de {MaxInstallerBytes} bytes.");
-
-                await output.WriteAsync(buffer.AsMemory(0, count), ct).ConfigureAwait(false);
-
-                if (canReportPercentage && expectedLength is > 0)
-                {
-                    double percent = Math.Clamp(
-                        Math.Floor(bytesRead * 10_000d / expectedLength.Value) / 100d, 0, 99.99);
-                    if (percent != lastPercent)
-                    {
-                        lastPercent = percent;
-                        onProgress?.Invoke(new InstallProgressUpdate(
-                            InstallProgressPhase.Downloading, percent, WingetMethod.OwnApi));
-                    }
-                }
-            }
-
-            await output.FlushAsync(ct).ConfigureAwait(false);
-
-            if (output.Length == 0 || output.Length > MaxInstallerBytes)
-                throw new InvalidDataException($"O download terminou com tamanho inválido ({output.Length} bytes).");
-            onProgress?.Invoke(new InstallProgressUpdate(
-                InstallProgressPhase.Downloading, 100, WingetMethod.OwnApi));
-        }, ct).ConfigureAwait(false);
-        // O Content-Length pode descrever a representação comprimida/intermediária do CDN.
-        // A integridade real do arquivo é confirmada pelo SHA-256 do manifesto.
-    }
-
-    private async Task DownloadFileWithRetryAsync(
-        string url,
+        string sha256,
         string destination,
         IProgress<string>? onLog,
         Action<InstallProgressUpdate>? onProgress,
         CancellationToken ct)
     {
-        // Um único prazo cobre todas as tentativas e os intervalos entre elas.
-        // Assim, três falhas não multiplicam o limite de 12 minutos por tentativa.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(uri.UserInfo) || !IsValidSha256(sha256))
+            throw new InvalidDataException("O instalador não possui URL HTTPS e SHA-256 válidos.");
+        using var downloadSlot = await OperationLimits.Downloads.EnterAsync(ct).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(DownloadTimeout);
-
-        for (int attempt = 1; ; attempt++)
+        int parallel = new OperationPreferencesService().Load().ParallelDownloads;
+        int connections = ConnectionsPerDownload(parallel);
+        await using var viper = new ViperEngine(new ViperOptions
         {
-            try
+            MaxConcurrentDownloads = 1,
+            ConnectionsPerFile = connections,
+            MaxConnectionsPerHost = connections,
+            MaxConnections = connections,
+            MaxFileSize = MaxInstallerBytes,
+            Resume = false
+        });
+        onLog?.Report($"Download Viper: até {connections} conexões para este arquivo.");
+        var progress = new CallbackProgress<ViperProgress>(value =>
+        {
+            if (value.Phase == ViperPhase.Completed)
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Downloading, 100, WingetMethod.OwnApi));
+            else if (value.Phase is ViperPhase.Downloading or ViperPhase.Verifying)
             {
-                await DownloadFileAsync(url, destination, onProgress, timeout.Token);
-                return;
+                double? percent = value.TotalBytes is > 0
+                    ? Math.Clamp(value.DownloadedBytes * 100d / value.TotalBytes.Value, 0, 99.99)
+                    : null;
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Downloading, percent, WingetMethod.OwnApi));
             }
-            catch (Exception ex) when (attempt < 4
-                && (ex is IOException
-                    || ex is RetryableDownloadException
-                    || ex is HttpRequestException { StatusCode: null }
-                    || ex is OperationCanceledException && !ct.IsCancellationRequested)
-                && !ct.IsCancellationRequested
-                && !timeout.IsCancellationRequested)
-            {
-                TryDeleteFile(destination);
-                onLog?.Report($"Falha temporária no download; nova tentativa {attempt + 1} de 4...");
-                TimeSpan delay = ex is RetryableDownloadException retryable
-                    ? retryable.RetryDelay
-                    : TimeSpan.FromMilliseconds(700 * Math.Pow(2, attempt - 1));
-                await Task.Delay(delay, timeout.Token);
-            }
-        }
+        });
+        await viper.DownloadAsync(new ViperRequest(uri, Path.GetFullPath(destination)) { Sha256 = sha256 }, progress, timeout.Token)
+            .ConfigureAwait(false);
     }
+
+    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
+
+    internal static int ConnectionsPerDownload(int parallelDownloads) =>
+        Math.Clamp(24 / Math.Clamp(parallelDownloads, 1, 8), 1, 16);
 
     private static string GetInstallerCacheDirectory() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
