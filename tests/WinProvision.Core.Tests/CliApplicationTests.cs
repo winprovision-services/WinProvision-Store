@@ -51,6 +51,7 @@ public class CliApplicationTests
         Assert.DoesNotContain("Diagnóstico do WinGet", fixture.Error.ToString());
         Assert.DoesNotContain("COM HRESULT", fixture.Error.ToString());
         Assert.Contains("não foi possível concluir", fixture.Error.ToString());
+        Assert.Contains("A operação retornou o código 1.", fixture.Error.ToString());
     }
 
     [Fact]
@@ -156,14 +157,15 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task DownloadNeverInstallsAndRemovalRequiresConfirmation()
+    public async Task DownloadNeverInstallsAndRemovalRunsDirectly()
     {
         var fixture = new Fixture("");
         Assert.Equal(0, await fixture.App.RunAsync(["download", "--id", "Google.Chrome"], default));
         Assert.Single(fixture.Backend.Downloaded);
         Assert.Empty(fixture.Backend.Executed);
         Assert.Equal(0, await fixture.App.RunAsync(["uninstall", "--id", "Google.Chrome"], default));
-        Assert.Empty(fixture.Backend.Removed);
+        Assert.Equal("Google.Chrome", Assert.Single(fixture.Backend.Removed));
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
         var confirmed = new Fixture("1\n");
         Assert.Equal(0, await confirmed.App.RunAsync(["--uninstall", "-d", "Google.Chrome"], default));
         Assert.Equal("Google.Chrome", Assert.Single(confirmed.Backend.Removed));
@@ -215,31 +217,31 @@ public class CliApplicationTests
     [Theory]
     [InlineData("install", "--id", "Google.Chrome")]
     [InlineData("upgrade", "--id", "Google.Chrome")]
-    [InlineData("upgrade", "--all", "--no-input")]
-    public async Task YesExecutesWithoutReadingAnyInput(string command, string option, string value)
+    [InlineData("upgrade", "--id", "Valve.Steam")]
+    public async Task OperationsExecuteWithoutConfirmationFlags(string command, string option, string value)
     {
         var fixture = new Fixture("");
-        Assert.Equal(0, await fixture.App.RunAsync([command, option, value, "-y"], default));
+        Assert.Equal(0, await fixture.App.RunAsync([command, option, value], default));
         Assert.NotEmpty(fixture.Backend.Executed);
         Assert.DoesNotContain("[0]", fixture.Output.ToString());
         Assert.DoesNotContain("Opção:", fixture.Output.ToString());
     }
 
     [Fact]
-    public async Task YesSupportsUninstallOfficeAndImportWithoutMenus()
+    public async Task UninstallOfficeAndImportRunWithoutMenus()
     {
         var fixture = new Fixture("");
-        Assert.Equal(0, await fixture.App.RunAsync(["uninstall", "--id", "Google.Chrome", "--yes"], default));
+        Assert.Equal(0, await fixture.App.RunAsync(["uninstall", "--id", "Google.Chrome"], default));
         Assert.Single(fixture.Backend.Removed);
-        Assert.Equal(0, await fixture.App.RunAsync(["install", "--office", "--yes"], default));
+        Assert.Equal(0, await fixture.App.RunAsync(["install", "--office"], default));
         Assert.Equal(1, fixture.Backend.OfficeInstallations);
         string path = Path.GetTempFileName();
         try
         {
             await File.WriteAllTextAsync(path, "[{\"id\":\"Google.Chrome\"}]");
-            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--yes", "--no-input"], default));
+            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--no-input"], default));
             Assert.Single(fixture.Backend.Executed);
-            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--download", "--yes"], default));
+            Assert.Equal(0, await fixture.App.RunAsync(["import", path, "--download"], default));
             Assert.Single(fixture.Backend.Downloaded);
         }
         finally { File.Delete(path); }
@@ -248,16 +250,30 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task RedirectedInstallRunsButRemovalStillNeedsExplicitConsent()
+    public async Task RedirectedInstallAndRemovalRunWithoutReadingInput()
     {
         var fixture = new Fixture("");
-        var app = new CliApplication(fixture.Backend, TextReader.Null, fixture.Output, fixture.Error, "test", inputRedirected: true);
-        Assert.Equal(0, await app.RunAsync(["install", "--id", "Google.Chrome"], default));
+        var app = new CliApplication(fixture.Backend, new RejectInputReader(), fixture.Output, fixture.Error, "test", inputRedirected: true);
+        Assert.Equal(0, await app.RunAsync(["install", "--id", "Google.Chrome", "--no-input"], default));
         Assert.Single(fixture.Backend.Executed);
-        await Assert.ThrowsAsync<ArgumentException>(() => app.RunAsync(["uninstall", "--id", "Google.Chrome"], default));
+        Assert.Equal(0, await app.RunAsync(["uninstall", "--id", "Google.Chrome"], default));
+        Assert.Equal(0, await app.RunAsync(["uninstall", "--id", "Google.Chrome", "--no-input"], default));
+        Assert.Equal(2, fixture.Backend.Removed.Count);
+        Assert.DoesNotContain("Opção:", fixture.Output.ToString());
+    }
+
+    private sealed class RejectInputReader : TextReader
+    {
+        public override ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
+            => throw new InvalidOperationException("A CLI não deve ler entrada.");
+    }
+
+    [Fact]
+    public async Task CancelledRemovalNeverReachesBackend()
+    {
+        var fixture = new Fixture("");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.App.RunAsync(["uninstall", "--id", "Google.Chrome"], new(true)));
         Assert.Empty(fixture.Backend.Removed);
-        Assert.Equal(0, await app.RunAsync(["uninstall", "--id", "Google.Chrome", "--yes"], default));
-        Assert.Single(fixture.Backend.Removed);
     }
 
     [Fact]
@@ -265,7 +281,7 @@ public class CliApplicationTests
     {
         var fixture = new Fixture("");
         fixture.Backend.FailId = "Google.Chrome";
-        Assert.Equal(1, await fixture.App.RunAsync(["upgrade", "--all", "--yes"], default));
+        Assert.Equal(1, await fixture.App.RunAsync(["upgrade", "--all"], default));
         Assert.Equal(2, fixture.Backend.Executed.Count);
     }
 

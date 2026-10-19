@@ -1,4 +1,3 @@
-using Spectre.Console;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -10,7 +9,7 @@ internal static partial class Program
     [MTAThread]
     private static int Main(string[] args)
     {
-        if (args is ["--background-update"]) FreeConsole();
+        if (args is ["--background-update"] or ["--background-update-now"]) FreeConsole();
         else Console.OutputEncoding = Encoding.UTF8;
         using var cancellation = new CancellationTokenSource();
         ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
@@ -24,11 +23,11 @@ internal static partial class Program
             WinRT.ComWrappersSupport.InitializeComWrappers();
             return RunAsync(args, cancellation.Token).GetAwaiter().GetResult();
         }
-        catch (OperationCanceledException) { Console.Error.WriteLine("Operação cancelada."); return 130; }
+        catch (OperationCanceledException) { CliConsole.Standard().Cancelled(); return 130; }
         catch (Exception exception)
         {
             CliDiagnostics.Write(exception.ToString());
-            Console.Error.WriteLine(exception is ArgumentException ? "Erro: " + CliApplication.Clean(exception.Message) : "Não foi possível concluir. Consulte o diagnóstico com winprovision logs.");
+            CliConsole.Standard().Result(exception is ArgumentException ? "Erro: " + CliApplication.Clean(exception.Message) : CliFailure.Message(CliFailure.Describe(exception)), false);
             return exception is ArgumentException ? 2 : 1;
         }
         finally
@@ -40,22 +39,27 @@ internal static partial class Program
 
     private static async Task<int> RunAsync(string[] args, CancellationToken token)
     {
+        if (args is [var command] && command == WinProvision.PackageManagement.ElevatedComProtocol.ProbeCommand)
+        {
+            Console.Out.WriteLine(WinProvision.PackageManagement.ElevatedComProtocol.ReadyMarker);
+            return 0;
+        }
+        if (args is [var loadCommand] && loadCommand == WinProvision.PackageManagement.ElevatedComProtocol.LoadProbeCommand)
+        {
+            WinProvision.PackageManagement.InProcessWinGetFactory.Enable();
+            Console.Out.WriteLine(WinProvision.PackageManagement.ElevatedComProtocol.ReadyMarker);
+            return 0;
+        }
         if (args.Length > 0 && args[0] == WinProvision.PackageManagement.ElevatedComProtocol.Command)
             return await RunElevatedComAsync(args, token);
-        if (args is ["--background-update"])
+        if (args is ["--background-update"] or ["--background-update-now"])
         {
             WinProvision.Core.Services.AotJson.Register(BackgroundJsonContext.Default);
-            return await BackgroundUpdateApplication.RunScheduledAsync(token);
+            return await BackgroundUpdateApplication.RunScheduledAsync(token, force: args[0] == "--background-update-now");
         }
         string version = typeof(CliApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.1.0";
         await using var backend = new ResilientCliBackend(CliDiagnostics.Write);
-        var terminal = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Out = new AnsiConsoleOutput(Console.Out),
-            Ansi = Console.IsOutputRedirected ? AnsiSupport.No : AnsiSupport.Detect,
-            Interactive = Console.IsOutputRedirected || Console.IsInputRedirected ? InteractionSupport.No : InteractionSupport.Detect
-        });
-        var presentation = new CliConsole(Console.Out, Console.Error, terminal);
+        var presentation = CliConsole.Standard();
         try { return await new CliApplication(backend, Console.In, Console.Out, Console.Error, version, Console.IsInputRedirected, presentation).RunAsync(args, token); }
         finally
         {
@@ -73,6 +77,8 @@ internal static partial class Program
         var request = WinProvision.PackageManagement.ElevatedComProtocol.DecodeRequest(args[1]);
         WinProvision.PackageManagement.InProcessWinGetFactory.Enable();
         WinProvision.PackageManagement.WinGetFactoryHelper.ConfigureMode(["/winget-mode=com"]);
+        Console.Out.WriteLine(WinProvision.PackageManagement.ElevatedComProtocol.ReadyMarker);
+        Console.Out.Flush();
         await using var api = new WinProvision.Core.Services.WinProvisionApiService();
         var service = new WinProvision.PackageManagement.WinGetService(new(), api, new());
         void Log(string line) => Console.Error.WriteLine(CliApplication.Clean(line));

@@ -28,59 +28,74 @@ public interface ICliPackageBackend
         => throw new NotSupportedException();
 }
 
-public sealed partial class CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version, bool inputRedirected = false, CliConsole? presentation = null)
+public sealed partial class CliApplication
 {
-    private readonly CliConsole _console = presentation ?? new(output, error);
-    private readonly TextWriter _output = TextWriter.Synchronized(output);
-    private readonly TextWriter _error = TextWriter.Synchronized(error);
+    private readonly ICliPackageBackend backend;
+    private readonly string version;
+    private readonly CliConsole _console;
+    private readonly TextWriter _output;
+
+    // Input parameters remain available to callers compiled against the original console adapter.
+    public CliApplication(ICliPackageBackend backend, TextReader input, TextWriter output, TextWriter error, string version, bool inputRedirected = false, CliConsole? presentation = null)
+    {
+        this.backend = backend;
+        this.version = version;
+        _console = presentation ?? new(output, error);
+        _output = TextWriter.Synchronized(output);
+    }
 
     public async Task<int> RunAsync(string[] args, CancellationToken token)
     {
         var request = InteractiveCliInput.ParseRequest(args);
         token.ThrowIfCancellationRequested();
-        if (request.Command == "logs") { Write(CliDiagnostics.DirectoryPath); return 0; }
-        if (request.Command == "help") { _output.WriteLine(Help(request.Query)); return 0; }
-        if (request.Command == "version") { _output.WriteLine($"WinProvision Store {version}"); return 0; }
-        if (inputRedirected && !request.Yes && request.Command == "uninstall")
-            throw new ArgumentException("Entrada redirecionada: use uninstall --id ID --yes para confirmar a desinstalação.");
+        if (request.Command == "logs") { _console.Section("Diagnósticos", CliDiagnostics.DirectoryPath); return 0; }
+        if (request.Command == "help") { _console.Help(Help(request.Query)); return 0; }
+        if (request.Command == "version") { _console.Section("Versão", $"WinProvision Store {version}"); return 0; }
         if (request.Command == "office")
         {
-            Write("Microsoft 365 Família — 64 bits, pt-br, canal Current; Access e Publisher excluídos.");
+            _console.Section("Office", "Microsoft 365 Família — 64 bits, pt-br, canal Current; Access e Publisher excluídos.");
             if (request.InstallOffice)
             {
-                if (!await ConfirmAsync(request, "Instalar o Office com o XML padrão?", token)) return 0;
                 return Report(await _console.RunAsync("Instalando Office", () => backend.InstallOfficeAsync(Log, token), token), "Office instalado");
             }
-            Write(request.Offline ? "Baixando a mídia completa para uso offline..." : "Baixando setup e XML para instalação online...");
+            _console.Note(request.Offline ? "Baixando a mídia completa para uso offline..." : "Baixando setup e XML para instalação online...");
             string folder = await _console.RunAsync("Baixando Office", () => backend.OfficeAsync(request.Offline, Log, token), token);
-            Write($"Arquivos salvos: {folder}\nPara instalar depois, execute Install-Office.ps1 nessa pasta.");
+            _console.Result("Office — download concluído", true);
+            _console.Section("Arquivos do Office", $"Destino: {folder}\nPara instalar depois, execute Install-Office.ps1 nessa pasta.");
             return 0;
         }
         if (request.Command == "import") return await ImportAsync(request, token);
         if (request.Command == "export") return await ExportAsync(request, token);
         if (request.Command == "uninstall")
         {
-            if (!await ConfirmAsync(request, $"Desinstalar {request.Id}?", token)) return 0;
             return Report(await _console.RunAsync($"Desinstalando {request.Id}", () => backend.UninstallAsync(request.Id!, request.Source, Log, token), token), "Aplicativo desinstalado");
         }
         if (request.Command == "show")
         {
-            Write(await backend.DetailsAsync(request.Id!, request.Source ?? "winget", token));
+            _console.Details(await _console.QueryAsync("Consultando detalhes...",
+                () => backend.DetailsAsync(request.Id!, request.Source ?? "winget", token), token));
             return 0;
         }
         // Status stays outside structured stdout; technical diagnostics go to the file sink.
-        _error.WriteLine(request.Command switch
+        string status = request.Command switch
         {
             "list" => "Consultando aplicativos instalados...",
             "update" => "Consultando atualizações...",
             _ => $"Pesquisando: {Clean(request.Id ?? request.Query)}"
-        });
-        var packages = request.Command switch
-        {
-            "list" => await backend.ListAsync(request.Source, token),
-            "update" => await backend.UpdatesAsync(Log, token),
-            _ => await backend.SearchAsync(request, token)
         };
+        Task<List<UpgradablePackage>> Query() => request.Command switch
+        {
+            "list" => backend.ListAsync(request.Source, token),
+            "update" => backend.UpdatesAsync(Log, token),
+            _ => backend.SearchAsync(request, token)
+        };
+        List<UpgradablePackage> packages;
+        if (request.Json)
+        {
+            _console.Status(status);
+            packages = await Query();
+        }
+        else packages = await _console.QueryAsync(status, Query, token);
         packages = Filter(packages, request);
         if (request.Json)
         {
@@ -91,18 +106,22 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         }
         if (packages.Count == 0)
         {
-            Write(request.Command == "update" ? "Nenhuma atualização encontrada." : "Nenhum resultado encontrado.");
-            return request.Command is "install" or "download" ? 1 : 0;
+            if (request.Command is "install" or "download")
+            {
+                _console.Result(CliFailure.Message("O pacote não foi encontrado.", request.Id), false);
+                return 1;
+            }
+            _console.Packages(packages, request.Command);
+            return 0;
         }
         if (request.Command == "download")
         {
             if (packages.Count != 1) throw new InvalidOperationException("O ID não resolveu um único pacote.");
             return Report(await _console.RunAsync($"Baixando {packages[0].Name}", () => backend.DownloadAsync(packages[0], request.Output, Log, token), token), "Download concluído");
         }
-        if (request.Command is "list" or "search" || (request.NoInput && !request.Yes))
+        if (request.Command is "list" or "search" || request.Command == "update" && request.NoInput)
         {
-            foreach (var package in packages) Write(Describe(package, request.Command));
-            Write($"\nTotal: {packages.Count}");
+            _console.Packages(packages, request.Command);
             return 0;
         }
         if (request.Command == "install" && packages.Count != 1) throw new InvalidOperationException("O ID não resolveu um único pacote.");
@@ -112,8 +131,8 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
             || package.Source is not ("winget" or "msstore")))
             throw new InvalidOperationException("Pacote com ID truncado ou fonte não reconhecida; nenhuma operação foi iniciada.");
         bool install = request.Command is "search" or "install";
-        Write($"\n{chosen.Count} pacote(s) para {(install ? "instalar" : "atualizar")}:");
-        if (!await ConfirmAsync(request, install ? "Instalar os pacotes?" : "Atualizar os pacotes?", token)) return 0;
+        _console.Heading(install ? "Instalação" : "Atualização");
+        _console.Note($"{chosen.Count} pacote(s) para {(install ? "instalar" : "atualizar")}:");
         int succeeded = 0, failed = 0, reboot = 0;
         for (int i = 0; i < chosen.Count; i++)
         {
@@ -124,9 +143,9 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
                 () => backend.ExecuteAsync(install, package, Log, token), token, i, chosen.Count); }
             catch (OperationCanceledException) { throw; }
             catch (Exception exception)
-            { failed++; Log(exception.ToString()); _console.Result($"{package.Name} — não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false); continue; }
+            { failed++; Log(exception.ToString()); _console.Result(CliFailure.Message(CliFailure.Describe(exception), package.Name), false); continue; }
             if (!result.Success)
-            { failed++; Log($"{package.Id}: {result.ExitCode} {result.Output}"); _console.Result($"{package.Name} — não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false); }
+            { failed++; Log($"{package.Id}: {result.ExitCode} {result.Output}"); _console.Result(CliFailure.Message(CliFailure.Describe(result), package.Name), false); }
             else
             {
                 succeeded++;
@@ -135,7 +154,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
                 if (result.RebootInitiated) break;
             }
         }
-        Write($"\nResumo: {succeeded} concluído(s), {failed} falha(s), {reboot} exige(m) reinicialização.");
+        _console.Summary(succeeded, failed, reboot);
         return failed == 0 ? 0 : 1;
     }
 
@@ -150,30 +169,6 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
                         || package.Id.Contains(request.Query, StringComparison.OrdinalIgnoreCase))))
             .DistinctBy(package => (package.Source.ToLowerInvariant(), package.Id.ToLowerInvariant())).ToList();
 
-    private async Task<bool> ConfirmAsync(InteractiveCliRequest request, string message, CancellationToken token)
-    {
-        token.ThrowIfCancellationRequested();
-        if (request.Command != "uninstall" || request.Yes) return true;
-        Write(message + "\n[1] Confirmar\n[0] Sair");
-        return await ReadConfirmation(token) != 0;
-    }
-
-    private async Task<int> ReadConfirmation(CancellationToken token)
-    {
-        while (true)
-        {
-            _output.Write("Opção: ");
-            var selected = InteractiveCliInput.Selection(await input.ReadLineAsync(token), 1, false);
-            if (selected is int value) return value;
-            Write("Opção inválida. Informe 1 para confirmar ou 0 para sair.");
-        }
-    }
-
-    private static string Describe(UpgradablePackage package, string command)
-        => $"{package.Name} — {package.Id} [{package.SourceLabel}]" +
-            (command == "update" ? $" | {package.CurrentVersion} → {package.AvailableVersion}"
-                : $" | {package.CurrentVersion}");
-    private void Write(string text) => _output.WriteLine(Clean(text));
     private void Log(string text) => CliDiagnostics.Write(text);
     public static string Clean(string text) => new(text.Where(character => !char.IsControl(character) || character is '\n' or '\t').ToArray());
 
@@ -185,9 +180,11 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
         "update" => "Uso: winprovision upgrade [nome] [--id ID] [--source winget|msstore] [--json|--no-input]\n     winprovision upgrade --all\nAtualiza todos os resultados diretamente. --id limita a um aplicativo; --json ou --no-input apenas consulta. Alias: update.",
         "install" => "Uso: winprovision install --id <ID> [--source winget|msstore]\n     winprovision install --office\nExecuta diretamente, sem menus. --office instala Microsoft 365 Família com o XML padrão. Use search para encontrar IDs de pacotes.",
         "show" => "Uso: winprovision show --id <ID> [--source winget|msstore]\nExibe detalhes sem instalar.",
-        "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: Downloads do usuário.",
-        "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato; use --yes (-y) para executar sem confirmação. Use list para encontrar o ID.",
+        "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: pasta configurada no app ou Downloads do usuário.",
+        "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato diretamente, sem confirmação da CLI. Use list para encontrar o ID.",
         "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista diretamente, sem menus. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
+        "logs" => "Uso: winprovision logs\nMostra a pasta dos diagnósticos técnicos da CLI.",
+        "help" => "Uso: winprovision help [comando]\nExibe a ajuda geral ou específica de um comando.",
         "export" => "Uso: winprovision export [--output arquivo.json]\nExporta os pacotes reconhecidos pelo WinGet em formato compatível com import. Padrão: winprovision-apps.json no diretório atual. Não sobrescreve arquivos.",
         _ => """
             WinProvision Store — CLI
@@ -203,11 +200,11 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
 
             Operações:
               install      Instalar por ID, sem menus
-              download     Baixar instalador na pasta Downloads
+              download     Baixar instalador na pasta configurada
               office       Baixar setup e XML do Office; --offline inclui a mídia
               import       Instalar lista JSON; --download apenas baixa
               upgrade      Atualizar todos; --id limita a um aplicativo
-              uninstall    Desinstalar por ID, com confirmação
+              uninstall    Desinstalar por ID, sem menus
 
             Opções comuns:
               --id ID           Identificador completo
@@ -215,9 +212,8 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
               -q, --query       Consulta por nome
               -e, --exact       Correspondência exata
               --json            JSON em search/list/upgrade; apenas consulta
-              --elevation-cache Alias compatível: cache de 5 min já habilitado por padrão
-              --yes, -y         Compatibilidade; dispensa confirmação na desinstalação
-              --no-input        Consultar sem menus; com --yes executa sem interação
+              --elevation-cache  Compatibilidade; cache automático de 5 minutos
+              --no-input        Em upgrade, apenas consulta; demais comandos sem menus
               -i, --input       Arquivo JSON ou URL HTTPS para import
               -o, --output      Arquivo de exportação ou pasta de download
               -h, --help        Ajuda geral ou específica
@@ -236,7 +232,7 @@ public sealed partial class CliApplication(ICliPackageBackend backend, TextReade
               winprovision uninstall --id Google.Chrome.EXE
               winprovision help import
 
-            Ctrl+C cancela. Apenas uninstall pede confirmação.
+            Ctrl+C cancela. Operações executam sem confirmação da CLI.
             logs mostra a pasta dos diagnósticos.
             Códigos de saída: 0 sucesso, 1 falha, 2 uso inválido, 130 cancelamento.
             """

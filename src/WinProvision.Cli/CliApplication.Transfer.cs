@@ -10,7 +10,7 @@ public sealed partial class CliApplication
         if (!result.Success)
         {
             Log($"Falha (código {result.ExitCode}): {result.Output}");
-            _console.Result($"{(name is null ? "" : name + " — ")}não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false);
+            _console.Result(CliFailure.Message(CliFailure.Describe(result), name), false);
             return 1;
         }
         _console.Result(success, true, result.RebootRequired);
@@ -20,18 +20,19 @@ public sealed partial class CliApplication
     private async Task<int> ExportAsync(InteractiveCliRequest request, CancellationToken token)
     {
         string destination = Path.GetFullPath(request.Output ?? "winprovision-apps.json");
-        if (File.Exists(destination)) throw new IOException($"O arquivo já existe: {destination}. Escolha outro --output.");
+        if (File.Exists(destination)) throw new IOException($"O arquivo já existe: {destination}. Escolha outro --output.", unchecked((int)0x80070050));
         string temporary = Path.Combine(Path.GetDirectoryName(destination)!, $".winprovision-{Guid.NewGuid():N}.json");
         try
         {
-            var result = await backend.ExportAsync(temporary, Log, token);
+            var result = await _console.RunAsync("Exportando aplicativos", () => backend.ExportAsync(temporary, Log, token), token);
             if (!result.Success) return Report(result);
             // Validate the complete manifest before publishing an export.
             using var reader = new ProfileDocumentReader();
             _ = ProfileDocumentService.CreateExecutionPlan(ProfileDocumentService.Parse(await reader.ReadAsync(temporary, token)));
             token.ThrowIfCancellationRequested();
             File.Move(temporary, destination, overwrite: false);
-            Write($"Lista exportada: {destination}");
+            _console.Result("Lista exportada", true);
+            _console.Section("Exportação", $"Destino: {destination}");
             return 0;
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
@@ -41,10 +42,10 @@ public sealed partial class CliApplication
     {
         using var reader = new ProfileDocumentReader();
         var packages = ProfileDocumentService.CreateExecutionPlan(ProfileDocumentService.Parse(await reader.ReadAsync(request.Input!, token)));
-        if (packages.Count == 0) { Write("A lista não contém pacotes."); return 0; }
+        if (packages.Count == 0) { _console.Section("Importação", "A lista não contém pacotes."); return 0; }
         string action = request.Download ? "baixar" : "instalar";
-        Write($"{packages.Count} pacote(s) para {action}:");
-        if (!await ConfirmAsync(request, "Executar a lista?", token)) return 0;
+        _console.Heading("Importação");
+        _console.Note($"{packages.Count} pacote(s) para {action}:");
         int succeeded = 0, failed = 0, reboot = 0;
         for (int i = 0; i < packages.Count; i++)
         {
@@ -61,9 +62,9 @@ public sealed partial class CliApplication
                 if (result.RebootInitiated) break;
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception exception) { failed++; Log(exception.ToString()); _console.Result($"{package.Name ?? package.Id} — não foi possível concluir. Consulte o diagnóstico com winprovision logs.", false); }
+            catch (Exception exception) { failed++; Log(exception.ToString()); _console.Result(CliFailure.Message(CliFailure.Describe(exception), package.Name ?? package.Id), false); }
         }
-        Write($"\nResumo: {succeeded} concluído(s), {failed} falha(s), {reboot} exige(m) reinicialização.");
+        _console.Summary(succeeded, failed, reboot);
         return failed == 0 ? 0 : 1;
     }
 
