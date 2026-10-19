@@ -31,15 +31,19 @@ winprovision --version
 - Pesquise aplicativos por nome e consulte seus detalhes.
 - Instale, atualize e remova aplicativos, acompanhando o resultado das operações.
 - Organize listas de aplicativos em coleções e prepare arquivos para uso offline.
-- Configure os aplicativos do Office e escolha instalação online ou mídia offline.
+- Configure os aplicativos do Office e escolha instalação online ou mídia offline com download pelo ODT ou pelo WinProvision Viper.
 - Exporte e importe listas JSON pela CLI.
 - Conecte sua conta GitHub, opcionalmente, para sincronizar coleções.
 - Use os temas claro e escuro e a navegação por teclado.
-- Reutilize o catálogo baixado entre a interface e a CLI, com pasta de rede opcional, revalidação por prazo e limpeza automática. Configure em **Configurações → Armazenamento e cache**; consulte os limites em [cache local](docs/ARCHITECTURE.md#cache-do-catálogo).
+- Agende verificações e atualizações pela CLI, em intervalos fixos ou agendas diária/semanal, com execução imediata e notificações do Windows em **Configurações → Manutenção agendada**.
+- Escolha notificações por categoria e configure limites simultâneos, pasta padrão e nomes dos instaladores em **Configurações → Notificações** e **Operações e downloads**.
+- Consulte o espaço ocupado por imagens, catálogo e instaladores em **Configurações → Armazenamento e cache**. Libere memória, limpe imagens, catálogo ou instaladores reutilizáveis separadamente e ajuste o limite e a revalidação das imagens. Coleções e preferências são preservadas nessas limpezas; veja [cache local](docs/ARCHITECTURE.md#cache-do-catálogo).
 
 Instaladores podem solicitar autorização administrativa ou interação adicional. A disponibilidade de aplicativos depende das fontes consultadas. A preparação de mídia offline exige conexão durante o download.
 
 ## Linha de comando
+
+O [WinProvision Viper](src/WinProvision.Viper/README.md) é um módulo HTTP(S) experimental e independente, com biblioteca e executável próprios para downloads segmentados e simultâneos. A biblioteca atende os downloads verificados de instaladores do catálogo, inclusive nas instalações pela API própria; o executável `winprovision-viper.exe` continua separado da CLI `winprovision`.
 
 ```powershell
 winprovision search Chrome
@@ -51,7 +55,7 @@ winprovision --install --office
 winprovision --office --offline
 ```
 
-Consulte os comandos, opções e confirmações em [CLI](docs/CLI.md).
+Consulte os comandos e opções em [CLI](docs/CLI.md).
 
 ## Desenvolvimento
 
