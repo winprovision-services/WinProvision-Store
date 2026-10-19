@@ -463,25 +463,32 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         if (selected.Count == 0) { StatusText = "Nenhum pacote selecionado. Marque ao menos um aplicativo para atualizar."; return; }
         IsBusy = true; CanUpdate = false; CanSelect = false; CanReload = false;
         StatusText = $"Iniciando atualização de {selected.Count} aplicativo(s)...";
+        using var operationBatch = _backend.BeginBatch();
         int succeeded = 0, failed = 0;
         try
         {
-            foreach (var package in selected)
+            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            await Task.WhenAll(selected.Select(async package =>
             {
-                token.ThrowIfCancellationRequested(); package.IsUpdating = true;
+                await batchGate.WaitAsync(token);
                 try
                 {
-                    PackageInstallOptions? options = elevated || interactive || ignoreSecurityHash
-                        ? (_packageOptions.Get(package.Id, package.Source) ?? new PackageInstallOptions()) with
-                        { Interactive = interactive || _packageOptions.Get(package.Id,package.Source)?.Interactive == true, IgnoreSecurityHash = false, RequiresElevation = elevated || _packageOptions.Get(package.Id,package.Source)?.RequiresElevation == true } : null;
-                    var result = await _backend.UpdateAsync(package, options);
-                    if (result.Success) { succeeded++; _rawPackages.Remove(package); _filteredPackages.Remove(package); }
-                    else { failed++; package.IsSelectedForUpdate = false; }
+                    token.ThrowIfCancellationRequested(); package.IsUpdating = true;
+                    try
+                    {
+                        PackageInstallOptions? options = elevated || interactive || ignoreSecurityHash
+                            ? (_packageOptions.Get(package.Id, package.Source) ?? new PackageInstallOptions()) with
+                            { Interactive = interactive || _packageOptions.Get(package.Id,package.Source)?.Interactive == true, IgnoreSecurityHash = false, RequiresElevation = elevated || _packageOptions.Get(package.Id,package.Source)?.RequiresElevation == true } : null;
+                        var result = await _backend.UpdateAsync(package, options);
+                        if (result.Success) { succeeded++; _rawPackages.Remove(package); _filteredPackages.Remove(package); }
+                        else { failed++; package.IsSelectedForUpdate = false; }
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+                    catch (Exception ex) { WinProvisionLog.Write($"Update failed {package.Id}: {ex}"); failed++; package.IsSelectedForUpdate = false; }
+                    finally { package.IsUpdating = false; }
                 }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
-                catch (Exception ex) { WinProvisionLog.Write($"Update failed {package.Id}: {ex}"); failed++; package.IsSelectedForUpdate = false; }
-                finally { package.IsUpdating = false; }
-            }
+                finally { batchGate.Release(); }
+            }));
             StatusText = failed == 0 ? $"Atualização concluída: {succeeded} pacote(s) atualizado(s) com sucesso."
                 : $"Atualização concluída: {succeeded} sucesso(s), {failed} falha(s). Verifique a fila.";
         }

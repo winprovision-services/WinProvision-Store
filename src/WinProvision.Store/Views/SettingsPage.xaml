@@ -64,6 +64,42 @@
                 <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
               </Grid>
             </Button>
+            <Button x:Name="CardElevator" AutomationProperties.AutomationId="CardElevator" AutomationProperties.Name="WinProvision Elevator" Tag="Elevator" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="WinProvision Elevator" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Pedidos de administrador, autorização da sessão e integridade do helper." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardMaintenance" AutomationProperties.AutomationId="CardMaintenance" AutomationProperties.Name="Manutenção agendada" Tag="Maintenance" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Manutenção agendada" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Verificações periódicas, atualizações automáticas e notificações." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
             <Button x:Name="CardInterface" AutomationProperties.AutomationId="CardInterface" AutomationProperties.Name="Interface e inicialização" Tag="Interface" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
               <Grid>
                 <Grid.ColumnDefinitions>
@@ -78,6 +114,42 @@
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Interface e inicialização" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Tema do aplicativo e inicialização com o Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardNotifications" AutomationProperties.AutomationId="CardNotifications" AutomationProperties.Name="Notificações" Tag="Notifications" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Notificações" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Escolha avisos de atualizações, erros, sucessos e resumos de lotes." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardExecution" AutomationProperties.AutomationId="CardExecution" AutomationProperties.Name="Operações e downloads" Tag="Execution" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="Operações e downloads" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="Limites simultâneos, pasta padrão e nomes dos instaladores baixados." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
                 <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
               </Grid>
@@ -151,17 +223,6 @@
                   <ComboBoxItem Content="WinGet CLI" Tag="WingetCli" />
                 </ComboBox>
               </Grid>
-            </Border>
-            <TextBlock Text="Autorização de administrador" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
-            <Border x:Name="ElevationCacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-              <StackPanel Spacing="12">
-                <TextBlock Text="Reutilizar autorização de administrador" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Text="Sua autorização é reutilizada automaticamente por 5 minutos de inatividade nos instaladores iniciados pelo aplicativo. Algumas operações podem solicitar confirmação própria. A interface continua sem privilégios de administrador." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button x:Name="AuthorizeElevationButton" Content="Autorizar nesta sessão" Command="{Binding AuthorizeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="AuthorizeElevationButton" />
-                </StackPanel>
-                <TextBlock Text="{Binding ElevationCacheMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-              </StackPanel>
             </Border>
             <TextBlock Text="Atualizações do aplicativo" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="AppUpdateCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
@@ -242,7 +303,146 @@
               </Grid>
             </Border>
           </StackPanel>
-          <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
+          <StackPanel x:Name="PanelElevator" Visibility="Collapsed">
+            <Border x:Name="ElevationCacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <ToggleSwitch Header="Permitir pedidos de administrador pelo Elevator" IsEnabled="{Binding CanEditElevator}" IsOn="{Binding AllowElevator, Mode=TwoWay}" OnContent="Permitidos" OffContent="Bloqueados" AutomationProperties.Name="Permitir elevação pelo WinProvision Elevator" />
+                <TextBlock Text="Bloquear impede novos pedidos feitos pelo helper na interface e na CLI, inclusive na atualização de uma instalação de máquina do próprio app. Instaladores e serviços do Windows podem solicitar sua própria autorização." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button x:Name="SaveElevatorOptionsButton" Content="Salvar opção" Command="{Binding SaveElevatorOptionsCommand}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Autorização desta sessão" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="A autorização é reutilizada automaticamente por 5 minutos de inatividade e encerrada ao fechar o aplicativo. A interface permanece sem privilégios de administrador. Esta sessão não compartilha autorização com outras execuções da CLI." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <controls:WrapPanel>
+                  <Button x:Name="AuthorizeElevationButton" Content="Autorizar nesta sessão" Command="{Binding AuthorizeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="AuthorizeElevationButton" Margin="0,0,8,8" />
+                  <Button x:Name="RevokeElevationButton" Content="Encerrar autorização" Command="{Binding RevokeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,0,8" />
+                </controls:WrapPanel>
+                <TextBlock Text="{Binding ElevationCacheMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Estado e integridade" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding ElevatorIntegrityMessage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="A verificação e a consulta de estado não pedem autorização administrativa." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button x:Name="RefreshElevatorButton" Content="Verificar e atualizar estado" Command="{Binding RefreshElevatorCommand}" Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel x:Name="PanelMaintenance" Visibility="Collapsed">
+            <TextBlock Text="Manutenção agendada" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Verifique e atualize seus aplicativos mesmo com esta janela fechada. As tarefas executam enquanto esta conta estiver conectada ao Windows." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,0,16" />
+            <Border x:Name="ScheduledMaintenanceCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <ToggleSwitch IsEnabled="{Binding CanEditMaintenance}" Header="Verificar atualizações de aplicativos" AutomationProperties.AutomationId="ScheduledUpdatesEnabledSwitch" AutomationProperties.Name="Ativar manutenção agendada" IsOn="{Binding ScheduledUpdatesEnabled, Mode=TwoWay}" OnContent="Ativada" OffContent="Desativada" />
+                <ComboBox IsEnabled="{Binding CanEditMaintenance}" Header="Ao encontrar atualizações" SelectedValuePath="Tag" SelectedValue="{Binding ScheduledUpdateMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Ação da manutenção agendada">
+                  <ComboBoxItem Content="Verificar e apenas avisar" Tag="NotifyOnly" />
+                  <ComboBoxItem Content="Instalar as atualizações disponíveis" Tag="InstallAutomatically" />
+                </ComboBox>
+                <ComboBox IsEnabled="{Binding CanEditMaintenance}" Header="Aplicativos para atualizar" SelectedValuePath="Tag" SelectedValue="{Binding ScheduledUpdateScope, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Aplicativos da manutenção agendada">
+                  <ComboBoxItem Content="Todos os aplicativos compatíveis" Tag="AllSupportedPackages" />
+                  <ComboBoxItem Content="Somente aplicativos selecionados" Tag="SelectedPackagesOnly" />
+                </ComboBox>
+                <TextBlock Text="A seleção pode ser alterada no menu do aplicativo em Aplicativos instalados. Versões ignoradas continuam sendo respeitadas. O Windows pode solicitar autorização administrativa." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <ComboBox IsEnabled="{Binding CanEditMaintenance}" Header="Repetição" x:Name="MaintenanceFrequencyComboBox" AutomationProperties.AutomationId="MaintenanceFrequencyComboBox" SelectedValuePath="Tag" SelectedValue="{Binding ScheduledUpdateFrequency, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Repetição da manutenção">
+                  <ComboBoxItem Content="Ao entrar no Windows" Tag="AtLogon" />
+                  <ComboBoxItem Content="Em um intervalo fixo" Tag="Interval" />
+                  <ComboBoxItem Content="Diariamente" Tag="Daily" />
+                  <ComboBoxItem Content="Semanalmente" Tag="Weekly" />
+                </ComboBox>
+                <ComboBox IsEnabled="{Binding CanEditMaintenance}" Header="Verificar a cada" x:Name="MaintenanceIntervalComboBox" AutomationProperties.AutomationId="MaintenanceIntervalComboBox" Visibility="{Binding IsIntervalSchedule, Converter={StaticResource BoolToVisibilityConverter}}" SelectedValuePath="Tag" SelectedValue="{Binding ScheduledUpdateInterval, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Intervalo entre verificações">
+                  <ComboBoxItem Content="15 minutos" Tag="15" />
+                  <ComboBoxItem Content="30 minutos" Tag="30" />
+                  <ComboBoxItem Content="1 hora" Tag="60" />
+                  <ComboBoxItem Content="2 horas" Tag="120" />
+                  <ComboBoxItem Content="4 horas" Tag="240" />
+                  <ComboBoxItem Content="12 horas" Tag="720" />
+                  <ComboBoxItem Content="24 horas" Tag="1440" />
+                </ComboBox>
+                <TextBox IsEnabled="{Binding CanEditMaintenance}" Header="Horário local (HH:mm)" Text="{Binding ScheduledUpdateTime, Mode=TwoWay}" Visibility="{Binding IsCalendarSchedule, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Horário da manutenção" />
+                <ComboBox IsEnabled="{Binding CanEditMaintenance}" Header="Dia da semana" SelectedValuePath="Tag" SelectedValue="{Binding ScheduledUpdateDay, Mode=TwoWay}" Visibility="{Binding IsWeeklySchedule, Converter={StaticResource BoolToVisibilityConverter}}" HorizontalAlignment="Stretch" AutomationProperties.Name="Dia da manutenção">
+                  <ComboBoxItem Content="Domingo" Tag="Sunday" /><ComboBoxItem Content="Segunda-feira" Tag="Monday" />
+                  <ComboBoxItem Content="Terça-feira" Tag="Tuesday" /><ComboBoxItem Content="Quarta-feira" Tag="Wednesday" />
+                  <ComboBoxItem Content="Quinta-feira" Tag="Thursday" /><ComboBoxItem Content="Sexta-feira" Tag="Friday" /><ComboBoxItem Content="Sábado" Tag="Saturday" />
+                </ComboBox>
+                <ToggleSwitch IsEnabled="{Binding CanEditMaintenance}" Header="Notificações do Windows" IsOn="{Binding ScheduledUpdateNotifications, Mode=TwoWay}" OnContent="Ativadas" OffContent="Desativadas" AutomationProperties.Name="Notificações da manutenção" />
+                <TextBlock Text="Receba avisos sobre atualizações disponíveis, conclusões e falhas. Verificações sem atualizações não enviam notificações." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Execução" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding ScheduledUpdateHistory}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{Binding ScheduledUpdateNext}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="Salve as alterações antes de executar agora." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <controls:WrapPanel>
+                  <Button IsEnabled="{Binding CanEditMaintenance}" Content="Salvar agenda" x:Name="SaveMaintenanceButton" AutomationProperties.AutomationId="SaveMaintenanceButton" Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveScheduledMaintenanceCommand}" Margin="0,0,8,8" />
+                  <Button IsEnabled="{Binding CanEditMaintenance}" Content="Executar agora" x:Name="RunMaintenanceNowButton" AutomationProperties.AutomationId="RunMaintenanceNowButton" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding RunScheduledMaintenanceCommand}" Margin="0,0,0,8" />
+                </controls:WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel x:Name="PanelNotifications" Visibility="Collapsed" Spacing="12">
+          <Border x:Name="NotificationCategoriesCard" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12" Padding="18">
+            <StackPanel Spacing="16">
+              <TextBlock Text="Categorias de notificação" FontSize="18" FontWeight="SemiBold" />
+              <TextBlock Text="Escolha quais avisos o Windows pode mostrar. As permissões e o modo Não incomodar do sistema continuam valendo." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <ToggleSwitch Header="Atualizações disponíveis" IsOn="{Binding NotifyUpdates, Mode=TwoWay}" OnContent="Ativadas" OffContent="Desativadas" />
+              <ToggleSwitch Header="Erros nas operações" IsOn="{Binding NotifyErrors, Mode=TwoWay}" OnContent="Ativados" OffContent="Desativados" />
+              <ToggleSwitch Header="Operações concluídas com sucesso" IsOn="{Binding NotifySuccess, Mode=TwoWay}" OnContent="Ativadas" OffContent="Desativadas" />
+              <ToggleSwitch Header="Resumos de lotes" IsOn="{Binding NotifyBatchSummary, Mode=TwoWay}" OnContent="Ativados" OffContent="Desativados" />
+              <TextBlock Text="Lotes com falhas usam a categoria Erros. A manutenção agendada também respeita seu próprio controle de notificações." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <Button x:Name="SaveNotificationCategoriesButton" Content="Salvar notificações" Command="{Binding SaveNotificationsCommand}" Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <StackPanel x:Name="PanelExecution" Visibility="Collapsed" Spacing="12">
+          <Border x:Name="ConcurrencyCard" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12" Padding="18">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Operações simultâneas" FontSize="18" FontWeight="SemiBold" />
+              <ComboBox Header="Instalações, atualizações e remoções na interface" HorizontalAlignment="Stretch" SelectedValuePath="Tag" SelectedValue="{Binding ParallelOperations, Mode=TwoWay}">
+                <ComboBoxItem Content="1 (padrão)" Tag="1" />
+                <ComboBoxItem Content="2" Tag="2" />
+                <ComboBoxItem Content="3" Tag="3" />
+                <ComboBoxItem Content="4" Tag="4" />
+              </ComboBox>
+              <ComboBox Header="Downloads avulsos de instaladores" HorizontalAlignment="Stretch" SelectedValuePath="Tag" SelectedValue="{Binding ParallelDownloads, Mode=TwoWay}">
+                <ComboBoxItem Content="1" Tag="1" />
+                <ComboBoxItem Content="2" Tag="2" />
+                <ComboBoxItem Content="3 (padrão)" Tag="3" />
+                <ComboBoxItem Content="4" Tag="4" />
+                <ComboBoxItem Content="6" Tag="6" />
+                <ComboBoxItem Content="8" Tag="8" />
+              </ComboBox>
+              <TextBlock Text="Uma operação por vez é o padrão recomendado. Alguns instaladores e o Office possuem bloqueios próprios. Reduzir o limite não interrompe tarefas iniciadas. Os limites valem por processo; lotes da CLI mantêm a execução sequencial." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+          </Border>
+          <Border x:Name="InstallerDownloadsCard" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12" Padding="18">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Instaladores baixados" FontSize="18" FontWeight="SemiBold" />
+              <TextBox Header="Pasta padrão" Text="{Binding DownloadDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Usar Downloads; na interface, perguntar a cada lote" TextWrapping="Wrap" />
+              <controls:WrapPanel>
+                <Button Content="Escolher pasta" Command="{Binding PickDownloadDirectoryCommand}" />
+                <Button Content="Usar padrão" Command="{Binding DefaultDownloadDirectoryCommand}" />
+              </controls:WrapPanel>
+              <ComboBox Header="Nome dos instaladores" HorizontalAlignment="Stretch" SelectedValuePath="Tag" SelectedValue="{Binding InstallerNames, Mode=TwoWay}">
+                <ComboBoxItem Content="Nome original" Tag="Original" />
+                <ComboBoxItem Content="ID e versão (padrão)" Tag="PackageVersion" />
+                <ComboBoxItem Content="ID, versão e arquitetura" Tag="PackageVersionArchitecture" />
+              </ComboBox>
+              <TextBlock Text="Exemplo: Fabricante.App-2.4-x64.exe. Quando o WinGet não informa a versão ou arquitetura, o nome fornecido por ele é preservado com o ID. Arquivos existentes nunca são sobrescritos; nomes repetidos recebem um número." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <TextBlock Text="A pasta se aplica aos downloads avulsos de instaladores. Destinos explícitos têm prioridade. Mídia offline, arquivos temporários de instalação e a atualização do próprio app mantêm seus destinos próprios." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+          </Border>
+          <Button x:Name="SaveExecutionOptionsButton" Content="Salvar operações e downloads" Command="{Binding SaveExecutionOptionsCommand}" Style="{StaticResource AccentButtonStyle}" />
+        </StackPanel>
+        <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
             <TextBlock Text="Catálogo de aplicativos" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="CatalogRefreshCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
               <Grid ColumnSpacing="16">
@@ -255,20 +455,50 @@
                         Style="{StaticResource StoreActionButtonStyle}" Command="{Binding RefreshCatalogCommand}" />
               </Grid>
             </Border>
-            <TextBlock Text="Armazenamento e cache" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Espaço ocupado" Margin="0,8,0,8" FontSize="18" FontWeight="SemiBold" />
             <Border x:Name="CacheCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                  <TextBlock Text="Caches locais do WinProvision" FontWeight="SemiBold" />
-                  <TextBlock Text="Remove índices de busca, detalhes de pacotes e instaladores guardados. Eles serão baixados novamente quando necessário." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                </StackPanel>
-                <Button Grid.Column="1" Content="Limpar cache" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding ClearCacheCommand}">
-                                    </Button>
-              </Grid>
+              <StackPanel Spacing="10">
+                <TextBlock Text="Ícones e imagens" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding ImagesCacheUsage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{Binding ImagesMemoryUsage}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <controls:WrapPanel>
+                  <Button x:Name="MeasureCacheButton" Content="Atualizar medição" Command="{Binding MeasureCacheCommand}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" />
+                  <Button Content="Liberar memória" Command="{Binding ReleaseImageMemoryCommand}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" />
+                  <Button x:Name="ClearImagesCacheButton" Content="Limpar somente imagens" Command="{Binding ClearImagesCacheCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                </controls:WrapPanel>
+                <TextBlock Text="A limpeza libera o cache de imagens da memória e do disco. Imagens visíveis podem permanecer até recarregar a página. Coleções, preferências e instaladores são preservados." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Cache de imagens no disco" FontSize="15" FontWeight="SemiBold" />
+                <ComboBox x:Name="ImageCacheLimitComboBox" Header="Limite de espaço para imagens baixadas" IsEnabled="{Binding CanEditCache}" SelectedValuePath="Tag" SelectedValue="{Binding ImageCacheLimit, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Limite do cache de imagens">
+                  <ComboBoxItem Content="64 MB" Tag="64" /><ComboBoxItem Content="128 MB" Tag="128" /><ComboBoxItem Content="256 MB" Tag="256" />
+                  <ComboBoxItem Content="512 MB (padrão)" Tag="512" /><ComboBoxItem Content="1 GB" Tag="1024" /><ComboBoxItem Content="2 GB" Tag="2048" />
+                </ComboBox>
+                <ComboBox x:Name="ImageCacheDaysComboBox" Header="Verificar se uma imagem mudou após" IsEnabled="{Binding CanEditCache}" SelectedValuePath="Tag" SelectedValue="{Binding ImageCacheDays, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.Name="Prazo para revalidar imagens">
+                  <ComboBoxItem Content="1 dia" Tag="1" /><ComboBoxItem Content="3 dias" Tag="3" /><ComboBoxItem Content="7 dias" Tag="7" />
+                  <ComboBoxItem Content="14 dias (padrão)" Tag="14" /><ComboBoxItem Content="30 dias" Tag="30" />
+                </ComboBox>
+                <TextBlock Text="A verificação ocorre quando a imagem é carregada novamente do disco. Se a rede falhar, uma cópia válida com até 60 dias pode ser reutilizada. A limpeza automática remove arquivos antigos e os menos usados para respeitar o limite; o cache em memória é ajustado ao computador." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="SaveImageCacheOptionsButton" Content="Salvar opções de imagens" Command="{Binding SaveImageCacheOptionsCommand}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Catálogo e metadados" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CatalogCacheUsage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="Remove índices, detalhes e métricas locais. A próxima consulta poderá precisar de internet. Para apenas buscar dados recentes, use Atualizar catálogo; imagens e instaladores não são apagados." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="ClearCatalogCacheButton" Content="Limpar catálogo e metadados" Command="{Binding ClearCatalogCacheCommand}" Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <Border Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Instaladores reutilizáveis" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding InstallerCacheUsage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="Gerenciados automaticamente pelas operações de instalação. A limpeza remove os instaladores já baixados desse cache local sem afetar imagens, catálogo, coleções ou preferências." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="ClearInstallerCacheButton" Content="Limpar instaladores reutilizáveis" Command="{Binding ClearInstallerCacheCommand}" Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
             </Border>
           </StackPanel>
         </StackPanel>

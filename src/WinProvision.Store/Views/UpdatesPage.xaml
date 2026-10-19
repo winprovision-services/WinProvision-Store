@@ -793,9 +793,11 @@
                                 <TextBlock Text="Agenda" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6" />
                                 <ComboBox x:Name="UpdateScheduleComboBox" AutomationProperties.AutomationId="UpdateScheduleComboBox" Height="32" SelectedValuePath="Tag" SelectionChanged="UpdateScheduleComboBox_SelectionChanged" HorizontalAlignment="Stretch">
                                     <ComboBoxItem Content="Ao entrar no Windows" Tag="AtLogon" />
+                                    <ComboBoxItem Content="Em um intervalo fixo (Configurações)" Tag="Interval" />
                                     <ComboBoxItem Content="Diariamente" Tag="Daily" />
                                     <ComboBoxItem Content="Semanalmente" Tag="Weekly" />
                                 </ComboBox>
+                                <TextBlock x:Name="UpdateScheduleIntervalText" Text="Intervalo definido em Configurações → Manutenção agendada." Visibility="Collapsed" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <controls:WrapPanel x:Name="UpdateScheduleDetailsPanel" Margin="0,8,0,0" VerticalAlignment="Center">
                                     <TextBox x:Name="UpdateScheduleTimeBox" AutomationProperties.AutomationId="UpdateScheduleTimeBox" Width="96" Height="32" PlaceholderText="HH:mm" ToolTipService.ToolTip="Horário local, formato 24 horas" />
                                     <ComboBox x:Name="UpdateScheduleDayComboBox" AutomationProperties.AutomationId="UpdateScheduleDayComboBox" Width="150" Height="32" Margin="8,0,0,0" SelectedValuePath="Tag">

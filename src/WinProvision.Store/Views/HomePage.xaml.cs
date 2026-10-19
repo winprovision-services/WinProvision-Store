@@ -45,6 +45,7 @@ public sealed partial class HomePage : Page
     {
         if (!_subscribed) { Storefront.PropertyChanged += Storefront_Changed; _subscribed = true; }
         UpdatePresentation();
+        App.MemoryLog?.RecordOnce("homepage_loaded");
         if (!App.IsSmokeTest) await Storefront.OnNavigatedToAsync();
     }
     private async void Page_Unloaded(object sender, RoutedEventArgs args)

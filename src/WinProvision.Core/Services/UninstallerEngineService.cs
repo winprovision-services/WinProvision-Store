@@ -358,12 +358,14 @@ public class UninstallerEngineService
         var result1 = await TryRunUninstallProcess(fileName, existingArguments, cancellationToken, true);
         if (result1.Success)
             return true;
+        if (WinProvisionElevationState.HasFailedThisSession) return false;
 
         // Fallback 2: Tenta com parâmetros genéricos mais agressivos
         var fallbackArgs = $"{existingArguments} /S /silent /quiet /VERYSILENT /SUPPRESSMSGBOXES /NORESTART".Trim();
         var result2 = await TryRunUninstallProcess(fileName, fallbackArgs, cancellationToken, true);
         if (result2.Success)
             return true;
+        if (WinProvisionElevationState.HasFailedThisSession) return false;
 
         // Fallback 3: Tenta com parâmetros específicos para MSI se for msiexec
         if (fileName.Contains("msiexec", StringComparison.OrdinalIgnoreCase))
@@ -372,6 +374,7 @@ public class UninstallerEngineService
             var result3 = await TryRunUninstallProcess(fileName, msiFallback, cancellationToken, true);
             if (result3.Success)
                 return true;
+            if (WinProvisionElevationState.HasFailedThisSession) return false;
         }
 
         // Fallback 4: Tenta desinstalação baseada no ID se todos os métodos anteriores falharem
@@ -410,7 +413,7 @@ public class UninstallerEngineService
                 "msiexec.exe",
                 $"/x {app.Id} /qn /norestart REBOOT=ReallySuppress",
                 cancellationToken,
-                false);
+                true);
             return result.Success;
         }
 
@@ -421,7 +424,7 @@ public class UninstallerEngineService
                 "winget.exe",
                 $"uninstall --id \"{app.Id}\" --silent --accept-source-agreements --disable-interactivity",
                 cancellationToken,
-                false);
+                true);
             if (result.Success)
                 return true;
         }

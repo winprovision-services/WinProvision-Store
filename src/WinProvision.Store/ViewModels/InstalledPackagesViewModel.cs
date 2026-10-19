@@ -19,6 +19,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
     private readonly IUpdatesIgnoreStore _ignoredUpdates;
     private readonly ApplicationPreferencesService _preferences;
     private readonly WingetExecutor _executor;
+    private readonly WindowsAppNotificationService? _notifications;
 
     public ObservableCollection<InstalledPackageRow> Packages { get; } = new();
     public ObservableCollection<InstalledPackageRow> VisiblePackages { get; } = new();
@@ -54,7 +55,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         CollectionsViewModel collections,
         IUpdatesIgnoreStore ignoredUpdates,
         ApplicationPreferencesService preferences,
-        WingetExecutor executor)
+        WingetExecutor executor, WindowsAppNotificationService? notifications = null)
     {
         _installedPackages = installedPackages;
         _backend = backend;
@@ -64,6 +65,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         _ignoredUpdates = ignoredUpdates;
         _preferences = preferences;
         _executor = executor;
+        _notifications = notifications;
 
         RefreshCommand = new AsyncRelayCommand(
             (CancellationToken cancellationToken) => LoadAsync(cancellationToken));
@@ -286,6 +288,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
             return;
 
         IsBusy = true;
+        using var operationBatch = _backend.BeginBatch();
         int removed = 0;
         var failures = new List<string>();
         try
@@ -300,17 +303,22 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
                 else failures.Add("Microsoft Office");
             }
             selected = selected.Where(package => !package.IsOffice).ToArray();
-            for (int index = 0; index < selected.Length; index++)
+            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            await Task.WhenAll(selected.Select(async (package, index) =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                InstalledPackageRow package = selected[index];
-                Status = $"Desinstalando {index + 1} de {selected.Length}: {package.Name}…";
-                var result = await _backend.UninstallAsync(package.ToAppEntry(), interactive, requiresElevation);
-                if (result.Success)
-                    removed++;
-                else
-                    failures.Add(package.Name);
-            }
+                await batchGate.WaitAsync(cancellationToken);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Status = $"Desinstalando {index + 1} de {selected.Length}: {package.Name}…";
+                    var result = await _backend.UninstallAsync(package.ToAppEntry(), interactive, requiresElevation);
+                    if (result.Success)
+                        removed++;
+                    else
+                        failures.Add(package.Name);
+                }
+                finally { batchGate.Release(); }
+            }));
 
             await LoadAsync(cancellationToken);
             Status = failures.Count == 0
@@ -518,7 +526,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
             return;
         }
 
-        string? folder = await _presentation.PickFolderAsync();
+        string? folder = new OperationPreferencesService().Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
         if (string.IsNullOrWhiteSpace(folder))
             return;
 
@@ -527,21 +535,29 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         var failures = new List<string>();
         try
         {
-            for (int index = 0; index < selected.Length; index++)
+            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelDownloads);
+            await Task.WhenAll(selected.Select(async (package, index) =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var package = selected[index];
-                Status = $"Baixando instalador {index + 1} de {selected.Length}: {package.Name}…";
-                var result = await _executor.DownloadInstallerAsync(
-                    package.Id,
-                    folder,
-                    package.SourceCategory == "Microsoft Store" ? "msstore" : "winget",
-                    cancellationToken: cancellationToken);
-                if (result.Success)
-                    downloaded++;
-                else
-                    failures.Add(package.Name);
-            }
+                await batchGate.WaitAsync(cancellationToken);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Status = $"Baixando instalador {index + 1} de {selected.Length}: {package.Name}…";
+                    var result = await _executor.DownloadInstallerAsync(
+                        package.Id,
+                        folder,
+                        package.SourceCategory == "Microsoft Store" ? "msstore" : "winget",
+                        cancellationToken: cancellationToken);
+                    if (result.Success)
+                        downloaded++;
+                    else
+                        failures.Add(package.Name);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex) { WinProvisionLog.Warning(ex, "Installed.Download"); failures.Add(package.Name); }
+                finally { batchGate.Release(); }
+            }));
+            _notifications?.ShowDownloadSummary(downloaded, failures.Count);
             Status = failures.Count == 0
                 ? $"{downloaded} instalador(es) baixado(s) em {folder}."
                 : $"{downloaded} baixado(s); falha em {failures.Count}: {string.Join(", ", failures)}.";

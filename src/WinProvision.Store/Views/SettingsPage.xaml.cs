@@ -12,8 +12,8 @@ public sealed partial class SettingsPage : Page
     public SettingsPage(SettingsViewModel viewModel)
     {
         InitializeComponent(); ViewModel = viewModel; DataContext = viewModel;
-        _categories = new() { ["General"] = ("Preferências gerais", PanelGeneral), ["Interface"] = ("Interface e inicialização", PanelInterface), ["Operations"] = ("Armazenamento e cache", PanelOperations) };
-        _targets = new() { ["elevation-cache"] = ElevationCacheCard, ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
+        _categories = new() { ["Notifications"] = ("Notificações", PanelNotifications), ["Execution"] = ("Operações e downloads", PanelExecution), ["Elevator"] = ("WinProvision Elevator", PanelElevator), ["Maintenance"] = ("Manutenção agendada", PanelMaintenance), ["General"] = ("Preferências gerais", PanelGeneral), ["Interface"] = ("Interface e inicialização", PanelInterface), ["Operations"] = ("Armazenamento e cache", PanelOperations) };
+        _targets = new() { ["notification-categories"] = NotificationCategoriesCard, ["concurrency"] = ConcurrencyCard, ["installer-downloads"] = InstallerDownloadsCard, ["scheduled-maintenance"] = ScheduledMaintenanceCard, ["elevation-cache"] = ElevationCacheCard, ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
         Loaded += OnLoaded; Unloaded += OnUnloaded;
         SizeChanged += (_, _) => SettingsSearchBox.Width = Math.Min(320, Math.Max(160, ActualWidth - 160));
     }
@@ -21,6 +21,10 @@ public sealed partial class SettingsPage : Page
     {
         ViewModel.PropertyChanged += ThemeChanged;
         RefreshThemeButtons();
+        ViewModel.LoadCacheOptions();
+        await ViewModel.MeasureCacheCommand.ExecuteAsync(null);
+        ViewModel.ReloadScheduledMaintenance();
+        await ViewModel.RefreshElevatorCommand.ExecuteAsync(null);
         if (!App.IsSmokeTest)
         {
             try { await ViewModel.EnsureUpdateCheckAsync(); }
@@ -38,6 +42,10 @@ public sealed partial class SettingsPage : Page
     public void NavigateToCategory(string key)
     {
         if (!_categories.TryGetValue(key, out var category)) return;
+        if (key is "Notifications" or "Execution") ViewModel.LoadExecutionOptions();
+        if (key == "Operations") ViewModel.LoadCacheOptions();
+        if (key == "Elevator") ViewModel.LoadElevatorOptions();
+        if (key == "Maintenance") ViewModel.ReloadScheduledMaintenance();
         HomepageScrollViewer.Visibility = Visibility.Collapsed; SubCategoryScrollViewer.Visibility = Visibility.Visible; BackButton.Visibility = Visibility.Visible;
         SettingsTitleTextBlock.Text = category.Title;
         foreach (var item in _categories.Values) item.Panel.Visibility = ReferenceEquals(item.Panel, category.Panel) ? Visibility.Visible : Visibility.Collapsed;

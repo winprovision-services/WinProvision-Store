@@ -15,17 +15,18 @@ namespace WinProvision.Store.Services;
 public sealed partial class AsyncImage : DependencyObject
 {
     private static readonly TimeSpan NegativeCacheTtl = TimeSpan.FromSeconds(45);
-    private static readonly TimeSpan DiskCacheTtl = TimeSpan.FromDays(14);
+    private static readonly TimeSpan DiskRetention = TimeSpan.FromDays(60);
+    private static ImageCacheOptions _diskOptions = new ImageCachePreferencesService().Options;
+    private static readonly SemaphoreSlim DiskMutationGate = new(1, 1);
     private const int MaxEncodedImageBytes = 16 * 1024 * 1024;
     private const uint MaxDecodedImageEdge = 2048;
-    private const long MaxDiskCacheBytes = 512L * 1024 * 1024;
     private static readonly HttpClient Client = new(new RequestRateLimitHandler(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(5)
     }));
     private static readonly SemaphoreSlim DownloadGate = new(
         Environment.ProcessorCount <= 2 ? 2 : 4);
-    private static readonly ConcurrentDictionary<string, Lazy<Task<byte[]?>>> InFlight = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Lazy<Task<ImageDownload>>> InFlight = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, DateTime> NegativeCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<long, CancellationTokenSource> ActiveImageCancellations = new();
     private static readonly ConcurrentDictionary<long, Task> ActiveImageLoads = new();
@@ -113,7 +114,7 @@ public sealed partial class AsyncImage : DependencyObject
             catch (Exception exception) { WinProvisionLog.Warning(exception, "AsyncImage.Shutdown"); }
         }
 
-        Task<byte[]?>[] pending = InFlight.Values
+        Task<ImageDownload>[] pending = InFlight.Values
             .Where(flight => flight.IsValueCreated)
             .Select(flight => flight.Value)
             .ToArray();
@@ -130,23 +131,51 @@ public sealed partial class AsyncImage : DependencyObject
         }
     }
 
-    public static void ClearCache()
+    public static void ApplyDiskOptions(ImageCacheOptions options)
+    {
+        options.Validate();
+        Volatile.Write(ref _diskOptions, options);
+        Interlocked.Exchange(ref _nextDiskTrimUtcTicks, 0);
+        ScheduleDiskCacheTrim();
+    }
+
+    public static string ImageCacheDirectory => DiskCacheFolder;
+
+    public static void ClearMemoryCache()
     {
         Interlocked.Increment(ref _cacheGeneration);
         MemoryCache.Clear();
         NegativeCache.Clear();
         InFlight.Clear();
-        Interlocked.Exchange(ref _nextDiskTrimUtcTicks, 0);
+    }
+
+    public static void ClearCache()
+    {
+        DiskMutationGate.Wait();
         try
         {
+            ClearMemoryCache();
+            Interlocked.Exchange(ref _nextDiskTrimUtcTicks, 0);
+            if (Directory.Exists(DiskCacheFolder) && (File.GetAttributes(DiskCacheFolder) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("A pasta de imagens não pode ser um link.");
             if (Directory.Exists(DiskCacheFolder))
-                Directory.Delete(DiskCacheFolder, recursive: true);
+                foreach (string path in Directory.EnumerateFiles(DiskCacheFolder).Where(IsOwnedCacheFile)) File.Delete(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             WinProvisionLog.Warning(exception, "AsyncImage.ClearCache");
             throw;
         }
+        finally { DiskMutationGate.Release(); }
+    }
+
+    private static bool IsOwnedCacheFile(string path)
+    {
+        string name = Path.GetFileName(path);
+        int dot = name.IndexOf('.');
+        return dot == 64 && name[..dot].All(Uri.IsHexDigit)
+            && (name.EndsWith(".img", StringComparison.Ordinal) || name.EndsWith(".img.meta.json", StringComparison.Ordinal))
+            && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
     }
 
     public static Task<BitmapImage?> LoadBitmapAsync(string url, int decodePixelWidth = 0, CancellationToken cancellationToken = default) =>
@@ -324,13 +353,15 @@ public sealed partial class AsyncImage : DependencyObject
         string requestKey = $"{url}|width={width}";
         if (MemoryCache.TryGet(requestKey, out BitmapImage? cached))
             return cached;
-        if (IsNegativeCached(requestKey))
+        if (IsNegativeCached(requestKey) && (!IsHttpUri(url) || !File.Exists(GetDiskPath(url))))
             return null;
 
         long generation = Interlocked.Read(ref _cacheGeneration);
         try
         {
             bool isRemote = IsHttpUri(url);
+            byte[]? previousBytes = null;
+            BitmapImage? previousBitmap = null;
             if (isRemote)
             {
                 string cachePath = GetDiskPath(url);
@@ -341,15 +372,23 @@ public sealed partial class AsyncImage : DependencyObject
                     cancellationToken.ThrowIfCancellationRequested();
                     if (cachedBitmap is not null)
                     {
-                        MemoryCache.Set(requestKey, cachedBitmap);
-                        TouchDiskCacheEntry(cachePath);
-                        ScheduleDiskCacheTrim();
-                        return cachedBitmap;
+                        previousBytes = cachedBytes;
+                        previousBitmap = cachedBitmap;
+                        var metadata = ImageCacheTransfer.ReadMetadata(cachePath + ".meta.json");
+                        DateTimeOffset validated = metadata?.ValidatedUtc ?? new DateTimeOffset(File.GetLastWriteTimeUtc(cachePath));
+                        if (DateTimeOffset.UtcNow - validated < TimeSpan.FromDays(Volatile.Read(ref _diskOptions).RevalidateAfterDays))
+                        {
+                            if (generation == Interlocked.Read(ref _cacheGeneration)) MemoryCache.Set(requestKey, cachedBitmap);
+                            TouchDiskCacheEntry(cachePath);
+                            ScheduleDiskCacheTrim();
+                            return cachedBitmap;
+                        }
                     }
 
-                    try
+                    if (cachedBitmap is null) try
                     {
                         File.Delete(cachePath);
+                        File.Delete(cachePath + ".meta.json");
                     }
                     catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                     {
@@ -358,42 +397,44 @@ public sealed partial class AsyncImage : DependencyObject
                 }
             }
 
-            byte[]? bytes = isRemote
-                ? await LoadSharedRemoteBytesAsync(url, generation, cancellationToken)
+            ImageDownload? download = isRemote ? IsNegativeCached(requestKey) ? new(null) : await LoadSharedRemoteBytesAsync(url, generation, cancellationToken) : null;
+            byte[]? bytes = isRemote ? download!.NotModified ? previousBytes : download.Bytes
                 : await LoadLocalBytesAsync(url, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (bytes is null)
-            {
-                RememberFailure(requestKey);
-                return null;
-            }
-
-            BitmapImage? bitmap = await DecodeAsync(bytes, width);
+            BitmapImage? bitmap = bytes is null ? null : await DecodeAsync(bytes, width);
             cancellationToken.ThrowIfCancellationRequested();
             if (bitmap is null)
             {
                 RememberFailure(requestKey);
+                if (previousBitmap is not null)
+                {
+                    // Do not mark a failed renewal fresh: the prior file remains unchanged.
+                    if (generation == Interlocked.Read(ref _cacheGeneration)) MemoryCache.Set(requestKey, previousBitmap);
+                    return previousBitmap;
+                }
                 return null;
             }
-
             NegativeCache.TryRemove(requestKey, out _);
-            MemoryCache.Set(requestKey, bitmap);
+            if (generation == Interlocked.Read(ref _cacheGeneration)) MemoryCache.Set(requestKey, bitmap);
             if (isRemote && generation == Interlocked.Read(ref _cacheGeneration))
             {
+                await DiskMutationGate.WaitAsync(cancellationToken);
                 try
                 {
-                    Directory.CreateDirectory(DiskCacheFolder);
-                    await AtomicFile.WriteAllBytesAsync(GetDiskPath(url), bytes, cancellationToken);
-                    ScheduleDiskCacheTrim();
+                    if (generation == Interlocked.Read(ref _cacheGeneration))
+                    {
+                        Directory.CreateDirectory(DiskCacheFolder);
+                        if (download!.NotModified) File.SetLastWriteTimeUtc(GetDiskPath(url), DateTime.UtcNow);
+                        else await AtomicFile.WriteAllBytesAsync(GetDiskPath(url), bytes!, cancellationToken);
+                        if (download.Metadata is not null)
+                            await ImageCacheTransfer.WriteMetadataAsync(GetDiskPath(url) + ".meta.json", download.Metadata, cancellationToken);
+                    }
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    WinProvisionLog.Warning(exception, "AsyncImage.WriteDiskCache");
-                }
+                { WinProvisionLog.Warning(exception, "AsyncImage.WriteDiskCache"); }
+                finally { DiskMutationGate.Release(); }
+                ScheduleDiskCacheTrim();
             }
             return bitmap;
         }
@@ -416,9 +457,10 @@ public sealed partial class AsyncImage : DependencyObject
 
         try
         {
-            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(path) >= DiskCacheTtl)
+            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(path) >= DiskRetention)
             {
                 File.Delete(path);
+                File.Delete(path + ".meta.json");
                 return null;
             }
             return await ReadBoundedFileAsync(path, cancellationToken);
@@ -426,7 +468,7 @@ public sealed partial class AsyncImage : DependencyObject
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             WinProvisionLog.Warning(exception, "AsyncImage.ReadDiskCache");
-            try { File.Delete(path); }
+            try { File.Delete(path); File.Delete(path + ".meta.json"); }
             catch (Exception deleteException) when (deleteException is IOException or UnauthorizedAccessException)
             {
                 WinProvisionLog.Warning(deleteException, "AsyncImage.DeleteDiskCache");
@@ -435,22 +477,22 @@ public sealed partial class AsyncImage : DependencyObject
         }
     }
 
-    private static async Task<byte[]?> LoadSharedRemoteBytesAsync(
+    private static async Task<ImageDownload> LoadSharedRemoteBytesAsync(
         string url,
         long generation,
         CancellationToken cancellationToken)
     {
         var flight = InFlight.GetOrAdd(url, key =>
-        new Lazy<Task<byte[]?>>(() => DownloadRemoteBytesAsync(key), LazyThreadSafetyMode.ExecutionAndPublication));
-        Task<byte[]?> task = flight.Value;
+        new Lazy<Task<ImageDownload>>(() => DownloadRemoteBytesAsync(key), LazyThreadSafetyMode.ExecutionAndPublication));
+        Task<ImageDownload> task = flight.Value;
         _ = RemoveCompletedFlightAsync(url, flight, task);
         return await task.WaitAsync(cancellationToken);
     }
 
     private static async Task RemoveCompletedFlightAsync(
         string url,
-        Lazy<Task<byte[]?>> flight,
-        Task<byte[]?> task)
+        Lazy<Task<ImageDownload>> flight,
+        Task<ImageDownload> task)
     {
         try
         {
@@ -467,7 +509,7 @@ public sealed partial class AsyncImage : DependencyObject
         }
     }
 
-    private static async Task<byte[]?> DownloadRemoteBytesAsync(string url)
+    private static async Task<ImageDownload> DownloadRemoteBytesAsync(string url)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
@@ -475,26 +517,16 @@ public sealed partial class AsyncImage : DependencyObject
             await DownloadGate.WaitAsync(timeout.Token);
             try
             {
-                using var response = await Client.GetAsync(
-                    url,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    timeout.Token);
-                response.EnsureSuccessStatusCode();
-                if (response.Content.Headers.ContentLength > MaxEncodedImageBytes)
-                    throw new InvalidDataException("A imagem excede o limite do carregador.");
-
-                await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
-                return await ReadBoundedAsync(stream, timeout.Token);
+                string path = GetDiskPath(url);
+                var metadata = File.Exists(path) ? ImageCacheTransfer.ReadMetadata(path + ".meta.json") : null;
+                return await ImageCacheTransfer.DownloadAsync(Client, url, metadata, timeout.Token);
             }
-            finally
-            {
-                DownloadGate.Release();
-            }
+            finally { DownloadGate.Release(); }
         }
         catch (Exception exception)
         {
             WinProvisionLog.Warning(exception, "AsyncImage.Download");
-            return null;
+            return new(null);
         }
     }
 
@@ -662,20 +694,29 @@ public sealed partial class AsyncImage : DependencyObject
 
     private static void TrimDiskCache()
     {
-        if (!Directory.Exists(DiskCacheFolder))
+        DiskMutationGate.Wait();
+        try { TrimDiskCacheCore(); }
+        finally { DiskMutationGate.Release(); }
+    }
+
+    private static void TrimDiskCacheCore()
+    {
+        if (!Directory.Exists(DiskCacheFolder) || (File.GetAttributes(DiskCacheFolder) & FileAttributes.ReparsePoint) != 0)
             return;
 
-        DateTime expiration = DateTime.UtcNow - DiskCacheTtl;
+        DateTime expiration = DateTime.UtcNow - DiskRetention;
         var files = new List<FileInfo>();
         long totalBytes = 0;
         foreach (string path in Directory.EnumerateFiles(DiskCacheFolder, "*.img", SearchOption.TopDirectoryOnly))
         {
             try
             {
+                if (!IsOwnedCacheFile(path)) continue;
                 var file = new FileInfo(path);
                 if (file.LastWriteTimeUtc < expiration)
                 {
                     file.Delete();
+                    File.Delete(file.FullName + ".meta.json");
                     continue;
                 }
                 files.Add(file);
@@ -689,12 +730,13 @@ public sealed partial class AsyncImage : DependencyObject
 
         foreach (FileInfo file in files.OrderBy(item => item.LastAccessTimeUtc))
         {
-            if (totalBytes <= MaxDiskCacheBytes)
+            if (totalBytes <= Volatile.Read(ref _diskOptions).MaxDiskMegabytes * 1024L * 1024)
                 break;
             try
             {
                 long length = file.Length;
                 file.Delete();
+                File.Delete(file.FullName + ".meta.json");
                 totalBytes -= length;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

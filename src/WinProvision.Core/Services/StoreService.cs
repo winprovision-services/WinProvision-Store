@@ -570,7 +570,9 @@ public class StoreService : IAsyncDisposable
         }
     }
 
-    public void ClearCache()
+    public void ClearCache() => ClearCacheCore(false);
+    public void ClearCacheStrict() => ClearCacheCore(true);
+    private void ClearCacheCore(bool throwOnError)
     {
         Interlocked.Increment(ref _cacheGeneration);
         SetCachedCatalog([]);
@@ -620,6 +622,7 @@ public class StoreService : IAsyncDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"[StoreService] Não foi possível remover o cache do catálogo: {ex.Message}");
+            if (throwOnError) throw;
         }
 
         CacheCleared?.Invoke();

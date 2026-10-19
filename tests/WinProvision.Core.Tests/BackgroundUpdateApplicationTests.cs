@@ -27,6 +27,53 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
     }
 
     [Fact]
+    public void IntervalPreferencesRoundTripAndOldFilesKeepDefaults()
+    {
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.SelectedPackagesOnly,
+            BackgroundUpdateSchedule.Interval, "10:30", DayOfWeek.Friday, 120, false);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.Equal(BackgroundUpdateSchedule.Interval, reloaded.UpdateSchedule);
+        Assert.Equal(120, reloaded.UpdateIntervalMinutes);
+        Assert.False(reloaded.UpdateNotificationsEnabled);
+        Assert.NotNull(reloaded.UpdateScheduleAnchorUtc);
+        Assert.Throws<ArgumentOutOfRangeException>(() => _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly,
+            BackgroundUpdateScope.AllSupportedPackages, BackgroundUpdateSchedule.Interval, "09:00", DayOfWeek.Monday, 0));
+        Assert.Equal(120, _preferences.UpdateIntervalMinutes);
+        File.WriteAllText(Path.Combine(_folder, "legacy.json"), "{\"Theme\":0,\"UpdateSchedule\":2}");
+        var legacy = new ApplicationPreferencesService(Path.Combine(_folder, "legacy.json"), false);
+        Assert.Equal(BackgroundUpdateSchedule.Weekly, legacy.UpdateSchedule);
+        Assert.Equal(60, legacy.UpdateIntervalMinutes);
+        Assert.True(legacy.UpdateNotificationsEnabled);
+    }
+
+    [Fact]
+    public async Task ExplicitRunWorksWhenScheduleIsDisabledAndFingerprintTracksVersions()
+    {
+        string? first = null, second = null;
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.AllSupportedPackages,
+            BackgroundUpdateSchedule.Interval, "09:00", DayOfWeek.Monday);
+        await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, force: true,
+            discovered: (_, fingerprint) => first = fingerprint);
+        Assert.NotNull(first);
+        Assert.Empty(_backend.Executed);
+        _backend.Packages[0] = new() { Id = "One", Name = "One", Source = "winget", AvailableVersion = "3" };
+        await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, force: true,
+            discovered: (_, fingerprint) => second = fingerprint);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void RunStateRoundTripsAndCorruptStateDoesNotBreakTheApp()
+    {
+        string path = Path.Combine(_folder, "state.json");
+        var state = new BackgroundUpdateRunState(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 1, 2, "abc");
+        BackgroundUpdateRunStore.Write(state, path);
+        Assert.Equal(state, BackgroundUpdateRunStore.Read(path));
+        File.WriteAllText(path, "incompleto");
+        Assert.Null(BackgroundUpdateRunStore.Read(path));
+    }
+
+    [Fact]
     public async Task StartupEnablesUpdatesWithoutOpeningUiAndSurvivesReload()
     {
         _preferences.SetLaunchAtStartup(true);

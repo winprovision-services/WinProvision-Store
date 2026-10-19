@@ -128,11 +128,12 @@ public static partial class OperationRunner
         customArguments ??= savedOptions?.CustomArguments;
 
         var item = queue.Enqueue(appName, OperationKind.Install, iconUrl);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             var onLogReceived = new Action<string>(line => ReportProgress(item, line));
             var onProgress = new Action<InstallProgressUpdate>(update => ReportInstallProgress(item, update));
             onLogReceived($"Instalando {appName} ({appId}) pela fonte {source}.");
@@ -243,11 +244,12 @@ public static partial class OperationRunner
         architecture ??= savedOptions?.Architecture;
 
         var item = queue.Enqueue(appName, OperationKind.Update, iconUrl);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando atualização...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             var updateHandler = _updateHandler;
             var onLogReceived = new Action<string>(line => ReportProgress(item, line));
             var onProgress = new Action<InstallProgressUpdate>(update => ReportInstallProgress(item, update));
@@ -338,11 +340,12 @@ public static partial class OperationRunner
         bool requiresElevation = false)
     {
         var item = queue.Enqueue(appName, OperationKind.Uninstall, iconUrl);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando remoção...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             var result = await executor.UninstallAppAsync(
                 appId,
                 onLogReceived: line => ReportProgress(item, line),
@@ -408,7 +411,6 @@ public static partial class OperationRunner
         bool requiresElevation = false)
     {
         var item = queue.Enqueue(appName, OperationKind.Uninstall, iconUrl);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando remoção...";
 
         var appDetail = new InstalledAppDetail
@@ -423,6 +425,8 @@ public static partial class OperationRunner
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             if (SteamUninstallService.IsGameUninstall(uninstallString))
             {
                 item.StatusText = "Aguardando a remoção na Steam...";
@@ -556,12 +560,13 @@ public static partial class OperationRunner
     {
         var item = queue.Enqueue(app.DisplayName, OperationKind.Uninstall, iconUrl);
 
-        item.State = OperationState.Running;
         item.StatusText = "Forçando remoção agressiva...";
         item.IsIndeterminate = true;
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             // O UninstallerEngineService usa o Token para timeout e cancelamento
             bool success = await uninstallerEngine.UninstallAggressivelyAsync(app, item.CancellationTokenSource.Token);
 
@@ -612,12 +617,13 @@ public static partial class OperationRunner
     {
         var item = queue.Enqueue(app.DisplayName, OperationKind.Uninstall, iconUrl);
 
-        item.State = OperationState.Running;
         item.StatusText = "Executando Force Uninstall...";
         item.IsIndeterminate = true;
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             // O UninstallerEngineService usa o ForceUninstallAsync
             bool success = await uninstallerEngine.ForceUninstallAsync(app, item.CancellationTokenSource.Token);
 
@@ -657,7 +663,7 @@ public static partial class OperationRunner
 
     /// <summary>
     /// Mesmo padrão de enfileiramento do RunInstallAsync, só que para o pipeline do
-    /// Office (ODT + configuration.xml) em vez do winget. Sem parsing de percentual —
+    /// Office (ODT + configuration.xml) em vez do winget. O Viper fornece progresso por bytes;
     /// o setup.exe do ODT não imprime progresso incremental, então o item fica
     /// indeterminado até terminar.
     /// </summary>
@@ -669,15 +675,17 @@ public static partial class OperationRunner
     {
         var item = queue.Enqueue(request.Plan.DisplayName, OperationKind.Install);
         using CancellationTokenRegistration cancellation = cancellationToken.Register(item.Cancel);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             var officeResult = await officeService.RunConfigureDetailedAsync(
                 request,
-                onStatus: line => item.StatusText = line,
-                cancellationToken: item.CancellationTokenSource.Token);
+                onStatus: line => { item.StatusText = line; item.AppendLog(line); },
+                cancellationToken: item.CancellationTokenSource.Token,
+                onProgress: update => ReportInstallProgress(item, update));
 
             bool success = officeResult.Success;
             item.RebootRequired = officeResult.RebootRequired;
@@ -718,11 +726,12 @@ public static partial class OperationRunner
         string label)
     {
         var item = queue.Enqueue(label, OperationKind.Uninstall);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             bool success = await officeService.RunRemoveAsync(
                 request,
                 onStatus: line => item.StatusText = line,
@@ -753,11 +762,12 @@ public static partial class OperationRunner
         bool silent = true)
     {
         var item = queue.Enqueue("Verificar atualizações do Office", OperationKind.Update);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             bool success = await officeService.RunUpdateNowAsync(
                 silent,
                 onStatus: line => item.StatusText = line,
@@ -788,11 +798,12 @@ public static partial class OperationRunner
         bool enabled)
     {
         var item = queue.Enqueue(enabled ? "Ativar atualizações automáticas do Office" : "Desativar atualizações automáticas do Office", OperationKind.Update);
-        item.State = OperationState.Running;
         item.StatusText = "Preparando...";
 
         try
         {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
             bool success = await officeService.RunSetAutoUpdateAsync(
                 enabled,
                 onStatus: line => item.StatusText = line,
@@ -895,7 +906,7 @@ public static partial class OperationRunner
         item.CancellationTokenSource.IsCancellationRequested
         || result.FailureReason is WingetFailureReason.ElevationCanceled or WingetFailureReason.OperationCanceled;
 
-    private static void ReportInstallProgress(OperationItem item, InstallProgressUpdate update)
+    internal static void ReportInstallProgress(OperationItem item, InstallProgressUpdate update)
     {
         // Atualiza o método se fornecido no update
         if (update.Method != WingetMethod.Unknown)
@@ -930,6 +941,7 @@ public static partial class OperationRunner
                 item.StatusText = "Instalando...";
                 break;
         }
+        item.LiveLine = item.StatusText;
     }
 
     [GeneratedRegex(@"(\d{1,3})\s?%")]

@@ -1,3 +1,4 @@
+using WinProvision.Core.Services;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -6,6 +7,9 @@ namespace WinProvision.Store.Services;
 /// <summary>Notificações nativas do Windows para operações que terminam sem janela aberta.</summary>
 public sealed partial class WindowsAppNotificationService : IDisposable
 {
+    private readonly OperationPreferencesService _preferences;
+    public WindowsAppNotificationService(OperationPreferencesService? preferences = null) => _preferences = preferences ?? new();
+    private bool Allows(NotificationCategory category) => !SuppressNotifications && _preferences.Load().Allows(category);
     public Action<string> Log { get; set; } = message => System.Diagnostics.Trace.WriteLine(message);
     public bool SuppressNotifications { get; set; }
     private bool _registered;
@@ -14,6 +18,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public bool TryRegister(Action? onNotificationInvoked = null)
     {
+        if (SuppressNotifications) return false;
         try
         {
             var manager = AppNotificationManager.Default;
@@ -55,9 +60,9 @@ public sealed partial class WindowsAppNotificationService : IDisposable
         }
     }
 
-    public void ShowCollectionResult(string title, string message)
+    public void ShowCollectionResult(string title, string message, bool failed = false)
     {
-        if (SuppressNotifications || (!_registered && !TryRegister())) return;
+        if (!Allows(failed ? NotificationCategory.Errors : NotificationCategory.Success) || (!_registered && !TryRegister())) return;
         try
         {
             AppNotificationManager.Default.Show(new AppNotificationBuilder()
@@ -71,7 +76,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowBackgroundUpdateSummary(int updated, int failed, int unselected)
     {
-        if (!_registered)
+        if (!Allows(failed > 0 ? NotificationCategory.Errors : NotificationCategory.BatchSummary) || (!_registered && !TryRegister()))
             return;
 
         string message = updated == 0 && failed == 0
@@ -102,7 +107,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowBackgroundUpdateCheckSummary(int available)
     {
-        if (!_registered)
+        if (!Allows(NotificationCategory.Updates) || (!_registered && !TryRegister()))
             return;
 
         string message = available == 0
@@ -126,7 +131,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowBackgroundUpdateFailure()
     {
-        if (!_registered)
+        if (!Allows(NotificationCategory.Errors) || (!_registered && !TryRegister()))
             return;
 
         try
@@ -147,7 +152,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowMaintenanceSummary(string message)
     {
-        if (!_registered) return;
+        if (!Allows(NotificationCategory.BatchSummary) || (!_registered && !TryRegister())) return;
         try
         {
             var notification = new AppNotificationBuilder().AddText("WinProvision Store")
@@ -155,6 +160,36 @@ public sealed partial class WindowsAppNotificationService : IDisposable
             AppNotificationManager.Default.Show(notification);
         }
         catch (Exception exception) { WinProvision.Core.Services.CoreLog.Warning(exception, "Maintenance.ShowNotification"); }
+    }
+
+    public void ShowDownloadSummary(int downloaded, int failed)
+    {
+        var category = failed > 0 ? NotificationCategory.Errors : downloaded > 1 ? NotificationCategory.BatchSummary : NotificationCategory.Success;
+        if (!Allows(category) || (!_registered && !TryRegister())) return;
+        try
+        {
+            AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText("WinProvision Store")
+                .AddText("Download de instaladores concluído").AddText($"{downloaded} baixado(s); {failed} falha(s).").BuildNotification());
+        }
+        catch (Exception ex) { CoreLog.Warning(ex, "Downloads.Notification"); }
+    }
+
+    public void ShowOperationBatchResult(IReadOnlyList<WinProvision.Core.Models.OperationItem> items)
+    {
+        int failed = items.Count(item => item.State == WinProvision.Core.Models.OperationState.Failed);
+        int succeeded = items.Count(item => item.State == WinProvision.Core.Models.OperationState.Completed);
+        if (failed == 0 && succeeded == 0) return;
+        NotificationCategory category = failed > 0 ? NotificationCategory.Errors
+            : items.Count > 1 ? NotificationCategory.BatchSummary : NotificationCategory.Success;
+        if (!Allows(category) || (!_registered && !TryRegister())) return;
+        try
+        {
+            string title = items.Count == 1 ? items[0].AppName : "Lote de operações concluído";
+            string message = items.Count == 1 ? failed > 0 ? "A operação falhou. Abra o app para ver a causa." : "Operação concluída com sucesso."
+                : $"{succeeded} concluída(s); {failed} falha(s); {items.Count - succeeded - failed} cancelada(s).";
+            AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText("WinProvision Store").AddText(title).AddText(message).BuildNotification());
+        }
+        catch (Exception ex) { CoreLog.Warning(ex, "Operations.Notification"); }
     }
 
     public void Unregister()

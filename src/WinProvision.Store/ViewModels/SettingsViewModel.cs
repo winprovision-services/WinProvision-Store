@@ -32,8 +32,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         IDesktopIntegrationService desktop,
         WinProvision.Core.Services.CacheService cache,
         WinProvision.Core.Services.AppUpdateService updater,
-        IPresentationService presentation)
+        IPresentationService presentation,
+        IBackgroundUpdateStartupService? backgroundUpdates = null,
+        IElevatorSettingsService? elevator = null,
+        ICacheSettingsService? cacheSettings = null,
+        WinProvision.Core.Services.OperationPreferencesService? operationPreferences = null)
     {
+        _operationPreferences = operationPreferences ?? new();
+        LoadExecutionOptions();
+        _cacheSettings = cacheSettings ?? new CacheSettingsService(cache);
+        _elevator = elevator ?? new ElevatorSettingsService();
+        _backgroundUpdates = backgroundUpdates;
         _themeService = themeService;
         _preferences = preferences;
         _installation = installation;
@@ -45,6 +54,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _isInitializing = true;
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);
         _isInitializing = false;
+        ReloadScheduledMaintenance();
     }
 
     partial void OnSelectedThemeOptionChanged(SettingsThemeOption? value)

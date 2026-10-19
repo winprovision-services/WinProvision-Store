@@ -15,6 +15,7 @@ public sealed partial class UpdatesIgnoreStore : IUpdatesIgnoreStore
 }
 public interface IBackgroundUpdateStartupService
 {
+    Task<int> RunNowAsync(CancellationToken token = default) => Task.FromResult(-1);
     bool IsEnabled { get; }
     Task<string?> MigrateLegacyTaskAsync(CancellationToken token = default);
     Task<(bool Success, string? Message)> EnableAsync(CancellationToken token = default);

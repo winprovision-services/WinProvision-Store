@@ -36,7 +36,7 @@ public sealed class AotJsonTests
         {
             Name = "Coleção de teste",
             Apps = [new() { Id = "Microsoft.PowerToys", PinnedVersion = "0.96" },
-                new() { Id = "Office", OfficeOptions = new OfficeInstallOptions { DownloadBeforeInstall = true } }]
+                new() { Id = "Office", OfficeOptions = new OfficeInstallOptions { DownloadBeforeInstall = true, UseViperDownload = true } }]
         };
         string json = AotJson.Serialize(profile, WinProvisionJsonOptions.Profile);
         var restored = AotJson.Deserialize<ProfileManifest>(json, WinProvisionJsonOptions.Profile)!;
@@ -44,6 +44,7 @@ public sealed class AotJsonTests
         Assert.Equal("0.96", restored.Apps[0].PinnedVersion);
         Assert.NotNull(restored.Apps[1].OfficeOptions);
         Assert.True(restored.Apps[1].OfficeOptions!.DownloadBeforeInstall);
+        Assert.True(restored.Apps[1].OfficeOptions!.UseViperDownload);
         Assert.DoesNotContain("\"source\": null", json);
     }
 

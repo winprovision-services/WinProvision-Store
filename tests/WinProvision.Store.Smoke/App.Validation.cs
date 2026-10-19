@@ -18,12 +18,15 @@ public partial class App
     {
         if (IsSmokeTest)
         {
+            services.AddSingleton(new OperationPreferencesService(Path.Combine(SmokeTest.OutputDirectory, "operation-preferences-test.json")));
             var testCollections = Path.Combine(SmokeTest.OutputDirectory, "collections-test.json");
             if (File.Exists(testCollections)) File.Delete(testCollections);
             var testPreferences = Path.Combine(SmokeTest.OutputDirectory,"updates-preferences-test.json");
             if(File.Exists(testPreferences)) File.Delete(testPreferences);
             services.AddSingleton<ApplicationPreferencesService>(_=>new ApplicationPreferencesService(testPreferences,false));
             services.AddSingleton<IBackgroundUpdateStartupService, SmokeUpdateStartup>();
+            services.AddSingleton<IElevatorSettingsService, SmokeElevatorSettings>();
+            services.AddSingleton<ICacheSettingsService, SmokeCacheSettings>();
             services.AddSingleton<IUpdatesIgnoreStore, SmokeIgnoredUpdates>();
             services.AddSingleton<IInstalledPackagesService, SmokePackageBackend.SmokeInstalledPackagesService>();
             services.AddSingleton<IPackageBackend, SmokePackageBackend>();
@@ -46,6 +49,12 @@ public partial class App
     }
     partial void TryLaunchValidation(ref bool handled)
     {
+        if (Environment.GetCommandLineArgs().Contains("--probe-home"))
+        {
+            _backgroundUpdateTask = RunHomeProbeAsync();
+            handled = true;
+            return;
+        }
         if (Environment.GetCommandLineArgs().Contains("--probe-inventory"))
         {
             _backgroundUpdateTask = RunInventoryProbeAsync();
@@ -67,6 +76,57 @@ public partial class App
     partial void ConfigureValidationWindow()
     {
         if (IsSmokeTest) _window!.RootElement.Loaded += RunSmokeTest;
+    }
+
+    private async Task RunHomeProbeAsync()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "home-probe-results");
+        Directory.CreateDirectory(directory);
+        int code = 1;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            _window = new MainWindow(_services!);
+            _window.Activate();
+            var storefront = _services!.GetRequiredService<HomeViewModel>().Storefront;
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (DateTime.UtcNow < deadline && (_window.CurrentPage is not HomePage page
+                || storefront.SelectedBanner is null || ((Microsoft.UI.Xaml.Controls.Image)page.FindName("HeroBannerImage")).Source is null))
+                await Task.Delay(100);
+            if (_window.CurrentPage is not HomePage home || storefront.SelectedBanner is null
+                || ((Microsoft.UI.Xaml.Controls.Image)home.FindName("HeroBannerImage")).Source is null)
+                throw new InvalidOperationException("O banner real não ficou disponível: " + storefront.StatusText);
+            double bannerSeconds = watch.Elapsed.TotalSeconds;
+            foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light })
+            {
+                _window.RootElement.RequestedTheme = theme;
+                await Task.Delay(250);
+                await SmokeTest.CaptureAsync(_window.RootElement, $"home-real-{theme}.png", directory);
+            }
+            _window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 800));
+            await Task.Delay(300);
+            await SmokeTest.CaptureAsync(_window.RootElement, "home-real-compact.png", directory);
+            File.WriteAllText(Path.Combine(directory, "result.json"), AotJson.Serialize(new Dictionary<string, object?>
+            {
+                ["success"] = true, ["bannerSeconds"] = bannerSeconds, ["bannerId"] = storefront.SelectedBanner.Id,
+                ["banners"] = storefront.StoreBannerApps.Select(app => app.Id).ToArray(),
+                ["popular"] = storefront.PopularApps.Select(app => app.Id).ToArray(),
+                ["note"] = "Catálogo e imagem reais; nenhuma instalação solicitada."
+            }));
+            code = 0;
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "HomeProbe");
+            File.WriteAllText(Path.Combine(directory, "result.json"), AotJson.Serialize(new Dictionary<string, object?>
+                { ["success"] = false, ["error"] = exception.ToString() }));
+        }
+        finally
+        {
+            if (_services is not null) await _services.DisposeAsync();
+            Environment.ExitCode = code;
+            Exit();
+        }
     }
     private async Task RunInventoryProbeAsync()
     {

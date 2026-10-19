@@ -16,6 +16,36 @@ public class OperationsQueueService : INotifyPropertyChanged, IDisposable
 
     private readonly System.Threading.Lock _gate = new();
     private readonly List<OperationItem> _operations = [];
+    private readonly List<OperationItem> _batch = [];
+    private int _batchDepth;
+    public event Action<IReadOnlyList<OperationItem>>? BatchCompleted;
+    public IDisposable BeginBatch()
+    {
+        lock (_gate) _batchDepth++;
+        return new BatchScope(this);
+    }
+    private void EndBatch()
+    {
+        OperationItem[]? completed = null;
+        lock (_gate)
+        {
+            _batchDepth--;
+            if (_batchDepth == 0 && _batch.Count > 0 && _operations.All(item => item.IsFinished))
+            { completed = _batch.ToArray(); _batch.Clear(); }
+        }
+        PublishBatch(completed);
+    }
+    private void PublishBatch(OperationItem[]? completed)
+    {
+        if (completed is null) return;
+        try { BatchCompleted?.Invoke(completed); }
+        catch (Exception ex) { CoreLog.Warning(ex, "Operations.BatchNotification"); }
+    }
+    private sealed class BatchScope(OperationsQueueService queue) : IDisposable
+    {
+        private OperationsQueueService? _queue = queue;
+        public void Dispose() => Interlocked.Exchange(ref _queue, null)?.EndBatch();
+    }
     private TaskCompletionSource _idle = CompletedSource();
 
     public IReadOnlyList<OperationItem> Operations
@@ -80,7 +110,11 @@ public class OperationsQueueService : INotifyPropertyChanged, IDisposable
         lock (_gate)
         {
             if (_idle.Task.IsCompleted)
+            {
                 _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (_batchDepth == 0) _batch.Clear();
+            }
+            _batch.Add(item);
             _operations.Add(item);
             item.PropertyChanged += Item_PropertyChanged;
         }
@@ -121,11 +155,16 @@ public class OperationsQueueService : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(CompletedCount));
             OnPropertyChanged(nameof(HasFailedOperations));
             _historyService?.Record(item);
+            OperationItem[]? completedBatch = null;
             lock (_gate)
             {
                 if (_operations.All(operation => operation.IsFinished))
+                {
                     _idle.TrySetResult();
+                    if (_batchDepth == 0) { completedBatch = _batch.ToArray(); _batch.Clear(); }
+                }
             }
+            PublishBatch(completedBatch);
         }
         else if (e.PropertyName == nameof(OperationItem.State))
         {

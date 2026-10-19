@@ -25,6 +25,17 @@ public sealed class CacheService
         _packageMetricsService = packageMetricsService;
     }
 
+    public Task ClearImagesAsync() => Task.Run(_iconService.ClearCache);
+
+    public async Task ClearCatalogAsync(CancellationToken token = default)
+    {
+        await Task.Run(_storeService.ClearCacheStrict, token);
+        await _apiService.ClearCatalogCacheAsync(token);
+        await _packageMetricsService.ClearAsync();
+    }
+
+    public Task ClearInstallersAsync(CancellationToken token = default) => _apiService.ClearInstallerCacheAsync(token);
+
     public async Task ClearAsync()
     {
         _storeService.ClearCache();

@@ -36,6 +36,7 @@ internal static partial class SmokeTest
     {
         Directory.CreateDirectory(OutputDirectory);
         window.HideStartupSplash();
+        await VerifyImageCacheRenewalAsync();
         var app = new AppEntry { Id = "Test.Package", Name = "Aplicativo de teste", Source = "winget", InstallerSizeBytes = 100 * 1024L * 1024 };
         services.GetRequiredService<HomeViewModel>().LoadPreview((AppEntry[])[app]);
         var packageOptions = services.GetRequiredService<PackageInstallOptionsService>();
@@ -61,6 +62,8 @@ internal static partial class SmokeTest
                 {
                     var rotation = (Microsoft.UI.Xaml.Controls.Primitives.ToggleButton)home.FindName("HeroRotationToggleButton");
                     var banner = (Border)home.FindName("HeroBanner");
+                    Check(banner.Visibility == Visibility.Visible && banner.DataContext is AppEntry,
+                        $"Descobrir: banner publicado permanece visível em {theme}");
                     var pauseIcon = (FontIcon)home.FindName("HeroRotationIcon");
                     Check(Views.HomePage.IsInteractiveChild(pauseIcon, banner)
                         && !Views.HomePage.IsInteractiveChild(home.FindName("HeroBannerImage") as DependencyObject, banner),
@@ -173,6 +176,55 @@ internal static partial class SmokeTest
                     Check(settings.FindName("CardBackup") is null && settings.FindName("PanelBackup") is null && settings.ViewModel.SearchResults.Count == 0,
                         $"Configurações: backup ausente da página e da pesquisa em {theme}");
                     settings.ViewModel.SearchText = "";
+                    settings.NavigateToCategory("Maintenance");
+                    settings.ViewModel.ScheduledUpdateFrequency = "Interval";
+                    settings.ViewModel.ScheduledUpdatesEnabled = true;
+                    settings.ViewModel.ScheduledUpdateMode = "NotifyOnly";
+                    settings.ViewModel.ScheduledUpdateInterval = "60";
+                    await settings.ViewModel.SaveScheduledMaintenanceCommand.ExecuteAsync(null);
+                    var scheduledPreferences = services.GetRequiredService<ApplicationPreferencesService>();
+                    Check(scheduledPreferences.UpdateSchedule == BackgroundUpdateSchedule.Interval
+                        && scheduledPreferences.UpdateIntervalMinutes == 60 && scheduledPreferences.AutoUpdateAtStartup,
+                        $"Manutenção: agenda salva nas preferências isoladas em {theme}");
+                    var scheduledService = (SmokeUpdateStartup)services.GetRequiredService<IBackgroundUpdateStartupService>();
+                    scheduledService.FailNextEnable = true;
+                    settings.ViewModel.ScheduledUpdateInterval = "120";
+                    await settings.ViewModel.SaveScheduledMaintenanceCommand.ExecuteAsync(null);
+                    Check(scheduledPreferences.UpdateIntervalMinutes == 60 && scheduledPreferences.AutoUpdateAtStartup,
+                        $"Manutenção: falha no agendamento restaura a preferência anterior em {theme}");
+                    await settings.ViewModel.RunScheduledMaintenanceCommand.ExecuteAsync(null);
+                    Check(scheduledService.RunCalls > 0, $"Manutenção: execução imediata delegada ao serviço em {theme}");
+                    await Task.Delay(200);
+                    Check(((ComboBox)settings.FindName("MaintenanceIntervalComboBox")).Visibility == Visibility.Visible,
+                        $"Manutenção: intervalo visível em {theme}");
+                    Check(((Button)settings.FindName("SaveMaintenanceButton")).Command is not null
+                        && ((Button)settings.FindName("RunMaintenanceNowButton")).Command is not null,
+                        $"Manutenção: comandos WinRT disponíveis em {theme}");
+                    await CaptureAsync(window.RootElement, $"settings-maintenance-{theme}.png");
+                    var maintenanceScroll = (ScrollViewer)settings.FindName("SubCategoryScrollViewer");
+                    maintenanceScroll.ChangeView(null, maintenanceScroll.ScrollableHeight, null, true);
+                    await Task.Delay(150);
+                    await CaptureAsync(window.RootElement, $"settings-maintenance-actions-{theme}.png");
+                    settings.GoBack();
+                    settings.NavigateToCategory("Elevator");
+                    await settings.ViewModel.RefreshElevatorCommand.ExecuteAsync(null);
+                    Check(((Button)settings.FindName("RefreshElevatorButton")).Command is not null,
+                        $"Elevator: verificação disponível por binding WinRT em {theme}");
+                    await settings.ViewModel.AuthorizeElevationCommand.ExecuteAsync(null);
+                    var elevator = (SmokeElevatorSettings)services.GetRequiredService<IElevatorSettingsService>();
+                    Check(elevator.Authorized, $"Elevator: autorização delegada ao serviço simulado em {theme}");
+                    settings.ViewModel.AllowElevator = false;
+                    await settings.ViewModel.SaveElevatorOptionsCommand.ExecuteAsync(null);
+                    Check(!elevator.IsAllowed && !elevator.Authorized, $"Elevator: bloqueio salva política e encerra cache simulado em {theme}");
+                    await settings.ViewModel.AuthorizeElevationCommand.ExecuteAsync(null);
+                    Check(!elevator.Authorized, $"Elevator: política bloqueada não autoriza em {theme}");
+                    settings.ViewModel.AllowElevator = true;
+                    await settings.ViewModel.SaveElevatorOptionsCommand.ExecuteAsync(null);
+                    await settings.ViewModel.AuthorizeElevationCommand.ExecuteAsync(null);
+                    await settings.ViewModel.RevokeElevationCommand.ExecuteAsync(null);
+                    Check(!elevator.Authorized && elevator.IsAllowed, $"Elevator: encerrar sessão preserva permissão futura em {theme}");
+                    await CaptureAsync(window.RootElement, $"settings-elevator-{theme}.png");
+                    settings.GoBack();
                 }
                 if (window.CurrentPage is Views.CollectionsPage packages)
                 {
@@ -186,6 +238,18 @@ internal static partial class SmokeTest
             }
         }
         window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
+        window.Navigate("settings");
+        await Task.Delay(300);
+        if (window.CurrentPage is Views.SettingsPage compactMaintenance)
+        {
+            compactMaintenance.NavigateToCategory("Maintenance");
+            compactMaintenance.ViewModel.ScheduledUpdateFrequency = "Interval";
+            await Task.Delay(200);
+            await CaptureAsync(window.RootElement, "settings-maintenance-compact.png");
+            compactMaintenance.NavigateToCategory("Elevator");
+            await Task.Delay(200);
+            await CaptureAsync(window.RootElement, "settings-elevator-compact.png");
+        }
         window.Navigate("office");
         await Task.Delay(400);
         await CaptureAsync(window.RootElement, "office-compact.png");
@@ -272,14 +336,80 @@ internal static partial class SmokeTest
             await CaptureAsync(window.RootElement, $"settings-startup-compact-{theme}.png");
             window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
             await Task.Delay(250);
+            var operationPreferences = services.GetRequiredService<OperationPreferencesService>();
+            operationPreferences.Save(new());
+            settingsPage.NavigateToCategory("Notifications");
+            var settingsModel = settingsPage.ViewModel;
+            settingsModel.NotifySuccess = false;
+            settingsModel.NotifyBatchSummary = true;
+            ((Button)settingsPage.FindName("SaveNotificationCategoriesButton")).Command.Execute(null);
+            Check(!operationPreferences.Load().NotifySuccess && operationPreferences.Load().NotifyErrors,
+                $"Notificações: categorias independentes salvas por binding em {theme}");
+            await CaptureAsync(window.RootElement, $"settings-notifications-{theme}.png");
+            settingsPage.NavigateToCategory("Execution");
+            settingsModel.ParallelOperations = "2"; settingsModel.ParallelDownloads = "4";
+            settingsModel.InstallerNames = "PackageVersionArchitecture";
+            settingsModel.DownloadDirectory = Path.Combine(OutputDirectory, "downloads-test");
+            ((Button)settingsPage.FindName("SaveExecutionOptionsButton")).Command.Execute(null);
+            Check(operationPreferences.Load().ParallelOperations == 2 && operationPreferences.Load().ParallelDownloads == 4
+                && operationPreferences.Load().InstallerNames == InstallerNameStyle.PackageVersionArchitecture,
+                $"Operações: limites e nomes persistidos por binding em {theme}");
+            Check(!operationPreferences.Load().NotifySuccess, $"Operações: salvar preserva categorias de notificação em {theme}");
+            settingsModel.ParallelOperations = "0";
+            settingsModel.SaveExecutionOptionsCommand.Execute(null);
+            Check(operationPreferences.Load().ParallelOperations == 2, $"Operações: limite inválido preserva preferências anteriores em {theme}");
+            settingsModel.LoadExecutionOptions();
+            settingsModel.SaveExecutionOptionsCommand.Execute(null);
+            await CaptureAsync(window.RootElement, $"settings-execution-{theme}.png");
+            var executionScroll = (ScrollViewer)settingsPage.FindName("SubCategoryScrollViewer");
+            executionScroll.ChangeView(null, executionScroll.ScrollableHeight, null, true);
+            await Task.Delay(150);
+            await CaptureAsync(window.RootElement, $"settings-downloads-{theme}.png");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
+            await Task.Delay(200);
+            executionScroll.ChangeView(null, executionScroll.ScrollableHeight, null, true);
+            await Task.Delay(150);
+            await CaptureAsync(window.RootElement, $"settings-downloads-compact-{theme}.png");
+            settingsPage.NavigateToCategory("Notifications");
+            await CaptureAsync(window.RootElement, $"settings-notifications-compact-{theme}.png");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
+            await Task.Delay(150);
+            operationPreferences.Save(new());
             settingsPage.NavigateToCategory("Operations");
             Check(ReferenceEquals(((Button)settingsPage.FindName("RefreshCatalogButton")).Command,
                 settingsPage.ViewModel.RefreshCatalogCommand), "Catálogo: atualização manual separada da limpeza de cache");
+            var cacheSettings = (SmokeCacheSettings)services.GetRequiredService<ICacheSettingsService>();
+            cacheSettings.Reset();
+            settingsPage.ViewModel.ImageCacheLimit = "256";
+            settingsPage.ViewModel.ImageCacheDays = "7";
+            await settingsPage.ViewModel.SaveImageCacheOptionsCommand.ExecuteAsync(null);
+            await settingsPage.ViewModel.MeasureCacheCommand.ExecuteAsync(null);
+            Check(cacheSettings.Options == new ImageCacheOptions(256, 7), $"Cache: opções de imagens salvas por comando em {theme}");
+            Check(settingsPage.ViewModel.ImagesCacheUsage.Contains("120"), $"Cache: medição de imagens exibida em {theme}");
             await CaptureAsync(window.RootElement, $"settings-catalog-{theme}.png");
+            var cacheScroll = (ScrollViewer)settingsPage.FindName("SubCategoryScrollViewer");
+            cacheScroll.ChangeView(null, cacheScroll.ScrollableHeight, null, true);
+            await Task.Delay(150);
+            await CaptureAsync(window.RootElement, $"settings-cache-options-{theme}.png");
+            await settingsPage.ViewModel.ClearImagesCacheCommand.ExecuteAsync(null);
+            Check(cacheSettings.Images.Bytes == 0 && cacheSettings.Catalog.Bytes > 0 && cacheSettings.Installers.Bytes > 0,
+                $"Cache: limpeza de imagens preserva catálogo e instaladores em {theme}");
+            await settingsPage.ViewModel.ClearCatalogCacheCommand.ExecuteAsync(null);
+            Check(cacheSettings.Catalog.Bytes == 0 && cacheSettings.Installers.Bytes > 0,
+                $"Cache: limpeza de catálogo preserva instaladores em {theme}");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
+            cacheScroll.ChangeView(null, 0, null, true);
+            await Task.Delay(200);
+            await CaptureAsync(window.RootElement, $"settings-cache-compact-{theme}.png");
+            window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 1000));
         }
         var queue = services.GetRequiredService<OperationsQueueService>();
         var queueModel = services.GetRequiredService<OperationsViewModel>();
         var operation = queue.Enqueue("Operação de demonstração", OperationKind.Install);
+        operation.State = OperationState.Running;
+        operation.IsIndeterminate = false;
+        operation.Progress = 42.5;
+        operation.LiveLine = "Baixando... 42,50%";
         var popup = (Microsoft.UI.Xaml.Controls.Primitives.Popup)window.RootElement.FindName("QueuePopup");
         var queuePanel = (OperationsQueuePanel)popup.Child;
         foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light })
@@ -291,6 +421,9 @@ internal static partial class SmokeTest
                 $"Operações: superfície Mica abre no tema {theme}");
             Check(ReferenceEquals(queuePanel.DataContext, queueModel) && queuePanel.ActualTheme == theme,
                 $"Operações: estado e tema preservados em {theme}");
+            var progressBar = FindOperationProgress(queuePanel, operation.Id);
+            Check(progressBar is { IsIndeterminate: false, Value: 42.5 },
+                $"Operações: barra exibe o percentual determinado em {theme}");
             Check(popup.HorizontalOffset >= 0 && popup.HorizontalOffset + queuePanel.ActualWidth <= window.RootElement.ActualWidth
                 && popup.VerticalOffset + queuePanel.ActualHeight <= window.RootElement.ActualHeight,
                 $"Operações: painel permanece dentro da janela em {theme}");
@@ -333,6 +466,15 @@ internal static partial class SmokeTest
         var page = window.CurrentPage;
         Check(false, $"Navegação: {tag} não renderizou em 10 segundos no tema {theme}; página={page?.GetType().Name}, carregada={page?.IsLoaded}, tamanho={page?.ActualWidth}x{page?.ActualHeight}, raiz={window.RootElement.ActualWidth}x{window.RootElement.ActualHeight}");
     }
+    private static ProgressBar? FindOperationProgress(DependencyObject root, Guid id)
+    {
+        if (root is ProgressBar { Name: "OperationProgress", DataContext: OperationViewModel item } bar && item.Id == id)
+            return bar;
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+            if (FindOperationProgress(VisualTreeHelper.GetChild(root, index), id) is { } found) return found;
+        return null;
+    }
+
     private static CheckBox? FindOfficeSelection(DependencyObject root, string id)
     {
         if (root is CheckBox { DataContext: OfficeAppToggleViewModel item } selection && item.Id == id)
@@ -342,7 +484,7 @@ internal static partial class SmokeTest
                 return found;
         return null;
     }
-    private static async Task CaptureAsync(FrameworkElement root, string name, string? outputDirectory = null)
+    internal static async Task CaptureAsync(FrameworkElement root, string name, string? outputDirectory = null)
     {
         // RenderTargetBitmap omits the compositor-owned Mica backdrop. Use its
         // opaque theme fallback only while rendering, then restore the real brush.

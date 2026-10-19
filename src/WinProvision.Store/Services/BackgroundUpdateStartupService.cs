@@ -130,7 +130,12 @@ public sealed partial class BackgroundUpdateStartupService(
         }
 
         string command = BackgroundUpdateCommand.ForDirectory(AppContext.BaseDirectory);
-        string scheduleType = preferences.UpdateSchedule == BackgroundUpdateSchedule.Daily ? "DAILY" : "WEEKLY";
+        string scheduleType = preferences.UpdateSchedule switch
+        {
+            BackgroundUpdateSchedule.Interval => preferences.UpdateIntervalMinutes == 1440 ? "DAILY" : "MINUTE",
+            BackgroundUpdateSchedule.Daily => "DAILY",
+            _ => "WEEKLY"
+        };
         var startInfo = new ProcessStartInfo
         {
             FileName = "schtasks.exe",
@@ -142,10 +147,15 @@ public sealed partial class BackgroundUpdateStartupService(
         foreach (string argument in new[]
         {
             "/Create", "/TN", ScheduledTaskName, "/SC", scheduleType,
-            "/ST", preferences.UpdateScheduleTime,
+            "/ST", preferences.UpdateSchedule == BackgroundUpdateSchedule.Interval ? DateTime.Now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : preferences.UpdateScheduleTime,
             "/TR", command, "/IT", "/F"
         })
             startInfo.ArgumentList.Add(argument);
+        if (preferences.UpdateSchedule == BackgroundUpdateSchedule.Interval)
+        {
+            startInfo.ArgumentList.Add("/MO");
+            startInfo.ArgumentList.Add((preferences.UpdateIntervalMinutes == 1440 ? 1 : preferences.UpdateIntervalMinutes).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         if (preferences.UpdateSchedule == BackgroundUpdateSchedule.Weekly)
         {
             startInfo.ArgumentList.Add("/D");
@@ -156,6 +166,21 @@ public sealed partial class BackgroundUpdateStartupService(
             ? (true, null)
             : (false, string.IsNullOrWhiteSpace(result.Output)
                 ? $"schtasks.exe retornou código {result.ExitCode}." : result.Output.Trim());
+    }
+
+    public async Task<int> RunNowAsync(CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        var start = new ProcessStartInfo(BackgroundUpdateCommand.CliPath(AppContext.BaseDirectory))
+        {
+            UseShellExecute = false, CreateNoWindow = true
+        };
+        start.ArgumentList.Add("--background-update-now");
+        using var process = Process.Start(start) ?? throw new IOException("Não foi possível iniciar a CLI.");
+        // The child owns its operation and cancellation; never abandon an installer mid-flight.
+        await process.WaitForExitAsync().ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+        return process.ExitCode;
     }
 
     private static string ToSchtasksDay(DayOfWeek day) => day switch

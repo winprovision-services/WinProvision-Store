@@ -5,6 +5,7 @@ using WinProvision.Core.Services;
 namespace WinProvision.Store.Services;
 public interface IPackageBackend
 {
+    IDisposable? BeginBatch() => null;
     Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null);
     Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null);
     Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false);
@@ -14,6 +15,7 @@ public interface IPackageBackend
 }
 public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
 {
+    public IDisposable BeginBatch() => _queue.BeginBatch();
     private readonly OperationsQueueService _queue;
     private readonly WingetExecutor _executor;
     private readonly WinGetService _winGet;
@@ -21,7 +23,6 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
     private readonly UninstallerEngineService _uninstaller;
     private readonly WinProvisionApiService _api;
     private readonly OfficeDeploymentToolService _office;
-    private readonly SemaphoreSlim _serial = new(1, 1);
     private CancellationTokenSource _waiting = new();
     private readonly List<CancellationTokenSource> _retiredTokens = [];
     private readonly object _gate = new();
@@ -50,39 +51,34 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         { Success = false, ExitCode = 1, Output = ApplicationPackagePolicy.SelfManagementMessage });
     public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => app.IsSelf ? SelfManagementBlocked() : TrackAsync($"{app.Source}:{app.Id}", async token =>
     {
-        await _serial.WaitAsync(token);
-        try { return await OperationRunner.RunInstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, installLocation: options?.InstallLocation, source: app.Source, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null, requiresElevation: options?.RequiresElevation == true, version: options?.Version, customArguments: options?.CustomArguments); }
-        finally { _serial.Release(); }
+        token.ThrowIfCancellationRequested();
+        return await OperationRunner.RunInstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, installLocation: options?.InstallLocation, source: app.Source, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null, requiresElevation: options?.RequiresElevation == true, version: options?.Version, customArguments: options?.CustomArguments);
     });
     public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => ApplicationPackagePolicy.IsSelf(package.Id, package.Name) ? SelfManagementBlocked() : TrackAsync($"{package.Source}:{package.Id}", async token =>
     {
-        await _serial.WaitAsync(token);
-        try { return await OperationRunner.RunUpdateAsync(_queue, _executor, package.Id, package.Name, package.IconUrl, source: package.Source, elevated: options?.RequiresElevation == true, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null); }
-        finally { _serial.Release(); }
+        token.ThrowIfCancellationRequested();
+        return await OperationRunner.RunUpdateAsync(_queue, _executor, package.Id, package.Name, package.IconUrl, source: package.Source, elevated: options?.RequiresElevation == true, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: false, useSavedPackageOptions: options is null);
     });
     public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => app.IsSelf ? SelfManagementBlocked() : TrackAsync(InstalledPackagesService.IsOffice(app.Id, app.Name) ? "office:removeall" : $"{app.Source}:{app.Id}", async token =>
     {
-        await _serial.WaitAsync(token);
-        try
+        token.ThrowIfCancellationRequested();
+        if (InstalledPackagesService.IsOffice(app.Id, app.Name))
         {
-            if (InstalledPackagesService.IsOffice(app.Id, app.Name))
-            {
-                var request = new OfficeRemoveRequest(true,
-                    DisplayLevel: interactive ? OfficeDisplayLevel.Visible : OfficeDisplayLevel.Silent,
-                    CleanStoreEdition: true, UseRemoveMSI: true, UseAggressiveUninstall: true);
-                bool removed = await OperationRunner.RunOfficeRemoveAsync(_queue, _office, request, "Remoção completa do Office (RemoveAll)");
-                if (removed) _installed.MarkUninstalled();
-                return new WingetExecutionResult { Success = removed };
-            }
-            await _installed.EnsureLoadedAsync(token);
-            var match = _installed.GetAllInstalledApps().FirstOrDefault(item => item.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase) || item.DisplayName.Equals(app.Name, StringComparison.OrdinalIgnoreCase));
-            string? installedVersion = string.IsNullOrWhiteSpace(match?.DisplayVersion) ? null : match.DisplayVersion;
-            if (interactive && !SteamUninstallService.IsGameUninstall(match?.UninstallString ?? ""))
-                return await OperationRunner.RunUninstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, app.Source, installedVersion, interactive: true, requiresElevation: requiresElevation);
-            bool success = await OperationRunner.RunUninstallWithFallbackAsync(_queue, _executor, _uninstaller, app.Id, app.Name, app.IconUrl, match?.UninstallString ?? "", match?.QuietUninstallString ?? "", match?.InstallLocation ?? "", _installed, source: app.Source, installedVersion: installedVersion, apiService: _api, requiresElevation: requiresElevation);
-            return new WingetExecutionResult { Success = success };
+            var request = new OfficeRemoveRequest(true,
+                DisplayLevel: interactive ? OfficeDisplayLevel.Visible : OfficeDisplayLevel.Silent,
+                CleanStoreEdition: true, UseRemoveMSI: true, UseAggressiveUninstall: true);
+            bool removed = await OperationRunner.RunOfficeRemoveAsync(_queue, _office, request, "Remoção completa do Office (RemoveAll)");
+            if (removed) _installed.MarkUninstalled();
+            return new WingetExecutionResult { Success = removed };
         }
-        finally { _serial.Release(); }
+        await _installed.EnsureLoadedAsync(token);
+        var match = _installed.GetAllInstalledApps().FirstOrDefault(item => item.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase) || item.DisplayName.Equals(app.Name, StringComparison.OrdinalIgnoreCase));
+        string? installedVersion = string.IsNullOrWhiteSpace(match?.DisplayVersion) ? null : match.DisplayVersion;
+        if (interactive && !SteamUninstallService.IsGameUninstall(match?.UninstallString ?? ""))
+            return await OperationRunner.RunUninstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, app.Source, installedVersion, interactive: true, requiresElevation: requiresElevation);
+        bool success = await OperationRunner.RunUninstallWithFallbackAsync(_queue, _executor, _uninstaller, app.Id, app.Name, app.IconUrl, match?.UninstallString ?? "", match?.QuietUninstallString ?? "", match?.InstallLocation ?? "", _installed, source: app.Source, installedVersion: installedVersion, apiService: _api, requiresElevation: requiresElevation);
+        return new WingetExecutionResult { Success = success };
+
     });
     private Task<WingetExecutionResult> TrackAsync(string key, Func<CancellationToken, Task<WingetExecutionResult>> action)
     {
@@ -133,7 +129,6 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         await ShutdownAsync();
         _waiting.Dispose();
         foreach (var token in _retiredTokens) token.Dispose();
-        _serial.Dispose();
     }
     public Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token) => _winGet.GetUpgradablePackagesAsync(cancellationToken: token);
 }

@@ -214,8 +214,31 @@ public class WingetExecutor
         string sourceIndependentArgs = BuildUninstallArguments(appId, true,
             effectiveVersion, interactive: interactive);
 
-        var result = await ExecuteWithElevationFallbackAsync(
-            baseArgs, onLogReceived, cancellationToken, forceElevation: requiresElevation);
+        // An unelevated winget may invoke an uninstall.exe that raises its own UAC
+        // prompt. Start desktop removals through our elevator so the consent is
+        // attributed to WinProvision. Store removals retain their user context.
+        bool preferElevation = requiresElevation || !string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase);
+        bool retryAsUser = false;
+        async Task<WingetExecutionResult> RunUninstallAttemptAsync(string arguments, bool userScope = false)
+        {
+            var attempt = await ExecuteWithElevationFallbackAsync(arguments, onLogReceived,
+                cancellationToken, forceElevation: preferElevation && !userScope);
+            if (attempt.FailureReason == WingetFailureReason.Unknown)
+                attempt.FailureReason = WingetErrorTranslator.Classify(attempt.ExitCode, attempt.Output);
+            if (attempt.FailureReason == WingetFailureReason.UserScopeElevationConflict
+                && preferElevation && !requiresElevation && !userScope
+                && !cancellationToken.IsCancellationRequested)
+            {
+                preferElevation = false;
+                retryAsUser = true;
+                attempt = await ExecuteWithElevationFallbackAsync(arguments, onLogReceived, cancellationToken);
+                if (attempt.FailureReason == WingetFailureReason.Unknown)
+                    attempt.FailureReason = WingetErrorTranslator.Classify(attempt.ExitCode, attempt.Output);
+            }
+            return attempt;
+        }
+
+        var result = await RunUninstallAttemptAsync(baseArgs);
         if (result.Success || cancellationToken.IsCancellationRequested)
         {
             return result;
@@ -229,7 +252,8 @@ public class WingetExecutor
         // APPINSTALLER_CLI_ERROR_EXEC_UNINSTALL_COMMAND_FAILED. Esse código é genérico,
         // portanto não pedimos UAC em cada fallback: só testamos uma vez e seguimos com
         // as demais estratégias se o comando elevado falhar.
-        if (result.FailureReason == WingetFailureReason.UninstallCommandFailed && !IsCurrentProcessElevated())
+        if (result.FailureReason == WingetFailureReason.UninstallCommandFailed && !preferElevation && !retryAsUser
+            && !string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase) && !IsCurrentProcessElevated())
         {
             onLogReceived?.Invoke("A remoção exige uma tentativa com privilégios elevados...");
             var elevatedRetry = await ElevatedProcessRunner.RunElevatedAsync(
@@ -264,7 +288,7 @@ public class WingetExecutor
         if (hasVersion && unchecked((uint)result.ExitCode) == 0x8A150017)
         {
             string noVersionArgs = BuildUninstallArguments(appId, true, null, interactive: interactive);
-            var noVersionResult = await ExecuteWithElevationFallbackAsync(noVersionArgs, onLogReceived, cancellationToken);
+            var noVersionResult = await RunUninstallAttemptAsync(noVersionArgs);
             if (noVersionResult.Success || cancellationToken.IsCancellationRequested || IsElevationTerminal(noVersionResult.FailureReason))
                 return noVersionResult;
             result = noVersionResult;
@@ -297,7 +321,7 @@ public class WingetExecutor
                 string localSource = IsSafeUninstallValue(localPackage.Source) ? localPackage.Source : string.Empty;
                 string localIdArgs = BuildUninstallArguments(localPackage.Id, true, null,
                     localSource.Length > 0 ? localSource : null, interactive);
-                var localIdResult = await ExecuteWithElevationFallbackAsync(localIdArgs, onLogReceived, cancellationToken);
+                var localIdResult = await RunUninstallAttemptAsync(localIdArgs);
                 if (localIdResult.Success || cancellationToken.IsCancellationRequested || IsElevationTerminal(localIdResult.FailureReason))
                     return localIdResult;
                 result = localIdResult;
@@ -310,7 +334,7 @@ public class WingetExecutor
         // scope or falling back to the installed display name.
         if (hasSource)
         {
-            var sourceIndependentResult = await ExecuteWithElevationFallbackAsync(sourceIndependentArgs, onLogReceived, cancellationToken);
+            var sourceIndependentResult = await RunUninstallAttemptAsync(sourceIndependentArgs);
             if (sourceIndependentResult.Success || cancellationToken.IsCancellationRequested || IsElevationTerminal(sourceIndependentResult.FailureReason))
                 return sourceIndependentResult;
             result = sourceIndependentResult;
@@ -318,7 +342,7 @@ public class WingetExecutor
 
         foreach (string scope in new[] { "user", "machine" })
         {
-            var scopedResult = await ExecuteWithElevationFallbackAsync($"{sourceIndependentArgs} --scope {scope}", onLogReceived, cancellationToken);
+            var scopedResult = await RunUninstallAttemptAsync($"{sourceIndependentArgs} --scope {scope}", userScope: scope == "user");
             if (scopedResult.Success || cancellationToken.IsCancellationRequested || IsElevationTerminal(scopedResult.FailureReason))
             {
                 return scopedResult;
@@ -351,7 +375,7 @@ public class WingetExecutor
 
         string nameArgs = BuildUninstallArguments(localName, false, null,
             hasSource ? source : localPackage?.Source, interactive);
-        var byNameResult = await ExecuteWithElevationFallbackAsync(nameArgs, onLogReceived, cancellationToken);
+        var byNameResult = await RunUninstallAttemptAsync(nameArgs);
         if (byNameResult.Success)
         {
             return byNameResult;
@@ -408,12 +432,7 @@ public class WingetExecutor
         var bootstrap = await EnsureWingetBootstrappedOnceAsync(onLogReceived).ConfigureAwait(false);
         if (!bootstrap.IsUsable)
             return new WingetExecutionResult { Success = false, ExitCode = -1, Output = bootstrap.ErrorMessage ?? "WinGet indisponível.", FailureReason = WingetFailureReason.InternalError };
-
-        string args = $"download --id {QuoteArgument(appId)} --exact --source {QuoteArgument(source)} --download-directory {QuoteArgument(Path.GetFullPath(destinationFolder))} --accept-source-agreements --accept-package-agreements";
-        var result = await ExecuteWingetCommandAsync(args, onLogReceived, cancellationToken).ConfigureAwait(false);
-        if (!result.Success)
-            result.FailureReason = WingetErrorTranslator.Classify(result.ExitCode, result.Output);
-        return result;
+        return await DownloadPackageAsync(appId, source, destinationFolder, onLogReceived, cancellationToken).ConfigureAwait(false);
     }
 
     internal static string QuoteArgument(string value)
@@ -904,13 +923,39 @@ public class WingetExecutor
         return _bootstrapper.EnsureOnceAsync(onLogReceived);
     }
 
-    public Task<WingetExecutionResult> DownloadPackageAsync(string id, string source, string? directory, Action<string>? log, CancellationToken token, string? version = null)
+    public async Task<WingetExecutionResult> DownloadPackageAsync(string id, string source, string? directory, Action<string>? log, CancellationToken token, string? version = null)
     {
-        var args = new List<string> { "download", "--id", id, "--exact", "--source", source,
-            "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity" };
-        if (version is not null) args.AddRange(["--version", version]);
-        if (directory is not null) args.AddRange(["--download-directory", Path.GetFullPath(directory)]);
-        return ExecuteWingetCommandAsync("", log, token, args);
+        using var slot = await OperationLimits.Downloads.EnterAsync(token).ConfigureAwait(false);
+        string folder = InstallerDownloadPolicy.ResolveDirectory(directory);
+        Directory.CreateDirectory(folder);
+        string staging = Path.Combine(folder, ".winprovision-download-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            var args = new List<string> { "download", "--id", id, "--exact", "--source", source,
+                "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity", "--download-directory", staging };
+            if (version is not null) args.AddRange(["--version", version]);
+            var result = await ExecuteWingetCommandAsync("", log, token, args).ConfigureAwait(false);
+            if (!result.Success) return result;
+            var options = new OperationPreferencesService().Load();
+            var files = Directory.EnumerateFiles(staging, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }).ToArray();
+            foreach (string file in files)
+            {
+                token.ThrowIfCancellationRequested();
+                string original = Path.GetFileName(file);
+                bool metadata = Path.GetExtension(file).ToLowerInvariant() is ".yaml" or ".yml" or ".json";
+                // Native names contain the resolved version/architecture; preserve them when these are unknown.
+                string name = metadata ? original : InstallerDownloadPolicy.FileName(options.InstallerNames, id, version, null, original);
+                string published = InstallerDownloadPolicy.Publish(file, folder, name);
+                log?.Invoke($"Arquivo baixado: {published}");
+            }
+            return result;
+        }
+        finally
+        {
+            try { Directory.Delete(staging, true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { CoreLog.Warning(ex, "Downloads.Cleanup"); }
+        }
     }
 
     public Task<WingetExecutionResult> ExportPackagesAsync(string path, Action<string>? log, CancellationToken token)

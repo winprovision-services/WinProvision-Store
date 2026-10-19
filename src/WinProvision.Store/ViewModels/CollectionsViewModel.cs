@@ -661,6 +661,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
 
         HasError = false;
         IsBusy = true;
+        using var operationBatch = _backend.BeginBatch();
         int succeeded = 0;
         var failures = new List<string>();
         try
@@ -668,26 +669,32 @@ public sealed partial class CollectionsViewModel : PageViewModel
             failures.AddRange(selected
                 .Where(item => !item.IsInstalled && !item.SupportsInstall && !item.App.IsSelf)
                 .Select(item => $"{item.Name}: configuração de instalação ausente ou incompatível."));
-            foreach (PackageItemViewModel item in installable)
+            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            await Task.WhenAll(installable.Select(async item =>
             {
-                token.ThrowIfCancellationRequested();
-                item.IsWorking = true;
+                await batchGate.WaitAsync(token);
                 try
                 {
-                    bool success = await InstallPackageOrOfficeAsync(item, options, token);
-                    if (success)
+                    token.ThrowIfCancellationRequested();
+                    item.IsWorking = true;
+                    try
                     {
-                        item.IsInstalled = true;
-                        succeeded++;
+                        bool success = await InstallPackageOrOfficeAsync(item, options, token);
+                        if (success)
+                        {
+                            item.IsInstalled = true;
+                            succeeded++;
+                        }
+                        else
+                            failures.Add($"{item.Name}: {StatusText}");
                     }
-                    else
-                        failures.Add($"{item.Name}: {StatusText}");
+                    finally
+                    {
+                        item.IsWorking = false;
+                    }
                 }
-                finally
-                {
-                    item.IsWorking = false;
-                }
-            }
+                finally { batchGate.Release(); }
+            }));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -841,7 +848,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             StatusText = "Selecione pacotes WinGet ou Microsoft Store sem versão fixa para baixar.";
             return;
         }
-        string? folder = await _presentation.PickFolderAsync();
+        string? folder = new OperationPreferencesService().Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
         if (folder is null)
             return;
         await DownloadAsync(selected, folder, token);
@@ -853,32 +860,38 @@ public sealed partial class CollectionsViewModel : PageViewModel
             throw new InvalidOperationException("O serviço de download de instaladores não foi configurado.");
         int downloaded = 0;
         var failures = new List<string>();
-        for (int index = 0; index < selected.Count; index++)
+        using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelDownloads);
+        await Task.WhenAll(selected.Select(async (item, index) =>
         {
-            token.ThrowIfCancellationRequested();
-            PackageItemViewModel item = selected[index];
-            StatusText = $"Baixando instalador {index + 1} de {selected.Count}: {item.Name}…";
+            await batchGate.WaitAsync(token);
             try
             {
-                WingetExecutionResult result = _engine is not null
-                    ? await _engine.DownloadProfileAsync(item.ToReference(), folder, _ => { }, token)
-                    : await _winget!.DownloadInstallerAsync(item.Id, folder, item.App.Source, cancellationToken: token);
-                if (result.Success)
-                    downloaded++;
-                else
+                token.ThrowIfCancellationRequested();
+                StatusText = $"Baixando instalador {index + 1} de {selected.Count}: {item.Name}…";
+                try
+                {
+                    WingetExecutionResult result = _engine is not null
+                        ? await _engine.DownloadProfileAsync(item.ToReference(), folder, _ => { }, token)
+                        : await _winget!.DownloadInstallerAsync(item.Id, folder, item.App.Source, cancellationToken: token);
+                    if (result.Success)
+                        downloaded++;
+                    else
+                        failures.Add(item.Name);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    WinProvisionLog.Warning(exception, "Collections.DownloadInstaller");
                     failures.Add(item.Name);
+                }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                WinProvisionLog.Warning(exception, "Collections.DownloadInstaller");
-                failures.Add(item.Name);
-            }
-        }
+            finally { batchGate.Release(); }
+        }));
 
+        _notifications?.ShowDownloadSummary(downloaded, failures.Count);
         StatusText = failures.Count == 0
             ? $"{downloaded} instalador(es) baixado(s) em {folder}."
             : $"{downloaded} baixado(s); falha em {failures.Count}: {string.Join(", ", failures)}.";

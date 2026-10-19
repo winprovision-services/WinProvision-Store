@@ -26,16 +26,24 @@ public partial class App : Application
     private MainWindow? _window;
     private Task? _shutdown;
     private Task? _backgroundUpdateTask;
+    private MemoryMilestoneLog? _memoryMilestoneLog;
+    internal static MemoryMilestoneLog? MemoryLog { get; private set; }
     public bool ShutdownComplete { get; private set; }
     public bool IsShuttingDown => _shutdown is not null;
     public App()
     {
         InitializeComponent();
+#if DEBUG
+        DebugMemoryTelemetry.Start();
+#endif
         ConfigureValidationDebug();
         UnhandledException += (_, args) => WinProvisionLog.Error(args.Exception, "UnhandledException");
     }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _memoryMilestoneLog = MemoryMilestoneLog.TryCreate();
+        MemoryLog = _memoryMilestoneLog;
+        _memoryMilestoneLog?.RecordOnce("onlaunched_start");
         var services = new ServiceCollection();
         services.AddSingleton<IUiDispatcher>(new UiDispatcher(DispatcherQueue.GetForCurrentThread()));
         services.AddSingleton<StoreService>();
@@ -52,6 +60,7 @@ public partial class App : Application
         services.AddSingleton<InstalledAppsService>();
         services.AddSingleton<OperationHistoryService>();
         services.AddSingleton<OperationsQueueService>();
+        services.AddSingleton<OperationPreferencesService>();
         services.AddSingleton<InstallationPreferencesService>();
         services.AddSingleton<LocalBackupService>();
         services.AddSingleton<GitHubBackupService>();
@@ -72,13 +81,15 @@ public partial class App : Application
         services.AddSingleton<FeaturedCatalogService>();
         services.AddSingleton<IconService>();
         services.AddSingleton<WinProvision.Core.Services.Indexing.MsStoreCatalogService>();
-        services.AddSingleton(_ => new WindowsAppNotificationService { SuppressNotifications = IsSmokeTest, Log = WinProvisionLog.Write });
+        services.AddSingleton(p => new WindowsAppNotificationService(p.GetRequiredService<OperationPreferencesService>()) { SuppressNotifications = IsSmokeTest, Log = WinProvisionLog.Write });
         services.AddSingleton<CollectionsViewModel>();
         services.AddSingleton<OfficeDeploymentToolService>();
         services.AddSingleton<IOfficeCollectionInstaller, OfficeCollectionInstaller>();
         services.AddSingleton<OfficeInstalledProductsDetector>();
         services.AddSingleton<IOfficeConfigurationExportService, OfficeConfigurationExportService>();
         services.AddSingleton<IDesktopIntegrationService, DesktopIntegrationService>();
+        services.AddSingleton<IElevatorSettingsService, ElevatorSettingsService>();
+        services.AddSingleton<ICacheSettingsService, CacheSettingsService>();
         services.AddSingleton<OfficeViewModel>();
         services.AddSingleton<InstalledIconResolver>();
         services.AddSingleton<IInstalledPackagesService, InstalledPackagesService>();
@@ -119,6 +130,7 @@ public partial class App : Application
         services.AddTransient<AccountSyncPage>();
         ConfigureValidationServices(services);
         _services = services.BuildServiceProvider();
+        _memoryMilestoneLog?.RecordOnce("di_provider_created");
         bool validationHandled = false;
         TryLaunchValidation(ref validationHandled);
         if (validationHandled) return;
@@ -133,10 +145,19 @@ public partial class App : Application
             return;
         }
         _services.GetRequiredService<WinUiBackupSyncService>();
+        _memoryMilestoneLog?.RecordOnce("backup_sync_resolved");
         _window = new MainWindow(_services);
+        _memoryMilestoneLog?.RecordOnce("mainwindow_created");
+        _services.GetRequiredService<WindowsAppNotificationService>().TryRegister(() =>
+            _window.RootElement.DispatcherQueue.TryEnqueue(() => _window.Activate()));
+        _services.GetRequiredService<OperationsQueueService>().BatchCompleted +=
+            _services.GetRequiredService<WindowsAppNotificationService>().ShowOperationBatchResult;
         _services.GetRequiredService<SettingsViewModel>().RestartRequested += Settings_RestartRequested;
+        _memoryMilestoneLog?.RecordOnce("settings_viewmodel_resolved");
+        _memoryMilestoneLog?.RecordOnce("startup_dependencies_resolved");
         ConfigureValidationWindow();
         _window.Activate();
+        _memoryMilestoneLog?.RecordOnce("window_activated");
     }
     private async void Settings_RestartRequested(object? sender, EventArgs e)
     {

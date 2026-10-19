@@ -39,6 +39,7 @@ internal static class DeferredAppUpdate
         setupPath = Path.GetFullPath(setupPath);
         string application = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, applicationName);
         bool machineInstall = IsMachineInstallDirectory(Path.GetDirectoryName(application)!);
+        if (machineInstall) GsudoElevationService.EnsureElevationAllowed();
         string root = Path.Combine(Path.GetTempPath(), "WinProvisionUpdate", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         string helper = Path.Combine(root, "WinProvision Elevator.exe");

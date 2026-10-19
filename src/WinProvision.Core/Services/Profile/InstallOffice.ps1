@@ -1,6 +1,7 @@
 ﻿#Requires -Version 5.1
 [CmdletBinding()]
 param([switch]$VerifyOnly, [switch]$SetupComplete, [string]$StateDirectory,
+    [Parameter(DontShow)][string]$LogPath,
     [Parameter(DontShow)][switch]$ElevationRequested)
 
 Set-StrictMode -Version Latest
@@ -11,7 +12,7 @@ function Write-OfficeLog {
     param([string]$Message)
     $line = '[{0}] Office: {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
     Write-Output $line | Out-Host
-    $path = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'WinProvision-Log.log')
+    $path = if ($LogPath) { $LogPath } else { [IO.Path]::Combine([IO.Path]::GetTempPath(), 'WinProvision-Log.log') }
     try {
         if ([IO.File]::Exists($path) -and [IO.FileInfo]::new($path).Length -ge 10MB) {
             Move-Item -LiteralPath $path -Destination ($path + '.previous') -Force

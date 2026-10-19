@@ -36,12 +36,15 @@ public partial class IconService
         {
             if (File.Exists(_legacyIconManifestCachePath))
                 File.Delete(_legacyIconManifestCachePath);
+            if ((File.GetAttributes(_iconCacheFolder) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("A pasta de ícones não pode ser um link.");
             foreach (string file in Directory.EnumerateFiles(_iconCacheFolder, "*.png"))
                 File.Delete(file);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[IconService] Não foi possível limpar todos os ícones locais: {ex.Message}");
+            throw;
         }
     }
 

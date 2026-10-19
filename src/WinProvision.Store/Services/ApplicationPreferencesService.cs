@@ -30,7 +30,8 @@ public enum BackgroundUpdateSchedule
 {
     AtLogon,
     Daily,
-    Weekly
+    Weekly,
+    Interval
 }
 
 public sealed partial class ApplicationPreferencesService
@@ -51,6 +52,9 @@ public sealed partial class ApplicationPreferencesService
     public BackgroundUpdateMode UpdateMode { get; private set; } = BackgroundUpdateMode.InstallAutomatically;
     public BackgroundUpdateScope UpdateScope { get; private set; } = BackgroundUpdateScope.AllSupportedPackages;
     public BackgroundUpdateSchedule UpdateSchedule { get; private set; } = BackgroundUpdateSchedule.AtLogon;
+    public DateTimeOffset? UpdateScheduleAnchorUtc { get; private set; }
+    public int UpdateIntervalMinutes { get; private set; } = 60;
+    public bool UpdateNotificationsEnabled { get; private set; } = true;
     public string UpdateScheduleTime { get; private set; } = "09:00";
     public DayOfWeek UpdateScheduleDay { get; private set; } = DayOfWeek.Monday;
     private readonly HashSet<string> _autoUpdatePackageKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -75,6 +79,9 @@ public sealed partial class ApplicationPreferencesService
                     if (saved.UpdateScheduleDay is { } day && Enum.IsDefined(day)) UpdateScheduleDay = day;
                     if (saved.AutoUpdatePackageKeys is not null)
                         _autoUpdatePackageKeys.UnionWith(saved.AutoUpdatePackageKeys.Where(key => !string.IsNullOrWhiteSpace(key)));
+                    UpdateIntervalMinutes = saved.UpdateIntervalMinutes is >= 15 and <= 1440 ? saved.UpdateIntervalMinutes : 60;
+                    UpdateNotificationsEnabled = saved.UpdateNotificationsEnabled;
+                    UpdateScheduleAnchorUtc = saved.UpdateScheduleAnchorUtc;
                     _savedAutoUpdateEnabled = saved.AutoUpdateAtStartup;
                     AutoMaintenanceUpdates = saved.AutoMaintenanceUpdates;
                     AutoMaintenanceDrivers = saved.AutoMaintenanceDrivers;
@@ -174,8 +181,15 @@ public sealed partial class ApplicationPreferencesService
         BackgroundUpdateScope scope,
         BackgroundUpdateSchedule schedule,
         string time,
-        DayOfWeek day)
+        DayOfWeek day,
+        int? intervalMinutes = null,
+        bool? notificationsEnabled = null)
     {
+        if (intervalMinutes is not null && intervalMinutes is not (>= 15 and <= 1440))
+            throw new ArgumentOutOfRangeException(nameof(intervalMinutes), "O intervalo deve estar entre 15 minutos e 24 horas.");
+        UpdateScheduleAnchorUtc = DateTimeOffset.UtcNow;
+        UpdateIntervalMinutes = intervalMinutes ?? UpdateIntervalMinutes;
+        UpdateNotificationsEnabled = notificationsEnabled ?? UpdateNotificationsEnabled;
         UpdateMode = Enum.IsDefined(mode) ? mode : BackgroundUpdateMode.InstallAutomatically;
         UpdateScope = Enum.IsDefined(scope) ? scope : BackgroundUpdateScope.AllSupportedPackages;
         UpdateSchedule = Enum.IsDefined(schedule) ? schedule : BackgroundUpdateSchedule.AtLogon;
@@ -243,7 +257,7 @@ public sealed partial class ApplicationPreferencesService
             UpdateScheduleTime,
             UpdateScheduleDay,
             _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
-            AutoMaintenanceUpdates, AutoMaintenanceDrivers)));
+            AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc)));
     }
 
     private bool? _savedAutoUpdateEnabled;
@@ -258,5 +272,8 @@ public sealed partial class ApplicationPreferencesService
         DayOfWeek? UpdateScheduleDay = null,
         string[]? AutoUpdatePackageKeys = null,
         bool AutoMaintenanceUpdates = false,
-        bool AutoMaintenanceDrivers = false);
+        bool AutoMaintenanceDrivers = false,
+        int UpdateIntervalMinutes = 60,
+        bool UpdateNotificationsEnabled = true,
+        DateTimeOffset? UpdateScheduleAnchorUtc = null);
 }

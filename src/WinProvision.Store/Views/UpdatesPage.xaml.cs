@@ -148,7 +148,13 @@ public sealed partial class UpdatesPage : Page
         UpdateScheduleComboBox.SelectedValue=ViewModel.AutomationSchedule; UpdateAutomationModeComboBox.SelectedValue=ViewModel.AutomationMode; UpdateAutomationScopeComboBox.SelectedValue=ViewModel.AutomationScope;
         UpdateScheduleDayComboBox.SelectedValue=ViewModel.AutomationDay; UpdateScheduleTimeBox.Text=ViewModel.AutomationTime; AutoUpdatePackageSelectionText.Text=ViewModel.AutomationSelectionText;
     }
-    private void UpdateScheduleComboBox_SelectionChanged(object sender,SelectionChangedEventArgs e) { if(UpdateScheduleDayComboBox is not null) UpdateScheduleDayComboBox.Visibility=UpdateScheduleComboBox.SelectedValue as string=="Weekly"?Visibility.Visible:Visibility.Collapsed; }
+    private void UpdateScheduleComboBox_SelectionChanged(object sender,SelectionChangedEventArgs e)
+    {
+        string? schedule = UpdateScheduleComboBox.SelectedValue as string;
+        if (UpdateScheduleDayComboBox is not null) UpdateScheduleDayComboBox.Visibility = schedule == "Weekly" ? Visibility.Visible : Visibility.Collapsed;
+        if (UpdateScheduleDetailsPanel is not null) UpdateScheduleDetailsPanel.Visibility = schedule is "Daily" or "Weekly" ? Visibility.Visible : Visibility.Collapsed;
+        if (UpdateScheduleIntervalText is not null) UpdateScheduleIntervalText.Visibility = schedule == "Interval" ? Visibility.Visible : Visibility.Collapsed;
+    }
     private async void ApplyAutomationOptions_Click(object sender,RoutedEventArgs e) { if(await ViewModel.ApplyAutomationOptionsAsync(UpdateScheduleComboBox.SelectedValue as string??"",UpdateAutomationModeComboBox.SelectedValue as string??"",UpdateAutomationScopeComboBox.SelectedValue as string??"",UpdateScheduleDayComboBox.SelectedValue as string??"",UpdateScheduleTimeBox.Text)) CloseModal(); }
     private async void AutoUpdateSwitch_Toggled(object sender,RoutedEventArgs e) { if(!_loaded||_suppressToggle)return; await ViewModel.SetAutoUpdateAsync(AutoUpdateSwitch.IsOn); _suppressToggle=true; AutoUpdateSwitch.IsOn=ViewModel.AutoUpdateEnabled; _suppressToggle=false; }
     private void SelectAllByDefaultSwitch_Toggled(object sender,RoutedEventArgs e) { if(_loaded&&!_suppressToggle) ViewModel.SelectAllByDefault=SelectAllByDefaultSwitch.IsOn; }

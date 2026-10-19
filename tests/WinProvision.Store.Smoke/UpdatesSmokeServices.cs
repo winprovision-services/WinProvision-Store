@@ -11,9 +11,12 @@ internal sealed partial class SmokeIgnoredUpdates : IUpdatesIgnoreStore
 }
 internal sealed partial class SmokeUpdateStartup(ApplicationPreferencesService preferences) : IBackgroundUpdateStartupService
 {
+    public bool FailNextEnable { get; set; }
+    public int RunCalls { get; private set; }
+    public Task<int> RunNowAsync(CancellationToken token = default) { RunCalls++; return Task.FromResult(0); }
     public bool IsEnabled=>preferences.AutoUpdateAtStartup;
     public Task<string?> MigrateLegacyTaskAsync(CancellationToken token=default)=>Task.FromResult<string?>(null);
-    public Task<(bool Success,string? Message)> EnableAsync(CancellationToken token=default) { preferences.SetAutoUpdateAtStartup(true);return Task.FromResult<(bool,string?)>((true,null)); }
+    public Task<(bool Success,string? Message)> EnableAsync(CancellationToken token=default) { if (FailNextEnable) { FailNextEnable = false; return Task.FromResult<(bool,string?)>((false,"Falha simulada.")); } preferences.SetAutoUpdateAtStartup(true);return Task.FromResult<(bool,string?)>((true,null)); }
     public Task<(bool Success,string? Message)> DisableAsync(CancellationToken token=default) { preferences.SetAutoUpdateAtStartup(false);return Task.FromResult<(bool,string?)>((true,null)); }
     public Task<(bool Success,string? Message)> ApplyConfiguredScheduleAsync(CancellationToken token=default)=>Task.FromResult<(bool,string?)>((true,null));
 }

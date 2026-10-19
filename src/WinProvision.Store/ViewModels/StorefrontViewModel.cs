@@ -245,7 +245,8 @@ public sealed partial class FeaturedCategoryShelf
         UpdateCatalogSyncText();
         if (!_isNavigationActive || _isDisposed) return;
         SyncInstalledFlags(_allApps);
-        _ = LoadStoreBannersAsync(force: true);
+        if (_storeBannersLoading) _featuredRefreshPending = true;
+        else _ = LoadStoreBannersAsync(force: true);
         UpdatePopularApps();
         ApplyFilter();
     }
@@ -336,12 +337,12 @@ public sealed partial class FeaturedCategoryShelf
         {
             ApplyFilter();
             _initialContentReady.TrySetResult(true);
+            await LoadStoreBannersAsync(cancellationToken: cancellationToken);
             await _installedAppsService.EnsureLoadedAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             SyncInstalledFlags(_allApps);
             UpdatePopularApps();
             ApplyFilter();
-            await LoadStoreBannersAsync(cancellationToken: cancellationToken);
             return;
         }
 
@@ -357,20 +358,24 @@ public sealed partial class FeaturedCategoryShelf
         {
             _allApps = await _storeService.LoadCatalogAsync(cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            _featuredCatalog ??= await _featuredCatalogService.LoadAsync(cancellationToken);
             UpdateCatalogSyncText();
             SyncInstalledFlags(_allApps);
             UpdatePopularApps();
             _catalogLoaded = true;
+            App.MemoryLog?.RecordOnce("catalog_loaded");
             ApplyFilter();
             _initialContentReady.TrySetResult(true);
 
-            // Inventário WinGet e banners de rede atualizam a vitrine já aberta.
+            // Editorial content must not wait for the potentially slow WinGet inventory.
+            await LoadStoreBannersAsync(cancellationToken: cancellationToken);
+            App.MemoryLog?.RecordOnce("editorial_banners_loaded");
             await _installedAppsService.EnsureLoadedAsync(cancellationToken);
+            App.MemoryLog?.RecordOnce("installed_inventory_loaded");
             cancellationToken.ThrowIfCancellationRequested();
             SyncInstalledFlags(_allApps);
             UpdatePopularApps();
             ApplyFilter();
-            await LoadStoreBannersAsync(cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception recoveryException)
@@ -495,7 +500,7 @@ public sealed partial class FeaturedCategoryShelf
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[HomePage] Falha ao carregar banners do catálogo: {ex.Message}");
+            WinProvisionLog.Warning(ex, "Storefront.LoadBanners");
         }
         finally
         {
