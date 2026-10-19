@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
-using System.Runtime.Versioning;
 using WinProvision.Core.Models;
 
 namespace WinProvision.Core.Services;
@@ -117,34 +115,4 @@ public partial class IconService
             : url;
     }
 
-    /// <summary>
-    /// Extrai o ícone real do arquivo .exe instalado no Windows (pós-instalação).
-    /// </summary>
-    [SupportedOSPlatform("windows")]
-    public string? ExtractIconFromExe(string exePath, string appId)
-    {
-        if (!File.Exists(exePath)) return null;
-
-        try
-        {
-            string destinationPath = Path.Combine(_iconCacheFolder, $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(appId)))}.png");
-
-            if (File.Exists(destinationPath))
-                return destinationPath;
-
-            using Icon? sysIcon = Icon.ExtractAssociatedIcon(exePath);
-            if (sysIcon != null)
-            {
-                using Bitmap bitmap = sysIcon.ToBitmap();
-                AtomicFile.Write(destinationPath, stream => bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png));
-                return destinationPath;
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[IconService] Falha ao extrair ícone de '{exePath}': {ex.Message}");
-        }
-
-        return null;
-    }
 }
