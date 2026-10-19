@@ -99,10 +99,7 @@ public static class OdtProcessRunner
     }
 
     /// <summary>
-    /// Executa setup.exe /configure com elevação administrativa isolada (UAC prompt).
-    /// Usa Verb=runas diretamente no setup.exe para solicitar elevação apenas para este comando,
-    /// não elevando o processo inteiro da Store. Define explicitamente o WorkingDirectory
-    /// e usa caminhos absolutos para evitar problemas com o cwd.
+    /// Executa setup.exe /configure pelo WinProvision Elevator, sem elevar a Store.
     /// </summary>
     public static Task<OdtProcessResult> RunConfigureElevatedAsync(
         string setupExePath, string configurationXmlPath, CancellationToken ct = default)
@@ -133,28 +130,16 @@ public static class OdtProcessRunner
                 ProcessStarted = false,
             };
 
-        // Eleva diretamente o ODT: caminhos não são interpretados por cmd.exe.
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = absoluteSetupPath,
-            Arguments = $"{mode} \"{absoluteXmlPath}\"",
-            WorkingDirectory = workingDir,
-            UseShellExecute = true,
-
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-
         try
         {
             ct.ThrowIfCancellationRequested();
             int code = await GsudoElevationService.RunElevatedAsync(absoluteSetupPath,
-                startInfo.Arguments, ct, workingDirectory: workingDir).ConfigureAwait(false);
+                $"{mode} \"{absoluteXmlPath}\"", ct, workingDirectory: workingDir).ConfigureAwait(false);
             if (mode == "/download") ct.ThrowIfCancellationRequested();
             return new OdtProcessResult
             {
                 Success = InstallerExitCodes.IsSuccess(code), ExitCode = code, ProcessStarted = true,
-                ElevationCanceled = code == 999,
-                Output = code == 999 ? "Elevação não concluída pelo helper." : InstallerExitCodes.IsSuccess(code)
+                Output = InstallerExitCodes.IsSuccess(code)
                     ? string.Empty : $"{InstallerExitCodes.Describe(code)} Consulte os logs do Office Deployment Tool."
             };
         }
@@ -166,6 +151,18 @@ public static class OdtProcessRunner
                 ExitCode = 1223,
                 Output = "Elevação cancelada pelo usuário.",
                 ElevationCanceled = true,
+                ProcessStarted = false,
+            };
+        }
+        catch (Win32Exception ex)
+        {
+            // Política bloqueando, helper ausente/adulterado, sem área de trabalho interativa ou UAC sem resposta:
+            // o setup.exe não foi iniciado, então a falha é reportada em vez de propagar a exceção.
+            return new OdtProcessResult
+            {
+                Success = false,
+                ExitCode = ex.NativeErrorCode,
+                Output = ex.Message,
                 ProcessStarted = false,
             };
         }

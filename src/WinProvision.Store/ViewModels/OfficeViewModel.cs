@@ -80,6 +80,9 @@ public sealed partial class OfficeViewModel : ObservableObject
     public partial bool DownloadBeforeInstall { get; set; }
 
     [ObservableProperty]
+    public partial bool UseViperOfficeDownload { get; set; }
+
+    [ObservableProperty]
     public partial bool IsAdvancedExpanded { get; set; }
 
     [ObservableProperty]
@@ -326,6 +329,13 @@ public sealed partial class OfficeViewModel : ObservableObject
             return null;
         }
 
+        if (DownloadBeforeInstall && UseViperOfficeDownload
+            && (AdditionalLanguages.Any(item => item.IsOn) || GetAdditionalProducts().Count > 0))
+        {
+            StatusText = "O download paralelo Viper aceita um produto e um idioma por vez. Remova produtos/idiomas adicionais ou selecione ODT.";
+            return null;
+        }
+
         var request = new OfficeInstallRequest(
             plan,
             Architecture == "32" ? 32 : 64,
@@ -337,7 +347,8 @@ public sealed partial class OfficeViewModel : ObservableObject
             DisplayLevel: DisplayMode == "Visible" ? OfficeDisplayLevel.Visible : OfficeDisplayLevel.Silent,
             ChannelOverride: plan.SupportsSelectableChannel ? SelectedChannel?.Id : null,
             AutoUpdatesEnabled: RequestedAutoUpdatesEnabled,
-            AdditionalProducts: GetAdditionalProducts(), DownloadBeforeInstall: DownloadBeforeInstall);
+            AdditionalProducts: GetAdditionalProducts(), DownloadBeforeInstall: DownloadBeforeInstall,
+            UseViperDownload: UseViperOfficeDownload);
         if (DownloadBeforeInstall)
             request = request with { SourcePath = _officeService.GetPayloadCachePath(request) };
 
@@ -458,6 +469,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             ChannelOverride = request.ChannelOverride,
             AutoUpdatesEnabled = request.AutoUpdatesEnabled,
             DownloadBeforeInstall = request.DownloadBeforeInstall,
+            UseViperDownload = request.UseViperDownload,
             AdditionalProductIds = additional.Select(item => item.ProductId).ToList()
         };
         string appsSummary = string.Join(", ", AppToggleItems.Where(item => item.IsOn).Select(item => item.DisplayName));

@@ -30,7 +30,7 @@ public static class OfficeConfigXmlBuilder
 
         if (!string.IsNullOrWhiteSpace(request.SourcePath))
             add.Add(new XAttribute("SourcePath", request.SourcePath));
-        if (request.DownloadBeforeInstall)
+        if (request.DownloadBeforeInstall || !string.IsNullOrWhiteSpace(request.SourcePath))
             add.Add(new XAttribute("AllowCdnFallback", "FALSE"));
 
         if (request.ChannelOverride is { Length: > 0 } channelOverride)
@@ -191,8 +191,9 @@ public static class OfficeConfigXmlBuilder
         string path = Path.Combine(folder, "configuration.xml");
 
         var doc = Build(request);
-        if (request.DownloadBeforeInstall)
-            doc.Root!.Element("Add")!.SetAttributeValue("Version", OfficeOfflinePayload.GetVersion(folder));
+        if (request.DownloadBeforeInstall || !string.IsNullOrWhiteSpace(request.SourcePath))
+            doc.Root!.Element("Add")!.SetAttributeValue("Version", OfficeOfflinePayload.GetVersion(request.SourcePath ?? folder,
+                request.Architecture, new[] { request.LanguageId }.Concat(request.AdditionalLanguageIds ?? [])));
         await AtomicFile.WriteAsync(path, (stream, token) => doc.SaveAsync(stream, SaveOptions.None, token), cancellationToken);
 
         return path;

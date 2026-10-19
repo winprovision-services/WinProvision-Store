@@ -18,6 +18,10 @@ public class OfficeInstallOptions
 {
     [JsonPropertyName("downloadBeforeInstall")]
     public bool DownloadBeforeInstall { get; set; }
+
+    /// <summary>Opcional; perfis antigos seguem usando o download oficial do ODT.</summary>
+    [JsonPropertyName("useViperDownload")]
+    public bool UseViperDownload { get; set; }
     [JsonPropertyName("productId")]
     public string ProductId { get; set; } = string.Empty;
 

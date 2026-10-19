@@ -312,7 +312,9 @@ public record OfficeInstallRequest(
     IReadOnlyList<OfficePlan>? AdditionalProducts = null,
     /// <summary>Origem local opcional para reutilizar conteúdo já baixado pelo ODT.</summary>
     string? SourcePath = null,
-    bool DownloadBeforeInstall = false);
+    bool DownloadBeforeInstall = false,
+    /// <summary>Obtém a mídia C2R da CDN com transferências paralelas do Viper.</summary>
+    bool UseViperDownload = false);
 
 /// <summary>
 /// Um produto Click-to-Run detectado no registro (ver Configuration\ProductReleaseIds),

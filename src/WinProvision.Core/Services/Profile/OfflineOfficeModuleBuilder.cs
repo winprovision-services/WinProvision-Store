@@ -88,7 +88,9 @@ public static class OfflineOfficeModuleBuilder
             {
                 await File.WriteAllTextAsync(downloadPath, download.ToString(SaveOptions.None), new UTF8Encoding(false), token).ConfigureAwait(false);
                 await source.DownloadPayloadAsync(setup, downloadPath, progress, token).ConfigureAwait(false);
-                configuration.Root!.Element("Add")!.SetAttributeValue("Version", OfficeOfflinePayload.GetVersion(folder));
+                var add = configuration.Root!.Element("Add")!;
+                add.SetAttributeValue("Version", OfficeOfflinePayload.GetVersion(folder,
+                    (int)add.Attribute("OfficeClientEdition")!, add.Elements("Product").Elements("Language").Select(language => (string)language.Attribute("ID")!)));
                 await File.WriteAllTextAsync(configurationPath, configuration.ToString(SaveOptions.None), new UTF8Encoding(false), token).ConfigureAwait(false);
                 progress?.Report(new("Verificando a integridade dos arquivos completos do Office..."));
                 await OfficeOfflinePayload.WriteIndexAsync(folder, token).ConfigureAwait(false);

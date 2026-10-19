@@ -232,12 +232,27 @@ public sealed class OfflineCollectionExportService(IOfflineCollectionSource sour
     {
         string[] parts = relative.Replace('\\', '/').Split('/');
         if (parts.Any(part => part is "" or "." or ".." || part.EndsWith('.') || part.EndsWith(' ')
-            || part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || part.Contains(':')))
+            || part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || part.Contains(':') || IsReservedWindowsName(part)))
             throw new InvalidDataException("O ZIP contém um caminho inválido.");
         string fullRoot = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
         string path = Path.GetFullPath(Path.Combine(root, Path.Combine(parts)));
         if (!path.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("O arquivo sai do diretório do ZIP.");
         return path;
+    }
+
+    private static bool IsReservedWindowsName(string segment)
+    {
+        string stem = segment.Split('.')[0].TrimEnd(' ', '.');
+        if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("NUL", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("CONIN$", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("CONOUT$", StringComparison.OrdinalIgnoreCase)) return true;
+        if (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase)
+            || stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)))
+            return stem[3] is >= '1' and <= '9' or '\u00b9' or '\u00b2' or '\u00b3';
+        return false;
     }
 
     private static async Task<string> HashAsync(string path, CancellationToken token)

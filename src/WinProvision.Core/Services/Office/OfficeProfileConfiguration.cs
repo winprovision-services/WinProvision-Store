@@ -14,7 +14,8 @@ public static class OfficeProfileConfiguration
             DisplayNone: options.Silent, AdditionalLanguageIds: options.AdditionalLanguageIds ?? [],
             DisplayLevel: options.Silent ? OfficeDisplayLevel.Silent : OfficeDisplayLevel.Visible,
             ChannelOverride: options.ChannelOverride, AutoUpdatesEnabled: options.AutoUpdatesEnabled,
-            AdditionalProducts: additional, DownloadBeforeInstall: options.DownloadBeforeInstall);
+            AdditionalProducts: additional, DownloadBeforeInstall: options.DownloadBeforeInstall,
+            UseViperDownload: options.UseViperDownload);
         string? error = OfficeConfigXmlBuilder.ValidateRequest(request);
         if (error is not null) throw new InvalidDataException(error);
         return request;
