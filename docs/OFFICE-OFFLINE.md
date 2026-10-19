@@ -35,7 +35,7 @@ winprovision --office
 winprovision --office --offline
 ```
 
-O primeiro comando instala após confirmação. O segundo baixa a ferramenta, o XML e o script para instalação online. O terceiro baixa também a mídia completa para uso offline. Os downloads da CLI ficam em Downloads.
+O primeiro comando instala diretamente, sem confirmação da CLI. O segundo baixa a ferramenta, o XML e o script para instalação online. O terceiro baixa também a mídia completa para uso offline; esse modo apenas prepara os arquivos e não instala. Os downloads da CLI ficam em Downloads. `--offline` não pode ser combinado com `--install --office`.
 
 O padrão da CLI é Microsoft 365 Família, 64 bits, português do Brasil, canal Current, com Access e Publisher excluídos. Consulte [CLI](CLI.md) para detalhes.
 
