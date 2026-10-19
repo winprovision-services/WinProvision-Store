@@ -2,6 +2,7 @@
 **/obj/
 **/__pycache__/
 .vs/
+.vscode/
 artifacts/
 .wrangler/
 *.user
