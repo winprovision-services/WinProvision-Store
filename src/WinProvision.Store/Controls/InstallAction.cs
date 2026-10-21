@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using FluentIcons.Common;
+using FluentIcons.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -47,11 +49,11 @@ public sealed partial class InstallAction : DependencyObject
             }
             string text = _app.IsInstalled ? "Instalado" : _app.IsInstalling ? "Instalando..." : "Instalar";
             var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            content.Children.Add(new FontIcon
+            content.Children.Add(new FluentIcon
             {
-                FontFamily = Application.Current.Resources["SymbolThemeFontFamily"] as FontFamily
-                    ?? new FontFamily("Segoe Fluent Icons"),
-                Glyph = _app.IsInstalled ? "\uE73E" : "\uE896",
+                Icon = _app.IsInstalled ? Icon.CheckmarkCircle : Icon.ArrowDownload,
+                IconVariant = IconVariant.Regular,
+                IconSize = IconSize.Size16,
                 FontSize = 16,
             });
             content.Children.Add(new TextBlock { Text = text });

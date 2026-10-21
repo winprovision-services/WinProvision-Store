@@ -9,6 +9,7 @@ public interface IPresentationService
     Task<string?> PickSaveAsync(string name, string? extension = null);
     Task<string?> PickFolderAsync();
     Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar");
+    Task<int?> ChooseAsync(string title, IReadOnlyList<string> options, string primaryButtonText = "Importar");
     Task ShowDetailsAsync(AppEntry app, string? currentVersion = null, string? availableVersion = null);
     void ShowAppUpdates();
 }
@@ -56,6 +57,20 @@ public sealed partial class PresentationService : IPresentationService
             var dialog = new ContentDialog { XamlRoot = Root, Title = title, Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap }, PrimaryButtonText = primaryButtonText, CloseButtonText = closeButtonText, DefaultButton = ContentDialogButton.Close };
             _activeDialog = dialog;
             return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        finally { _activeDialog = null; _dialogs.Release(); }
+    }
+    public async Task<int?> ChooseAsync(string title, IReadOnlyList<string> options, string primaryButtonText = "Importar")
+    {
+        if (options.Count == 0) return null;
+        await _dialogs.WaitAsync();
+        try
+        {
+            var list = new ListView { ItemsSource = options, SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360, SelectedIndex = 0 };
+            var dialog = new ContentDialog { XamlRoot = Root, Title = title, Content = list,
+                PrimaryButtonText = primaryButtonText, CloseButtonText = "Cancelar", DefaultButton = ContentDialogButton.Close };
+            _activeDialog = dialog;
+            return await dialog.ShowAsync() == ContentDialogResult.Primary ? list.SelectedIndex : null;
         }
         finally { _activeDialog = null; _dialogs.Release(); }
     }

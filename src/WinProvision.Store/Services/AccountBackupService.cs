@@ -16,6 +16,10 @@ public interface IAccountBackupService
     Task<ProfileBackupSet?> LoadLatestLocalAsync(CancellationToken cancellationToken);
     Task<GitHubBackupUploadResult> UploadCloudAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken);
     Task<GitHubBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<CloudBackupFile>> ListCloudFilesAsync(CancellationToken cancellationToken);
+    Task<GitHubBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken);
+    Task<(bool Success, string? Error)> DeleteCloudFileAsync(string fileName, CancellationToken cancellationToken);
+    Task<(int DeletedCount, int TotalCount, string? Error)> DeleteAllAppGistsAsync(CancellationToken cancellationToken);
 }
 
 public sealed partial class AccountBackupService(
@@ -44,4 +48,16 @@ public sealed partial class AccountBackupService(
 
     public Task<GitHubBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken) =>
         githubBackup.DownloadProfileAsync(cancellationToken);
+
+    public Task<IReadOnlyList<CloudBackupFile>> ListCloudFilesAsync(CancellationToken cancellationToken) =>
+        githubBackup.ListBackupFilesAsync(cancellationToken);
+
+    public Task<GitHubBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken) =>
+        githubBackup.DownloadBackupFileAsync(fileName, cancellationToken);
+
+    public Task<(bool Success, string? Error)> DeleteCloudFileAsync(string fileName, CancellationToken cancellationToken) =>
+        githubBackup.DeleteBackupFileAsync(fileName, cancellationToken);
+
+    public Task<(int DeletedCount, int TotalCount, string? Error)> DeleteAllAppGistsAsync(CancellationToken cancellationToken) =>
+        githubBackup.DeleteAllAppGistsAsync(cancellationToken);
 }

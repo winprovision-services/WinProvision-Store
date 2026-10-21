@@ -40,7 +40,8 @@ public sealed partial class SettingsViewModel
         try
         {
             _operationPreferences.Save(_operationPreferences.Load() with { ParallelOperations = operations,
-                ParallelDownloads = downloads, InstallerNames = style, DownloadDirectory = string.IsNullOrWhiteSpace(DownloadDirectory) ? null : DownloadDirectory.Trim() });
+                ParallelDownloads = downloads, InstallerNames = style, WarnInstallerHostChange = WarnInstallerHostChange,
+                DownloadDirectory = string.IsNullOrWhiteSpace(DownloadDirectory) ? null : DownloadDirectory.Trim() });
             StatusText = "Opções salvas. Os novos limites não interrompem operações em andamento.";
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)

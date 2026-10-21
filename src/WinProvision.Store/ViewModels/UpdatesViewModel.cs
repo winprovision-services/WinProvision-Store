@@ -21,6 +21,8 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
 
     private readonly IPackageBackend _backend;
     private readonly PackageInstallOptionsService _packageOptions;
+    private readonly WingetPackageDetailsService? _wingetDetails;
+    private readonly IPresentationService? _presentation;
     private readonly HashSet<Task> _work = [];
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -77,8 +79,11 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
     public bool SearchName { get; set => Set(ref field, value); } = false;
     public bool SearchId { get; set => Set(ref field, value); } = false;
     public UpdatesViewModel(IPackageBackend backend, StoreService store, IBackgroundUpdateStartupService startup,
-        ApplicationPreferencesService preferences, IUpdatesIgnoreStore ignored, PackageInstallOptionsService packageOptions)
+        ApplicationPreferencesService preferences, IUpdatesIgnoreStore ignored, PackageInstallOptionsService packageOptions,
+        WingetPackageDetailsService? wingetDetails = null, IPresentationService? presentation = null)
     {
+        _wingetDetails = wingetDetails;
+        _presentation = presentation;
         _packageOptions = packageOptions; _backend = backend; _storeService = store; _backgroundUpdateStartupService = startup;
         _applicationPreferences = preferences; _ignoredUpdatesService = ignored;
         ScanCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(CheckUpdatesCoreAsync, () => !IsBusy);
@@ -461,6 +466,8 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
     {
         if (IsBusy || _lifetime.IsCancellationRequested) return;
         if (selected.Count == 0) { StatusText = "Nenhum pacote selecionado. Marque ao menos um aplicativo para atualizar."; return; }
+        selected = await ConfirmInstallerHostChangesAsync(selected, token);
+        if (selected.Count == 0) { StatusText = "Atualização cancelada após revisar a mudança de domínio."; return; }
         IsBusy = true; CanUpdate = false; CanSelect = false; CanReload = false;
         StatusText = $"Iniciando atualização de {selected.Count} aplicativo(s)...";
         using var operationBatch = _backend.BeginBatch();
@@ -494,6 +501,39 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { StatusText = "Atualização cancelada."; }
         finally { IsBusy = false; CanReload = true; ApplyFilters(); }
+    }
+
+    private async Task<List<UpgradablePackage>> ConfirmInstallerHostChangesAsync(List<UpgradablePackage> packages, CancellationToken token)
+    {
+        if (!new OperationPreferencesService().Load().WarnInstallerHostChange || _wingetDetails is null || _presentation is null) return packages;
+        var approved = new List<UpgradablePackage>(packages.Count);
+        foreach (var package in packages)
+        {
+            token.ThrowIfCancellationRequested();
+            if (!package.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(package.CurrentVersion) || string.IsNullOrWhiteSpace(package.AvailableVersion))
+            { approved.Add(package); continue; }
+            try
+            {
+                var app = new AppEntry { Id = package.Id, Name = package.Name, Source = package.Source };
+                var current = await _wingetDetails.GetAsync(app, package.CurrentVersion, token);
+                var available = await _wingetDetails.GetAsync(app, package.AvailableVersion, token);
+                if (Uri.TryCreate(current.InstallerUrl, UriKind.Absolute, out var oldUri)
+                    && Uri.TryCreate(available.InstallerUrl, UriKind.Absolute, out var newUri)
+                    && oldUri.Scheme == Uri.UriSchemeHttps && newUri.Scheme == Uri.UriSchemeHttps
+                    && !oldUri.Host.Equals(newUri.Host, StringComparison.OrdinalIgnoreCase))
+                {
+                    bool proceed = await _presentation.ConfirmAsync("Domínio do instalador alterado",
+                        $"{package.Name}: o instalador mudou de {oldUri.Host} para {newUri.Host}. Deseja continuar com a atualização?",
+                        "Continuar atualização", "Pular este pacote");
+                    if (!proceed) continue;
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (Exception ex) { WinProvisionLog.Warning(ex, "Updates.InstallerHostCheck"); }
+            approved.Add(package);
+        }
+        return approved;
     }
 
     public void RefreshIgnoredUpdates()

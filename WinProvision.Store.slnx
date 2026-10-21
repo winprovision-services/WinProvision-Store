@@ -1,0 +1,19 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/WinProvision.Store/WinProvision.Store.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/WinProvision.Core/WinProvision.Core.csproj" />
+    <Project Path="src/WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
+    <Project Path="src/WinProvision.Cli/WinProvision.Cli.csproj" />
+    <Project Path="src/WinProvision.Viper.Cli/WinProvision.Viper.Cli.csproj" />
+    <Project Path="src/WinProvision.Viper/WinProvision.Viper.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WinProvision.Core.Tests/WinProvision.Core.Tests.csproj" />
+    <Project Path="tests/WinProvision.Viper.Tests/WinProvision.Viper.Tests.csproj" />
+  </Folder>
+</Solution>

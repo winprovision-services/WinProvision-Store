@@ -28,7 +28,7 @@ namespace WinProvision.Core.Services.Backup;
 /// vez de duplicado.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public class GitHubBackupService : IDisposable
+public partial class GitHubBackupService : IDisposable
 {
     public void Dispose() { _http.Dispose(); _rawHttp.Dispose(); }
 
@@ -54,6 +54,7 @@ public class GitHubBackupService : IDisposable
     private readonly SemaphoreSlim _syncLock = new(1, 1);
 
     private BackupAccountInfo _account = new();
+    private bool _connecting;
 
     public GitHubBackupService() : this(DefaultBackupDir())
     {
@@ -184,6 +185,9 @@ public class GitHubBackupService : IDisposable
     [SupportedOSPlatform("windows")]
     public async Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken ct = default)
     {
+        await _syncLock.WaitAsync(ct);
+        try
+        {
         token = token?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(token))
             return GitHubConnectResult.Fail("Cole um Personal Access Token antes de conectar.");
@@ -205,6 +209,8 @@ public class GitHubBackupService : IDisposable
             return GitHubConnectResult.Fail("Tempo esgotado ao contatar o GitHub. Verifique sua conexão.");
         }
 
+        using (response)
+        {
         if (response.StatusCode == HttpStatusCode.Unauthorized)
             return GitHubConnectResult.Fail("Token inválido ou expirado.");
 
@@ -226,6 +232,23 @@ public class GitHubBackupService : IDisposable
         }
 
         bool accountChanged = !string.Equals(_account.Login, user.Login, StringComparison.OrdinalIgnoreCase);
+        string? previousGistId = accountChanged ? null : _account.GistId ?? LoadGistIdFromRegistry();
+        AuthenticationHeaderValue? previousAuthorization = _http.DefaultRequestHeaders.Authorization;
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (string? Id, string? Error) gistLookup;
+        try
+        {
+            _connecting = true;
+            gistLookup = await ResolveOwnedGistIdAsync(previousGistId, ct);
+        }
+        finally
+        {
+            _connecting = false;
+            _http.DefaultRequestHeaders.Authorization = previousAuthorization;
+        }
+        if (gistLookup.Error is not null)
+            return GitHubConnectResult.Fail(gistLookup.Error);
+
         try
         {
             SecureTokenStore.Save(_tokenPath, token);
@@ -243,14 +266,18 @@ public class GitHubBackupService : IDisposable
             _account.GistId = null;
             _account.BootstrapGistId = null;
         }
-        string? previousGistId = accountChanged ? null : _account.GistId ?? LoadGistIdFromRegistry();
         if (accountChanged)
             SaveGistIdToRegistry(null);
-        var gistLookup = await ResolveOwnedGistIdAsync(previousGistId, ct);
         _account.GistId = gistLookup.Id;
         PersistAccountInfo();
 
         return GitHubConnectResult.Ok(user.Login);
+        }
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
     }
 
     /// <summary>Desconecta localmente (apaga token + metadados desta máquina). O Gist na nuvem NÃO é apagado.</summary>
@@ -359,11 +386,10 @@ public class GitHubBackupService : IDisposable
                 var createPayload = BuildGistPayload(
                     new Dictionary<string, string> { ["profile.json"] = profileJson }, BootstrapGistDescription);
 
-                using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiBase}/gists")
+                using var createResponse = await SendWithTransientRetryAsync(() => new HttpRequestMessage(HttpMethod.Post, $"{ApiBase}/gists")
                 {
                     Content = new StringContent(AotJson.Serialize(createPayload), System.Text.Encoding.UTF8, "application/json")
-                };
-                using var createResponse = await _http.SendAsync(createRequest, ct);
+                }, ct);
                 if (!createResponse.IsSuccessStatusCode)
                     return GitHubBootstrapPublishResult.Fail(await FormatGitHubErrorAsync(createResponse, "criar o Gist", ct));
 
@@ -386,11 +412,10 @@ public class GitHubBackupService : IDisposable
                 }
  };
 
-            using var updateRequest = new HttpRequestMessage(HttpMethod.Patch, $"{ApiBase}/gists/{Uri.EscapeDataString(gistId)}")
+            using var updateResponse = await SendWithTransientRetryAsync(() => new HttpRequestMessage(HttpMethod.Patch, $"{ApiBase}/gists/{Uri.EscapeDataString(gistId)}")
             {
                 Content = new StringContent(AotJson.Serialize(updatePayload), System.Text.Encoding.UTF8, "application/json")
-            };
-            using var updateResponse = await _http.SendAsync(updateRequest, ct);
+            }, ct);
             if (!updateResponse.IsSuccessStatusCode)
                 return GitHubBootstrapPublishResult.Fail(await FormatGitHubErrorAsync(updateResponse, "atualizar os arquivos do Gist", ct));
 
@@ -424,7 +449,8 @@ public class GitHubBackupService : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(candidateId))
         {
-            using var response = await _http.GetAsync($"{ApiBase}/gists/{Uri.EscapeDataString(candidateId)}", ct);
+            using var response = await SendWithTransientRetryAsync(() => new HttpRequestMessage(HttpMethod.Get,
+                $"{ApiBase}/gists/{Uri.EscapeDataString(candidateId)}"), ct);
             if (response.IsSuccessStatusCode)
             {
                 var gist = await response.Content.ReadFromJsonAsync(WinProvision.Core.Services.AotJson.TypeInfo<GitHubGistResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)), cancellationToken: ct);
@@ -439,7 +465,8 @@ public class GitHubBackupService : IDisposable
 
         for (int page = 1; page <= 10; page++)
         {
-            using var response = await _http.GetAsync($"{ApiBase}/gists?per_page=100&page={page}", ct);
+            using var response = await SendWithTransientRetryAsync(() => new HttpRequestMessage(HttpMethod.Get,
+                $"{ApiBase}/gists?per_page=100&page={page}"), ct);
             if (!response.IsSuccessStatusCode)
                 return (null, await FormatGitHubErrorAsync(response, "localizar o Gist de Bootstrap", ct));
 
@@ -461,6 +488,8 @@ public class GitHubBackupService : IDisposable
 
     private static async Task<string> FormatGitHubErrorAsync(HttpResponseMessage response, string action, CancellationToken ct)
     {
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            return "A sessão do GitHub expirou ou foi revogada. Conecte sua conta novamente para sincronizar.";
         string body = await response.Content.ReadAsStringAsync(ct);
         string? message = null;
         try
@@ -477,7 +506,7 @@ public class GitHubBackupService : IDisposable
         string detail = string.IsNullOrWhiteSpace(message) ? response.ReasonPhrase ?? "sem detalhes" : message;
         string hint = response.StatusCode switch
         {
-            HttpStatusCode.Unauthorized => " Verifique se o token continua válido.",
+            HttpStatusCode.Unauthorized => " Conecte sua conta GitHub novamente.",
             HttpStatusCode.Forbidden => " Verifique se o token tem o escopo gist e se o limite da API não foi atingido.",
             _ => string.Empty
         };
@@ -668,6 +697,7 @@ public class GitHubBackupService : IDisposable
         if (!IsConnected)
             return GitHubBackupDownloadResult.Fail("Conecte o GitHub antes de baixar o backup.");
 
+        await _syncLock.WaitAsync(ct);
         try
         {
             // Perfil pode ter sido criado por outra instalação do app (outra máquina) que
@@ -720,6 +750,10 @@ public class GitHubBackupService : IDisposable
         catch (JsonException ex)
         {
             return GitHubBackupDownloadResult.Fail($"O arquivo do backup contém JSON inválido: {ex.Message}");
+        }
+        finally
+        {
+            _syncLock.Release();
         }
     }
 
@@ -822,7 +856,10 @@ public class GitHubBackupService : IDisposable
     {
         var payload = BuildGistPayload(files, description);
 
-        using var response = await _http.PostAsync($"{ApiBase}/gists", new StringContent(AotJson.Serialize(payload), System.Text.Encoding.UTF8, "application/json"), ct);
+        using var response = await SendWithTransientRetryAsync(() => new HttpRequestMessage(HttpMethod.Post, $"{ApiBase}/gists")
+        {
+            Content = new StringContent(AotJson.Serialize(payload), System.Text.Encoding.UTF8, "application/json")
+        }, ct);
         if (!response.IsSuccessStatusCode)
             return (null, await FormatGitHubErrorAsync(response, "criar o Gist de backup", ct));
 
@@ -921,6 +958,15 @@ public class GitHubBackupService : IDisposable
             try
             {
                 var response = await (api ? _http : _rawHttp).SendAsync(request, ct);
+                if (api && response.StatusCode == HttpStatusCode.Unauthorized && !_connecting)
+                {
+                    _http.DefaultRequestHeaders.Authorization = null;
+                    try { SecureTokenStore.Delete(_tokenPath); }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        CoreLog.Warning(exception, "GitHubBackupService.InvalidateToken");
+                    }
+                }
                 bool transient = response.StatusCode == (HttpStatusCode)429 || (int)response.StatusCode >= 500;
                 if (!transient || attempt >= MaxTransientRetries)
                     return response;

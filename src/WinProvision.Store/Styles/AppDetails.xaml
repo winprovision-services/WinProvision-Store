@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ic="using:FluentIcons.WinUI">
 <ResourceDictionary.ThemeDictionaries>
  <ResourceDictionary x:Key="Light"><SolidColorBrush x:Key="DetailsBackgroundBrush" Color="{ThemeResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="DetailsSurfaceBrush" Color="{ThemeResource LayerFillColorDefault}"/><SolidColorBrush x:Key="DetailsBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DetailsLinkBrush" Color="#FF0067B8"/></ResourceDictionary>
  <ResourceDictionary x:Key="Default"><SolidColorBrush x:Key="DetailsBackgroundBrush" Color="{ThemeResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="DetailsSurfaceBrush" Color="{ThemeResource LayerFillColorDefault}"/><SolidColorBrush x:Key="DetailsBorderBrush" Color="{ThemeResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DetailsLinkBrush" Color="#FF60CDFF"/></ResourceDictionary>
@@ -6,7 +6,7 @@
 <x:Double x:Key="DetailsBodySize">14</x:Double>
 <Thickness x:Key="AppDetailsSpacing24">24</Thickness>
     
-<CornerRadius x:Key="AppOverlayCornerRadius">16</CornerRadius>
+<CornerRadius x:Key="AppOverlayCornerRadius">24</CornerRadius>
     
 <x:Double x:Key="AppDetailsPanelMaxWidth">1120</x:Double>
     
@@ -122,7 +122,7 @@
     
 <SolidColorBrush x:Key="AppDetailsSplitDividerBrush" Color="#33FFFFFF" />
     
-<SolidColorBrush x:Key="AppDetailsScreenshotCounterBrush" Color="#CC111820" />
+<SolidColorBrush x:Key="AppDetailsScreenshotCounterBrush" Color="#E6111820" />
     
 <x:Double x:Key="AppDetailsSingleColumnBreakpoint">950</x:Double>
     
@@ -158,8 +158,9 @@
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     
-<Style x:Key="AppDetailsCheckBoxStyle" TargetType="CheckBox">
+<Style x:Key="AppDetailsCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
         <Setter Property="FontSize" Value="{StaticResource DetailsBodySize}" />
+        <Setter Property="CornerRadius" Value="4" />
     </Style>
     
 <Style x:Key="AppDetailsCodeBoxStyle" TargetType="TextBox">
@@ -167,15 +168,15 @@
         <Setter Property="FontSize" Value="12" />
     </Style>
     
-<Style x:Key="AppDetailsIconStyle" TargetType="FontIcon">
+<Style x:Key="AppDetailsIconStyle" TargetType="ic:FluentIcon">
         <Setter Property="FontSize" Value="20" />
     </Style>
     
-<Style x:Key="AppDetailsSmallIconStyle" TargetType="FontIcon" BasedOn="{StaticResource AppDetailsIconStyle}">
+<Style x:Key="AppDetailsSmallIconStyle" TargetType="ic:FluentIcon" BasedOn="{StaticResource AppDetailsIconStyle}">
         <Setter Property="FontSize" Value="16" />
     </Style>
     
-<Style x:Key="AppDetailsFallbackIconStyle" TargetType="FontIcon" BasedOn="{StaticResource AppDetailsIconStyle}">
+<Style x:Key="AppDetailsFallbackIconStyle" TargetType="ic:FluentIcon" BasedOn="{StaticResource AppDetailsIconStyle}">
         <Setter Property="FontSize" Value="36" />
     </Style>
 

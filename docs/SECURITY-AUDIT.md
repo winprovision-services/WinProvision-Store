@@ -6,7 +6,7 @@ Este documento descreve os cuidados e verificações do WinProvision Store. Ele 
 
 - Validação de entradas antes de iniciar operações ou modificar arquivos.
 - Uso de conexões HTTPS nas funções online.
-- Verificação de integridade nos fluxos que a exigem, sem opção de ignorar hashes.
+- Verificação de integridade por padrão. Nas instalações e atualizações individuais via WinGet, o usuário pode optar por ignorar o hash somente na operação atual; os downloads da API própria continuam exigindo SHA-256.
 - Proteção local de tokens pela conta do Windows.
 - Ocultação de formatos comuns de credenciais em diagnósticos.
 - Validação de caminhos e conteúdo em arquivos importados.

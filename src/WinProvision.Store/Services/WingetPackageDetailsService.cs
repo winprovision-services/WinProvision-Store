@@ -7,7 +7,55 @@ namespace WinProvision.Store.Services;
 
 public sealed partial class WingetPackageDetailsService
 {
-    public async Task<ExtendedPackageInfo> GetAsync(AppEntry app, CancellationToken cancellationToken)
+    public async Task<string[]> GetVersionsAsync(AppEntry app, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = WingetLocator.ExecutablePath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        foreach (string argument in new[] { "show", "--id", app.Id, "--exact", "--source", app.Source,
+                     "--versions", "--accept-source-agreements", "--disable-interactivity" })
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        try { await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw;
+        }
+        string output = await outputTask.ConfigureAwait(false);
+        string error = await errorTask.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
+                ? $"O WinGet falhou ao consultar versões (código {process.ExitCode})." : error.Trim());
+        return ParseVersions(output);
+    }
+
+    internal static string[] ParseVersions(string output)
+    {
+        var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        int separator = Array.FindIndex(lines, line => line.Trim().Length >= 3
+            && line.Trim().All(character => character == '-'));
+        if (separator < 0) return [];
+        return lines.Skip(separator + 1).Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.Contains(' ') && !line.Contains('\t'))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public Task<ExtendedPackageInfo> GetAsync(AppEntry app, CancellationToken cancellationToken) => GetAsync(app, null, cancellationToken);
+
+    public async Task<ExtendedPackageInfo> GetAsync(AppEntry app, string? version, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -21,11 +69,10 @@ public sealed partial class WingetPackageDetailsService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
-        foreach (string argument in new[]
-        {
-            "show", "--id", app.Id, "--exact", "--source", app.Source,
-            "--accept-source-agreements", "--disable-interactivity",
-        })
+        var arguments = new List<string> { "show", "--id", app.Id, "--exact", "--source", app.Source };
+        if (!string.IsNullOrWhiteSpace(version)) { arguments.Add("--version"); arguments.Add(version); }
+        arguments.AddRange((string[])["--accept-source-agreements", "--disable-interactivity"]);
+        foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }

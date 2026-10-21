@@ -49,6 +49,13 @@ internal static partial class SmokeTest
         Check(collections.EstimatedSizeText.Contains("100") && collections.EstimatedTimeText != "—", "Coleções: estimativas disponíveis para tamanho conhecido");
         string backup = AotJson.Serialize(new ProfileBackupSet { Tabs = [collections.SelectedProfile!.Snapshot()] }, WinProvisionJsonOptions.Profile);
         Check(CollectionsViewModel.ParseProfiles(backup, "Teste").Count == 1, "Coleções: backup aceita restauração");
+        var historyItem = new OperationItem("7-Zip", OperationKind.Install);
+        historyItem.State = OperationState.Running;
+        historyItem.Method = WingetMethod.ComApi;
+        historyItem.AppendLog("Pacote localizado no catálogo WinGet.");
+        historyItem.AppendLog("Instalação concluída com sucesso.");
+        historyItem.State = OperationState.Completed;
+        services.GetRequiredService<OperationHistoryService>().Record(historyItem);
         await services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecuteAsync(null);
         await services.GetRequiredService<InstalledPackagesViewModel>().RefreshCommand.ExecuteAsync(null);
         foreach (ElementTheme theme in new[] { ElementTheme.Dark, ElementTheme.Light })
@@ -237,6 +244,56 @@ internal static partial class SmokeTest
                         $"Conta: ações JSON concentradas em Pacotes em {theme}");
             }
         }
+        window.Navigate("more");
+        await WaitForPageAsync(window, "more", ElementTheme.Light);
+        if (window.CurrentPage is Views.MorePage logPage)
+        {
+            logPage.ViewModel.OpenHistoryCommand.Execute(null);
+            ((FrameworkElement)logPage.FindName("HistoryPanel")).StartBringIntoView();
+            await Task.Delay(200);
+            var historyList = (ListView)logPage.FindName("HistoryList");
+            if (historyList.ContainerFromIndex(0) is DependencyObject firstHistory && FindCloudExpander(firstHistory) is { } historyExpander)
+            {
+                historyExpander.IsExpanded = true;
+                window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1224, 950));
+                await Task.Delay(200);
+                var moreScroll = (ScrollViewer)logPage.FindName("MoreContentScrollViewer");
+                moreScroll.ChangeView(null, moreScroll.ScrollableHeight, null, true);
+                await Task.Delay(150);
+                await CaptureAsync(window.RootElement, "operation-history-light.png");
+                window.RootElement.RequestedTheme = ElementTheme.Dark;
+                await Task.Delay(150);
+                await CaptureAsync(window.RootElement, "operation-history-dark.png");
+                window.RootElement.RequestedTheme = ElementTheme.Light;
+                window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1224, 750));
+            }
+        }
+        var simulatedBackup = (SmokeAccountBackupService)services.GetRequiredService<IAccountBackupService>();
+        simulatedBackup.SimulateConnected = true;
+        services.GetRequiredService<AccountSyncViewModel>().Refresh();
+        window.Navigate("account");
+        await WaitForPageAsync(window, "account", ElementTheme.Light);
+        if (window.CurrentPage is Views.AccountSyncPage cloudAccount)
+        {
+            await cloudAccount.ViewModel.RefreshCloudFilesCommand.ExecuteAsync(null);
+            Check(cloudAccount.ViewModel.CloudFiles.Count == 3, "Conta: lista JSON com resumo e arquivo incompatível");
+            ((FrameworkElement)cloudAccount.FindName("CloudFilesCard")).StartBringIntoView();
+            await Task.Delay(250);
+            await CaptureAsync(window.RootElement, "account-cloud-files-light.png");
+            var list = (ListView)cloudAccount.FindName("CloudFilesList");
+            if (list.ContainerFromIndex(0) is DependencyObject first && FindCloudExpander(first) is { } expander)
+            {
+                expander.IsExpanded = true;
+                await Task.Delay(250);
+                await CaptureAsync(window.RootElement, "account-cloud-apps-light.png");
+                window.RootElement.RequestedTheme = ElementTheme.Dark;
+                await Task.Delay(200);
+                await CaptureAsync(window.RootElement, "account-cloud-apps-dark.png");
+                window.RootElement.RequestedTheme = ElementTheme.Light;
+            }
+        }
+        simulatedBackup.SimulateConnected = false;
+        services.GetRequiredService<AccountSyncViewModel>().Refresh();
         window.AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 700));
         window.Navigate("settings");
         await Task.Delay(300);
@@ -264,8 +321,18 @@ internal static partial class SmokeTest
         await details.ShowAsync(app);
         await Task.Delay(300);
         Check(details.IsOpen, "Detalhes: overlay abre");
-        Check(details.FindName("SkipHashCheckCheckBox") is null, "Integridade: opção de ignorar hash ausente dos detalhes");
-        services.GetRequiredService<AppDetailsViewModel>().IsOptionsBodyPanelVisible = true;
+        var detailsOptions = services.GetRequiredService<AppDetailsViewModel>();
+        Check(details.FindName("IgnoreSecurityHashCheckBox") is CheckBox && details.FindName("InstallVersionComboBox") is ComboBox,
+            "Detalhes: hash e versões têm controles de instalação");
+        await detailsOptions.LoadInstallVersionsAsync(CancellationToken.None);
+        detailsOptions.SelectedInstallVersion = "1.2.2";
+        detailsOptions.IgnoreSecurityHashCheckBoxIsChecked = true;
+        detailsOptions.UpdateInstallCommandPreview();
+        Check(detailsOptions.CurrentOptions().Version == "1.2.2" && detailsOptions.CurrentOptions().IgnoreSecurityHash
+            && detailsOptions.InstallCommandPreviewTextBox.Contains("--version '1.2.2'")
+            && detailsOptions.InstallCommandPreviewTextBox.Contains("--ignore-security-hash"),
+            "Detalhes: opções selecionadas chegam à instalação e à prévia");
+        detailsOptions.IsOptionsBodyPanelVisible = true;
         await Task.Delay(150);
         await CaptureAsync(window.RootElement, "details.png");
         details.Close();
@@ -320,6 +387,9 @@ internal static partial class SmokeTest
             window.RootElement.RequestedTheme = theme;
             var settingsPage = (Views.SettingsPage)window.CurrentPage!;
             settingsPage.NavigateToCategory("General");
+            Check(settingsPage.FindName("InstallMethodComboBox") is ComboBox methodCombo
+                && methodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WinGetPkgsViper"),
+                $"Instalação: método WinGet-Pkgs + Viper disponível em {theme}");
             Check(ReferenceEquals(((Button)settingsPage.FindName("AuthorizeElevationButton")).Command,
                 settingsPage.ViewModel.AuthorizeElevationCommand), "Elevação: nova autorização por sessão disponível");
             Check(WinProvision.Core.Services.GsudoElevationService.CacheMinutes == 5, "Elevação: cache fixo de 5 minutos por padrão");
@@ -347,6 +417,14 @@ internal static partial class SmokeTest
                 $"Notificações: categorias independentes salvas por binding em {theme}");
             await CaptureAsync(window.RootElement, $"settings-notifications-{theme}.png");
             settingsPage.NavigateToCategory("Execution");
+            var officeDownloader = (ToggleSwitch)settingsPage.FindName("OfficeViperDownloadToggle");
+            officeDownloader.IsOn = true;
+            Check(settingsModel.UseViperOfficeDownload
+                && services.GetRequiredService<ApplicationPreferencesService>().UseViperOfficeDownload,
+                $"Office: mecanismo Viper configurado e salvo em Configurações em {theme}");
+            Check(services.GetRequiredService<OfficeViewModel>().CreateInstallRequest()?.UseViperDownload == true,
+                $"Office: novas configurações usam o mecanismo salvo em {theme}");
+            officeDownloader.IsOn = false;
             settingsModel.ParallelOperations = "2"; settingsModel.ParallelDownloads = "4";
             settingsModel.InstallerNames = "PackageVersionArchitecture";
             settingsModel.DownloadDirectory = Path.Combine(OutputDirectory, "downloads-test");
@@ -407,6 +485,7 @@ internal static partial class SmokeTest
         var queueModel = services.GetRequiredService<OperationsViewModel>();
         var operation = queue.Enqueue("Operação de demonstração", OperationKind.Install);
         operation.State = OperationState.Running;
+        operation.Method = WingetMethod.WinGetPkgsViper;
         operation.IsIndeterminate = false;
         operation.Progress = 42.5;
         operation.LiveLine = "Baixando... 42,50%";
@@ -424,6 +503,9 @@ internal static partial class SmokeTest
             var progressBar = FindOperationProgress(queuePanel, operation.Id);
             Check(progressBar is { IsIndeterminate: false, Value: 42.5 },
                 $"Operações: barra exibe o percentual determinado em {theme}");
+            Check(progressBar?.Foreground is SolidColorBrush viperBrush
+                && viperBrush.Color == Windows.UI.Color.FromArgb(255, 209, 52, 56),
+                $"Operações: Viper usa progresso vermelho em {theme}");
             Check(popup.HorizontalOffset >= 0 && popup.HorizontalOffset + queuePanel.ActualWidth <= window.RootElement.ActualWidth
                 && popup.VerticalOffset + queuePanel.ActualHeight <= window.RootElement.ActualHeight,
                 $"Operações: painel permanece dentro da janela em {theme}");
@@ -472,6 +554,14 @@ internal static partial class SmokeTest
             return bar;
         for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
             if (FindOperationProgress(VisualTreeHelper.GetChild(root, index), id) is { } found) return found;
+        return null;
+    }
+
+    private static Expander? FindCloudExpander(DependencyObject root)
+    {
+        if (root is Expander expander) return expander;
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+            if (FindCloudExpander(VisualTreeHelper.GetChild(root, index)) is { } found) return found;
         return null;
     }
 

@@ -27,6 +27,20 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
     }
 
     [Fact]
+    public void OfficeDownloaderPreferencePersistsAndPortableImportKeepsLegacyDefault()
+    {
+        Assert.False(_preferences.UseViperOfficeDownload);
+        _preferences.SetUseViperOfficeDownload(true);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.True(reloaded.UseViperOfficeDownload);
+        Assert.True(reloaded.ExportPortablePreferences().UseViperOfficeDownload);
+        reloaded.ImportPortablePreferences(reloaded.ExportPortablePreferences() with { UseViperOfficeDownload = false });
+        Assert.False(new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false).UseViperOfficeDownload);
+        File.WriteAllText(Path.Combine(_folder, "legacy-office.json"), "{\"Theme\":0}");
+        Assert.False(new ApplicationPreferencesService(Path.Combine(_folder, "legacy-office.json"), false).UseViperOfficeDownload);
+    }
+
+    [Fact]
     public void IntervalPreferencesRoundTripAndOldFilesKeepDefaults()
     {
         _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.SelectedPackagesOnly,

@@ -102,6 +102,7 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     public IRelayCommand CopyDiagnosticCommand { get; }
     public IRelayCommand OpenHistoryCommand { get; }
     public IRelayCommand ClearHistoryCommand { get; }
+    public IRelayCommand OpenTaskLogFileCommand { get; }
     public IRelayCommand OpenAboutCommand { get; }
     public IRelayCommand RetryAboutCommand { get; }
     public IRelayCommand CloseAboutCommand { get; }
@@ -132,6 +133,7 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
         CopyDiagnosticCommand = new RelayCommand(CopyDiagnostic, () => CanCopyDiagnostic);
         OpenHistoryCommand = new RelayCommand(ToggleHistory);
         ClearHistoryCommand = new RelayCommand(ClearHistory, () => HasHistory);
+        OpenTaskLogFileCommand = new RelayCommand(OpenTaskLogFile);
         OpenAboutCommand = new RelayCommand(ShowAbout);
         RetryAboutCommand = new RelayCommand(
             () => AboutRetryRequested?.Invoke(this, EventArgs.Empty),
@@ -398,6 +400,17 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     });
 
     private void ClearHistory() => _history.Clear();
+
+    private void OpenTaskLogFile()
+    {
+        try { _desktop.OpenFile(_history.TaskLogPath); }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Warning(exception, "MoreViewModel.OpenTaskLogFile");
+            StatusMessage = "O log de operações ainda não está disponível.";
+            HasStatusMessage = true;
+        }
+    }
 
     private void ShowAbout()
     {

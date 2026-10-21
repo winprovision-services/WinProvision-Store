@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Management.Deployment;
 using WinProvision.Core.Models;
@@ -22,6 +24,7 @@ public sealed partial class WinGetService
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
     private readonly WingetExecutor _wingetExecutor;
     private readonly WinProvisionApiService _apiService;
+    private readonly WinGetPkgsManifestService _winGetPkgs = new();
     private readonly Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>> _provision;
     private readonly Func<PackageInstallMethod> _preferredMethod;
     private int _postProvisionHandled;
@@ -274,6 +277,22 @@ public sealed partial class WinGetService
         => InstallWithMethodAsync(packageId, _preferredMethod(), onLogReceived,
             cancellationToken, installLocation, onProgress, source);
 
+    public Task<WingetExecutionResult> InstallPreferredVersionAsync(
+        string packageId, string version, Action<string>? onLogReceived,
+        CancellationToken cancellationToken, string? installLocation,
+        Action<InstallProgressUpdate>? onProgress, string source,
+        string? scope, string? architecture)
+    {
+        if (_preferredMethod() == PackageInstallMethod.WinGetPkgsViper
+            && string.IsNullOrWhiteSpace(installLocation))
+            return InstallWithMethodAsync(packageId, PackageInstallMethod.WinGetPkgsViper,
+                onLogReceived, cancellationToken, installLocation, onProgress, source,
+                version, scope, architecture);
+        onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+        return _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
+            installLocation, source, scope, architecture, version: version);
+    }
+
     public async Task<WingetExecutionResult> InstallWithMethodAsync(
         string packageId,
         PackageInstallMethod method,
@@ -281,7 +300,10 @@ public sealed partial class WinGetService
         CancellationToken cancellationToken = default,
         string? installLocation = null,
         Action<InstallProgressUpdate>? onProgress = null,
-        string source = "winget")
+        string source = "winget",
+        string? version = null,
+        string? preferredScope = null,
+        string? preferredArchitecture = null)
     {
         switch (method)
         {
@@ -299,6 +321,96 @@ public sealed partial class WinGetService
                 return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
                     installLocation, source, cliPreferences?.Scope, cliPreferences?.Architecture,
                     cliPreferences?.RequiresElevation ?? false, cliPreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+            case PackageInstallMethod.WinGetPkgsViper:
+                if (!string.Equals(source, "winget", StringComparison.OrdinalIgnoreCase))
+                {
+                    onLogReceived?.Invoke($"A fonte {source} não pertence ao WinGet-Pkgs; encaminhando ao WinGet.");
+                    onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+                    await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+                    return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
+                        installLocation, source: source, version: version).ConfigureAwait(false);
+                }
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WinGetPkgsViper));
+                PackageManifest githubManifest;
+                string? pinnedVersion = version;
+                if (string.IsNullOrWhiteSpace(pinnedVersion))
+                {
+                    try
+                    {
+                        var publishedManifest = await _apiService.GetPackageAsync(packageId, cancellationToken, source)
+                            .ConfigureAwait(false);
+                        pinnedVersion = publishedManifest?.Version;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                    catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException)
+                    {
+                        onLogReceived?.Invoke($"Não foi possível resolver a versão fixada no snapshot: {ex.Message}");
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(pinnedVersion))
+                {
+                    onLogReceived?.Invoke("O pacote ainda não tem versão no snapshot publicado; usando o WinGet com a versão solicitada.");
+                    onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+                    await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+                    return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
+                        installLocation, source: source, scope: preferredScope,
+                        architecture: preferredArchitecture).ConfigureAwait(false);
+                }
+                try
+                {
+                    onLogReceived?.Invoke($"Consultando a versão {pinnedVersion} validada na CDN WinProvision...");
+                    githubManifest = await _apiService.GetPackageAsync(packageId, cancellationToken, source, pinnedVersion)
+                        .ConfigureAwait(false) ?? throw new InvalidDataException("Versão ausente do catálogo publicado.");
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    return new WingetExecutionResult { Success = false, ExitCode = ex.HResult,
+                        Output = $"Não foi possível consultar o WinGet-Pkgs: {ex.Message}",
+                        FailureReason = WingetFailureReason.DownloadError };
+                }
+                var architecture = preferredArchitecture?.ToLowerInvariant() switch
+                {
+                    "x64" => Architecture.X64,
+                    "x86" => Architecture.X86,
+                    "arm64" => Architecture.Arm64,
+                    "arm" => Architecture.Arm,
+                    _ => (Architecture?)null
+                };
+                var selectedInstaller = WinProvisionApiService.PickInstaller(githubManifest, architecture, preferredScope);
+                if (selectedInstaller?.SilentSupported != true)
+                {
+                    onLogReceived?.Invoke("O manifesto exige recursos que o instalador direto não resolve (por exemplo, dependências ou outro formato). Usando WinGet para concluir a instalação silenciosa.");
+                    onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+                    await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+                    return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
+                        installLocation, source, preferredScope, preferredArchitecture,
+                        version: pinnedVersion).ConfigureAwait(false);
+                }
+                Action<InstallProgressUpdate>? githubProgress = onProgress is null ? null
+                    : update => onProgress(update with { Method = WingetMethod.WinGetPkgsViper });
+                var githubResult = await _apiService.TryInstallAsync(packageId,
+                    onLogReceived is null ? null : new Progress<string>(onLogReceived), cancellationToken,
+                    preferredArchitecture: preferredArchitecture, preferredScope: preferredScope,
+                    onProgress: githubProgress, source: source,
+                    suppliedManifest: githubManifest).ConfigureAwait(false);
+                return new WingetExecutionResult
+                {
+                    Success = githubResult.Outcome == WinProvisionInstallOutcome.Success,
+                    ExitCode = githubResult.ExitCode ?? (githubResult.Outcome == WinProvisionInstallOutcome.Success ? 0 : -1),
+                    Output = githubResult.Message ?? $"WinGet-Pkgs + Viper: {githubResult.Outcome}.",
+                    InstallerStarted = githubResult.InstallerStarted,
+                    FailureReason = githubResult.Outcome switch
+                    {
+                        WinProvisionInstallOutcome.Success => WingetFailureReason.Unknown,
+                        WinProvisionInstallOutcome.HashMismatch => WingetFailureReason.InstallerHashMismatch,
+                        WinProvisionInstallOutcome.DownloadFailed => WingetFailureReason.DownloadError,
+                        WinProvisionInstallOutcome.ElevationCanceled => WingetFailureReason.ElevationCanceled,
+                        WinProvisionInstallOutcome.NoCompatibleInstaller or WinProvisionInstallOutcome.SilentInstallNotSupported
+                            => WingetFailureReason.NoApplicableInstallers,
+                        _ => WingetFailureReason.InstallError
+                    }
+                };
             case PackageInstallMethod.WinProvisionApi:
                 // A API própria só instala pacotes publicados no catálogo WinProvision.
                 // IDs da Microsoft Store (9.../Store Product ID) podem não existir nele;
@@ -333,7 +445,8 @@ public sealed partial class WinGetService
                         onProgress: onProgress,
                         source: source,
                         requiresElevation: apiPreferences?.RequiresElevation ?? false,
-                        elevationProhibited: apiPreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+                        elevationProhibited: apiPreferences?.ElevationProhibited ?? false,
+                        requestedVersion: version).ConfigureAwait(false);
                     if (result.Outcome is WinProvisionInstallOutcome.RequiresWinget
                         or WinProvisionInstallOutcome.PackageNotFound
                         or WinProvisionInstallOutcome.NoCompatibleInstaller)

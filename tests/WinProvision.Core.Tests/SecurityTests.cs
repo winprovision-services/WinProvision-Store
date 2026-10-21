@@ -115,17 +115,4 @@ public sealed class SecurityTests
         finally { File.Delete(path); }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task HashBypassIsRejectedBeforeAnyInstallerOrBootstrap(bool update)
-    {
-        var executor = new WingetExecutor();
-        var result = update
-            ? await executor.UpdateAppAsync("Test.NoExecution", ignoreSecurityHash: true)
-            : await executor.InstallAppAsync("Test.NoExecution", ignoreSecurityHash: true);
-        Assert.False(result.Success);
-        Assert.Equal(WingetFailureReason.InstallerHashMismatch, result.FailureReason);
-        Assert.Contains("obrigatória", result.Output);
-    }
 }

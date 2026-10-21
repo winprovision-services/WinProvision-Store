@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "WinProvision Store",
+    "Projects": [
+      {
+        "Path": "src\\WinProvision.Store\\WinProvision.Store.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

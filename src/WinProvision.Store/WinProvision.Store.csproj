@@ -54,9 +54,12 @@
     <Content Include="..\..\PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\Tools\FluentUI\LICENSE.txt" Link="Tools\FluentUI\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\Tools\FluentUI\FluentSystemIcons-LICENSE.txt" Link="Tools\FluentUI\FluentSystemIcons-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="app.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="FluentIcons.WinUI" Version="2.2.344" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
@@ -66,6 +69,20 @@
     <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
   </ItemGroup>
+  <!-- A compilação direta da interface também precisa do host COM elevado. -->
+  <Target Name="IncludeDevelopmentComWorker" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="..\WinProvision.Cli\WinProvision.Cli.csproj" Targets="Build"
+             Properties="Configuration=$(Configuration);Platform=AnyCPU" />
+    <ItemGroup>
+      <_ComWorkerFile Include="..\WinProvision.Cli\bin\$(Configuration)\net10.0-windows10.0.26100.0\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ComWorkerFile)"
+          DestinationFiles="@(_ComWorkerFile->'$(TargetDir)cli\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(TargetDir)cli\winprovision.exe')"
+           Text="O host COM elevado não foi copiado para a saída da Store." />
+  </Target>
   <!-- The unpackaged publish pipeline must carry the application's compiled XAML
        and PRI alongside the native runtime. Build output already contains them. -->
   <Target Name="IncludeWinUIResourcesInPublish" AfterTargets="ComputeFilesToPublish">

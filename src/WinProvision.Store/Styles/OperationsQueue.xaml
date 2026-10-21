@@ -42,6 +42,7 @@
     </ResourceDictionary.ThemeDictionaries>
     <SolidColorBrush x:Key="AppOperationComBrush" Color="#FFB991FF"/>
     <SolidColorBrush x:Key="AppOperationApiBrush" Color="#FFFF9A3D"/>
+    <SolidColorBrush x:Key="AppOperationViperBrush" Color="#FFD13438"/>
     <SolidColorBrush x:Key="AppOperationWingetBrush" Color="#FF0078D4"/>
     <SolidColorBrush x:Key="AppOperationDefaultBrush" Color="#FF0078D4"/>
     <Style TargetType="controls:OperationStatusBadge">

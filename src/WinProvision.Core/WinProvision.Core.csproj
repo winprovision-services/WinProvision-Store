@@ -48,6 +48,7 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <!-- Last MS-RL-only DTF release; later packages require the OSMF EULA. No WiX installer tools are shipped. -->
     <PackageReference Include="WixToolset.Dtf.Compression.Cab" Version="5.0.2" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>

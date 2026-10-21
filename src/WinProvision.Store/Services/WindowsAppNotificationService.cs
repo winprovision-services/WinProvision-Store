@@ -10,6 +10,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
     private readonly OperationPreferencesService _preferences;
     public WindowsAppNotificationService(OperationPreferencesService? preferences = null) => _preferences = preferences ?? new();
     private bool Allows(NotificationCategory category) => !SuppressNotifications && _preferences.Load().Allows(category);
+    private bool AllowsSuccessfulOperation(bool isBatch) => !SuppressNotifications && _preferences.Load().AllowsSuccessfulOperation(isBatch);
     public Action<string> Log { get; set; } = message => System.Diagnostics.Trace.WriteLine(message);
     public bool SuppressNotifications { get; set; }
     private bool _registered;
@@ -76,7 +77,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowBackgroundUpdateSummary(int updated, int failed, int unselected)
     {
-        if (!Allows(failed > 0 ? NotificationCategory.Errors : NotificationCategory.BatchSummary) || (!_registered && !TryRegister()))
+        if (!(failed > 0 ? Allows(NotificationCategory.Errors) : AllowsSuccessfulOperation(isBatch: true)) || (!_registered && !TryRegister()))
             return;
 
         string message = updated == 0 && failed == 0
@@ -152,7 +153,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowMaintenanceSummary(string message)
     {
-        if (!Allows(NotificationCategory.BatchSummary) || (!_registered && !TryRegister())) return;
+        if (!AllowsSuccessfulOperation(isBatch: true) || (!_registered && !TryRegister())) return;
         try
         {
             var notification = new AppNotificationBuilder().AddText("WinProvision Store")
@@ -164,8 +165,8 @@ public sealed partial class WindowsAppNotificationService : IDisposable
 
     public void ShowDownloadSummary(int downloaded, int failed)
     {
-        var category = failed > 0 ? NotificationCategory.Errors : downloaded > 1 ? NotificationCategory.BatchSummary : NotificationCategory.Success;
-        if (!Allows(category) || (!_registered && !TryRegister())) return;
+        bool allowed = failed > 0 ? Allows(NotificationCategory.Errors) : AllowsSuccessfulOperation(isBatch: downloaded > 1);
+        if (!allowed || (!_registered && !TryRegister())) return;
         try
         {
             AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText("WinProvision Store")
@@ -179,9 +180,8 @@ public sealed partial class WindowsAppNotificationService : IDisposable
         int failed = items.Count(item => item.State == WinProvision.Core.Models.OperationState.Failed);
         int succeeded = items.Count(item => item.State == WinProvision.Core.Models.OperationState.Completed);
         if (failed == 0 && succeeded == 0) return;
-        NotificationCategory category = failed > 0 ? NotificationCategory.Errors
-            : items.Count > 1 ? NotificationCategory.BatchSummary : NotificationCategory.Success;
-        if (!Allows(category) || (!_registered && !TryRegister())) return;
+        bool allowed = failed > 0 ? Allows(NotificationCategory.Errors) : AllowsSuccessfulOperation(isBatch: items.Count > 1);
+        if (!allowed || (!_registered && !TryRegister())) return;
         try
         {
             string title = items.Count == 1 ? items[0].AppName : "Lote de operações concluído";

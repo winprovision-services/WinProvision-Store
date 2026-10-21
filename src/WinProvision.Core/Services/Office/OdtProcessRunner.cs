@@ -180,6 +180,7 @@ public sealed class OfficeElevationCanceledException(CancellationToken token)
 public record OdtProcessResult
 {
     public bool Success { get; init; }
+    public bool AlreadyInstalled { get; init; }
     public int ExitCode { get; init; }
     public bool RebootRequired => InstallerExitCodes.RequiresReboot(ExitCode);
     public string Output { get; init; } = string.Empty;

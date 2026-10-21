@@ -1,4 +1,4 @@
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.InstalledPackagesPage" x:Name="InstalledRoot" Background="Transparent" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged" KeyDown="Page_KeyDown" FontFamily="{StaticResource StoreFontFamily}" FontSize="13">
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:ic="using:FluentIcons.WinUI" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.InstalledPackagesPage" x:Name="InstalledRoot" Background="Transparent" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged" KeyDown="Page_KeyDown" FontFamily="{StaticResource StoreFontFamily}" FontSize="13">
     <Page.Resources>
         <conv:FormatConverter x:Key="InstalledFormatConverter" />
         <conv:UpdatePackageIconUrlConverter x:Key="InstalledIconUrl" />
@@ -17,66 +17,66 @@
                     <MenuFlyout Opening="ContextMenu_Opening">
                         <MenuFlyoutItem Click="ContextUninstall_Click" Text="Desinstalar">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" IconSize="Size16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextUninstallAdmin_Click" Text="Desinstalar como administrador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ShieldPerson" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextInteractiveUninstall_Click" Text="Desinstalação interativa">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyUninstall_Click" Text="Desinstalação manual">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextOpenLocation_Click" Text="Abrir local de instalação">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentFolder" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextDownload_Click" Text="Baixar instalador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSquareDown" IconVariant="Color" IconSize="Size20" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextIgnore_Click" Text="Ignorar atualizações deste pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <ToggleMenuFlyoutItem Click="ContextAutoUpdate_Click" Text="Incluir nas atualizações automáticas">
                             <ToggleMenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSync" IconVariant="Color" IconSize="Size16" />
                             </ToggleMenuFlyoutItem.Icon>
                         </ToggleMenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem IsEnabled="{Binding CanAddToCollection}" Click="ContextAddToCollection_Click" Text="Adicionar à coleção">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="AddCircle" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyId_Click" Text="Copiar ID do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyName_Click" Text="Copiar nome do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextDetails_Click" Text="Detalhes do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentText" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyout>
@@ -89,7 +89,7 @@
                         <ColumnDefinition Width="1.1*" />
                         <ColumnDefinition Width="1.3*" />
                     </Grid.ColumnDefinitions>
-                    <FontIcon Grid.Column="0" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="Checkmark" IconVariant="Regular" IconSize="Size16" Grid.Column="0" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" />
                     <Grid Grid.Column="1" Margin="6,0,10,0" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -97,7 +97,7 @@
                         </Grid.ColumnDefinitions>
                         <Grid Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
                             <Grid>
-                                <FontIcon FontSize="22" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledRowImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size20" FontSize="22" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledRowImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" />
                                 <Image x:Name="InstalledRowImage" Stretch="Uniform" conv:AsyncImage.DecodePixelWidth="64" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledRowImage, Converter={StaticResource BoolVisibility}}" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource InstalledIconUrl}}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="32" Height="32" />
                             </Grid>
                         </Grid>
@@ -110,7 +110,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" x:Name="InstalledIdIcon" Width="18" Height="18" />
+                        <ic:FluentIcon Icon="Tag" IconVariant="Regular" IconSize="Size16" FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" x:Name="InstalledIdIcon" Width="18" Height="18" />
                         <TextBlock Text="{Binding Id}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Id}" Grid.Column="1" />
                     </Grid>
                     <Grid Grid.Column="3" Margin="6,0,10,0" VerticalAlignment="Center" ToolTipService.ToolTip="{Binding VersionLabel}">
@@ -118,7 +118,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" x:Name="InstalledVersionIcon" Width="18" Height="18" />
+                        <ic:FluentIcon Icon="Document" IconVariant="Regular" IconSize="Size16" FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" x:Name="InstalledVersionIcon" Width="18" Height="18" />
                         <TextBlock Text="{Binding VersionLabel}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Grid.Column="1" />
                     </Grid>
                     <Grid Grid.Column="4" Margin="6,0,6,0" VerticalAlignment="Center">
@@ -126,7 +126,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" Glyph="{Binding SourceGlyph}" FontFamily="{ThemeResource SymbolThemeFontFamily}" x:Name="InstalledSourceIcon" Width="18" Height="18" />
+                        <ic:FluentIcon IconVariant="Regular" IconSize="Size16" FontSize="14" Margin="0,0,6,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" Icon="{Binding SourceIcon}" x:Name="InstalledSourceIcon" Width="18" Height="18" />
                         <TextBlock Text="{Binding SourceLabel}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" ToolTipService.ToolTip="{Binding SourceLabel}" Grid.Column="1" />
                     </Grid>
                 </Grid>
@@ -138,66 +138,66 @@
                     <MenuFlyout Opening="ContextMenu_Opening">
                         <MenuFlyoutItem Click="ContextUninstall_Click" Text="Desinstalar">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" IconSize="Size16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextUninstallAdmin_Click" Text="Desinstalar como administrador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ShieldPerson" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextInteractiveUninstall_Click" Text="Desinstalação interativa">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyUninstall_Click" Text="Desinstalação manual">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextOpenLocation_Click" Text="Abrir local de instalação">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentFolder" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextDownload_Click" Text="Baixar instalador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSquareDown" IconVariant="Color" IconSize="Size20" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextIgnore_Click" Text="Ignorar atualizações deste pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <ToggleMenuFlyoutItem Click="ContextAutoUpdate_Click" Text="Incluir nas atualizações automáticas">
                             <ToggleMenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSync" IconVariant="Color" IconSize="Size16" />
                             </ToggleMenuFlyoutItem.Icon>
                         </ToggleMenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem IsEnabled="{Binding CanAddToCollection}" Click="ContextAddToCollection_Click" Text="Adicionar à coleção">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="AddCircle" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyId_Click" Text="Copiar ID do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyName_Click" Text="Copiar nome do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextDetails_Click" Text="Detalhes do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentText" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyout>
@@ -208,19 +208,19 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <FontIcon Grid.Row="0" FontSize="17" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="Checkmark" IconVariant="Regular" IconSize="Size16" Grid.Row="0" FontSize="17" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" />
                     <Grid Grid.Row="1" Margin="0,4,0,0">
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Grid Width="56" Height="56" Margin="0,0,0,8" HorizontalAlignment="Center">
                                 <Grid>
-                                    <FontIcon FontSize="34" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledCardImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size32" FontSize="34" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledCardImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" />
                                     <Image x:Name="InstalledCardImage" Stretch="Uniform" conv:AsyncImage.DecodePixelWidth="96" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledCardImage, Converter={StaticResource BoolVisibility}}" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource InstalledIconUrl}}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="48" Height="48" />
                                 </Grid>
                             </Grid>
-                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" FontWeight="SemiBold" TextAlignment="Center" FontFamily="Segoe UI Variable Text" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" MaxHeight="38" ToolTipService.ToolTip="{Binding Name}" />
+                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" FontWeight="SemiBold" TextAlignment="Center" FontFamily="{StaticResource StoreFontFamily}" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" MaxHeight="38" ToolTipService.ToolTip="{Binding Name}" />
                         </StackPanel>
                     </Grid>
-                    <FontIcon Grid.Row="2" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="{Binding SourceGlyph}" FontFamily="{ThemeResource SymbolThemeFontFamily}" ToolTipService.ToolTip="{Binding SourceLabel}" />
+                    <ic:FluentIcon IconVariant="Regular" IconSize="Size16" Grid.Row="2" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Icon="{Binding SourceIcon}" ToolTipService.ToolTip="{Binding SourceLabel}" />
                 </Grid>
             </Border>
         </DataTemplate>
@@ -230,66 +230,66 @@
                     <MenuFlyout Opening="ContextMenu_Opening">
                         <MenuFlyoutItem Click="ContextUninstall_Click" Text="Desinstalar">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" IconSize="Size16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextUninstallAdmin_Click" Text="Desinstalar como administrador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ShieldPerson" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextInteractiveUninstall_Click" Text="Desinstalação interativa">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyUninstall_Click" Text="Desinstalação manual">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextOpenLocation_Click" Text="Abrir local de instalação">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentFolder" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextDownload_Click" Text="Baixar instalador">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSquareDown" IconVariant="Color" IconSize="Size20" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextIgnore_Click" Text="Ignorar atualizações deste pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <ToggleMenuFlyoutItem Click="ContextAutoUpdate_Click" Text="Incluir nas atualizações automáticas">
                             <ToggleMenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowSync" IconVariant="Color" IconSize="Size16" />
                             </ToggleMenuFlyoutItem.Icon>
                         </ToggleMenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem IsEnabled="{Binding CanAddToCollection}" Click="ContextAddToCollection_Click" Text="Adicionar à coleção">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="AddCircle" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyId_Click" Text="Copiar ID do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutItem Click="ContextCopyName_Click" Text="Copiar nome do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Click="ContextDetails_Click" Text="Detalhes do pacote">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="DocumentText" IconVariant="Color" IconSize="Size16" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyout>
@@ -299,17 +299,17 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <FontIcon Grid.Row="0" FontSize="16" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="Checkmark" IconVariant="Regular" IconSize="Size16" Grid.Row="0" FontSize="16" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsSelected, Converter={StaticResource BoolVisibility}}" />
                     <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,2,0,0">
                         <Grid Width="40" Height="40" HorizontalAlignment="Center" Margin="0,0,0,8">
                             <Grid>
-                                <FontIcon FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledIconImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size28" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledIconImage, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}" />
                                 <Image x:Name="InstalledIconImage" conv:AsyncImage.DecodePixelWidth="64" Stretch="Uniform" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=InstalledIconImage, Converter={StaticResource BoolVisibility}}" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource InstalledIconUrl}}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="36" Height="36" />
                             </Grid>
                         </Grid>
                         <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36" ToolTipService.ToolTip="{Binding Name}" />
                     </StackPanel>
-                    <FontIcon Grid.Row="0" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="{Binding SourceGlyph}" FontFamily="{ThemeResource SymbolThemeFontFamily}" ToolTipService.ToolTip="{Binding SourceLabel}" />
+                    <ic:FluentIcon IconVariant="Regular" IconSize="Size16" Grid.Row="0" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Icon="{Binding SourceIcon}" ToolTipService.ToolTip="{Binding SourceLabel}" />
                 </Grid>
             </Border>
         </DataTemplate>
@@ -327,7 +327,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border Grid.Column="0" Style="{StaticResource PageHeaderIconTileStyle}">
-                <FontIcon Glyph="" Style="{StaticResource PageHeaderSymbolIconStyle}" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="Apps" IconSize="Size24" IconVariant="Color" Style="{StaticResource PageHeaderSymbolIconStyle}" />
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock Text="Pacotes Instalados" Style="{StaticResource FluentPageTitleStyle}" />
@@ -339,14 +339,14 @@
                 <StackPanel x:Name="InstalledToolbarActions" Orientation="Horizontal" VerticalAlignment="Center">
                     <ToggleButton x:Name="ToggleFiltersButton" AutomationProperties.AutomationId="ToggleFiltersButton" IsChecked="True" Style="{StaticResource InstalledToolbarToggleStyle}" Click="ToggleFiltersButton_Click" ToolTipService.ToolTip="Exibir ou ocultar os filtros">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" />
+                            <ic:FluentIcon Icon="Filter" IconVariant="Regular" IconSize="Size16" FontSize="16" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" />
                             <TextBlock Text="Filtros" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
                     <SplitButton x:Name="UninstallSelectedButton" AutomationProperties.AutomationId="UninstallSelectedButton" Height="34" MinHeight="34" Padding="12,0" Margin="0,0,6,0" Command="{Binding RemoveSelectedCommand}" ToolTipService.ToolTip="Desinstalar os aplicativos selecionados" Style="{StaticResource UpdatesPrimarySplitButtonStyle}" IsEnabled="{Binding CanRemove}">
                         <SplitButton.Content>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" />
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" IconSize="Size16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                                 <TextBlock Text="Desinstalar seleção" FontWeight="SemiBold" />
                             </StackPanel>
                         </SplitButton.Content>
@@ -354,18 +354,18 @@
                             <MenuFlyout>
                                 <MenuFlyoutItem Text="Desinstalar como administrador" Click="RemoveSelectedAdmin_Click">
                                     <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                        <ic:FluentIcon Icon="ShieldPerson" IconVariant="Regular" IconSize="Size16" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutItem Text="Desinstalação interativa" Click="RemoveSelectedInteractive_Click">
                                     <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                        <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutSeparator />
                                 <MenuFlyoutItem Text="Baixar instaladores selecionados" Command="{Binding DownloadSelectedCommand}">
                                     <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                        <ic:FluentIcon Icon="ArrowSquareDown" IconVariant="Color" IconSize="Size20" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                             </MenuFlyout>
@@ -373,13 +373,13 @@
                     </SplitButton>
                     <Button Style="{StaticResource InstalledToolbarButtonStyle}" Click="PackageDetails_Click" ToolTipService.ToolTip="Ver detalhes do pacote selecionado">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" />
+                            <ic:FluentIcon Icon="DocumentText" IconVariant="Color" IconSize="Size16" FontSize="16" />
                             <TextBlock Text="Detalhes" />
                         </StackPanel>
                     </Button>
-                    <Button x:Name="RefreshButton" AutomationProperties.AutomationId="RefreshButton" Style="{StaticResource InstalledToolbarButtonStyle}" Command="{Binding RefreshCommand}" ToolTipService.ToolTip="Recarregar aplicativos instalados">
+                    <Button x:Name="RefreshButton" AutomationProperties.AutomationId="RefreshButton" AutomationProperties.Name="Recarregar aplicativos instalados" Style="{StaticResource InstalledToolbarButtonStyle}" Command="{Binding RefreshCommand}" ToolTipService.ToolTip="Recarregar aplicativos instalados">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" />
+                            <ic:FluentIcon Icon="ArrowSync" IconVariant="Color" IconSize="Size16" />
                             <TextBlock Text="Recarregar" />
                         </StackPanel>
                     </Button>
@@ -395,7 +395,7 @@
                                 <MenuFlyoutItem Text="Exportar para CSV" Command="{Binding ExportCsvCommand}" />
                             </MenuFlyout>
                         </Button.Flyout>
-                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="16" />
+                        <ic:FluentIcon Icon="Toolbox" IconVariant="Color" IconSize="Size16" />
                     </Button>
                     <Button x:Name="CancelBatchButton" AutomationProperties.AutomationId="CancelBatchButton" Content="Interromper" Command="{Binding CancelBatchCommand}" Visibility="{Binding IsBusy, Converter={StaticResource BoolVisibility}}" />
                 </StackPanel>
@@ -414,7 +414,7 @@
                         <Expander IsExpanded="True" Background="Transparent" BorderThickness="0" Padding="4,2" Margin="0,0,0,8" Style="{StaticResource UpdatesExpanderStyle}">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal">
-                                    <FontIcon FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" />
                                     <TextBlock Text="Fontes" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Expander.Header>
@@ -427,13 +427,13 @@
                                         </Grid.ColumnDefinitions>
                                         <Button Grid.Column="0" Style="{StaticResource InstalledSourceSelectionButtonStyle}" Margin="0,0,4,0" Click="SelectAllSources_Click">
                                             <StackPanel Orientation="Horizontal">
-                                                <FontIcon FontSize="14" Margin="0,0,4,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                                <ic:FluentIcon Icon="Checkmark" IconVariant="Regular" IconSize="Size16" FontSize="14" Margin="0,0,4,0" />
                                                 <TextBlock Text="Selecionar tudo" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </Button>
                                         <Button Grid.Column="1" Style="{StaticResource InstalledSourceSelectionButtonStyle}" Margin="4,0,0,0" Click="ClearSources_Click">
                                             <StackPanel Orientation="Horizontal">
-                                                <FontIcon FontSize="14" Margin="0,0,5,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" IconSize="Size16" FontSize="14" Margin="0,0,5,0" />
                                                 <TextBlock Text="Limpar" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </Button>
@@ -445,7 +445,7 @@
                                     </CheckBox>
                                     <CheckBox x:Name="FilterWingetCheck" AutomationProperties.AutomationId="FilterWingetCheck" IsChecked="{Binding FilterWinget, Mode=TwoWay}" Click="SourceFilter_Changed" Margin="2,3">
                                         <StackPanel Orientation="Horizontal">
-                                            <FontIcon FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                            <ic:FluentIcon Icon="ArrowDownload" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             <TextBlock Text="WinGet" VerticalAlignment="Center" />
                                         </StackPanel>
                                         <CheckBox.Resources>
@@ -454,7 +454,7 @@
                                     </CheckBox>
                                     <CheckBox x:Name="FilterStoreCheck" AutomationProperties.AutomationId="FilterStoreCheck" IsChecked="{Binding FilterStore, Mode=TwoWay}" Click="SourceFilter_Changed" Margin="2,3">
                                         <StackPanel Orientation="Horizontal">
-                                            <FontIcon FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                            <ic:FluentIcon Icon="StoreMicrosoft" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             <TextBlock Text="Microsoft Store" VerticalAlignment="Center" />
                                         </StackPanel>
                                         <CheckBox.Resources>
@@ -463,7 +463,7 @@
                                     </CheckBox>
                                     <CheckBox x:Name="FilterLocalCheck" AutomationProperties.AutomationId="FilterLocalCheck" IsChecked="{Binding FilterLocal, Mode=TwoWay}" Click="SourceFilter_Changed" Margin="2,3" ToolTipService.ToolTip="Aplicativos detectados no Windows cuja origem não é WinGet ou Microsoft Store.">
                                         <StackPanel Orientation="Horizontal">
-                                            <FontIcon FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                            <ic:FluentIcon Icon="Laptop" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             <TextBlock Text="PC Local" VerticalAlignment="Center" />
                                         </StackPanel>
                                         <CheckBox.Resources>
@@ -477,7 +477,7 @@
                         <Expander IsExpanded="False" Background="Transparent" BorderThickness="0" Padding="4,2" Margin="0,0,0,8" Style="{StaticResource UpdatesExpanderStyle}">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal">
-                                    <FontIcon FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="Filter" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" />
                                     <TextBlock Text="Filtros" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Expander.Header>
@@ -505,12 +505,14 @@
                         <Expander IsExpanded="True" Background="Transparent" BorderThickness="0" Padding="4,2" Style="{StaticResource UpdatesExpanderStyle}">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal">
-                                    <FontIcon FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center" />
                                     <TextBlock Text="Modo de pesquisa" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Expander.Header>
                             <StackPanel Margin="0,6,0,0">
-                                    <AutoSuggestBox QueryIcon="Find" Style="{StaticResource PageFilterSearchBoxStyle}" x:Name="InstalledSearchBox" AutomationProperties.AutomationId="InstalledSearchBox" Text="{Binding SearchText, Mode=OneWay}" PlaceholderText="Pesquisar nome ou ID e pressionar Enter..." TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" AutomationProperties.Name="Pesquisar aplicativos instalados por nome ou ID" ToolTipService.ToolTip="Pesquise pelo nome ou ID do pacote" />
+                                    <AutoSuggestBox Style="{StaticResource PageFilterSearchBoxStyle}" x:Name="InstalledSearchBox" AutomationProperties.AutomationId="InstalledSearchBox" Text="{Binding SearchText, Mode=OneWay}" PlaceholderText="Pesquisar nome ou ID e pressionar Enter..." TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" AutomationProperties.Name="Pesquisar aplicativos instalados por nome ou ID" ToolTipService.ToolTip="Pesquise pelo nome ou ID do pacote">
+                                        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size16" /></AutoSuggestBox.QueryIcon>
+                                    </AutoSuggestBox>
                                     <RadioButton x:Name="SearchModeNameRadio" AutomationProperties.AutomationId="SearchModeNameRadio" GroupName="InstalledSearchMode" Content="Nome do Pacote" Margin="0,2,0,4" Click="SearchMode_Click" Tag="Nome" />
                                     <RadioButton x:Name="SearchModeIdRadio" AutomationProperties.AutomationId="SearchModeIdRadio" GroupName="InstalledSearchMode" Content="ID do Pacote" Margin="0,2,0,4" Click="SearchMode_Click" Tag="ID" />
                                     <RadioButton x:Name="SearchModeBothRadio" AutomationProperties.AutomationId="SearchModeBothRadio" GroupName="InstalledSearchMode" Content="Ambos" IsChecked="True" Margin="0,2,0,4" Click="SearchMode_Click" Tag="Ambos" />
@@ -552,25 +554,25 @@
                             <Button Grid.Column="1" Background="Transparent" BorderThickness="0" Padding="6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center" Click="SortByName_Click" Style="{StaticResource InstalledTableHeaderButtonStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Nome do Pacote" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <FontIcon x:Name="SortNameIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" IconSize="Size16" x:Name="SortNameIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
                             </Button>
                             <Button Grid.Column="2" Background="Transparent" BorderThickness="0" Padding="6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center" Click="SortById_Click" Style="{StaticResource InstalledTableHeaderButtonStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="ID do Pacote" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <FontIcon x:Name="SortIdIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" IconSize="Size16" x:Name="SortIdIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
                                 </StackPanel>
                             </Button>
                             <Button Grid.Column="3" Background="Transparent" BorderThickness="0" Padding="6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center" Click="SortByVersion_Click" Style="{StaticResource InstalledTableHeaderButtonStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Versão" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <FontIcon x:Name="SortVersionIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" IconSize="Size16" x:Name="SortVersionIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
                                 </StackPanel>
                             </Button>
                             <Button Grid.Column="4" Background="Transparent" BorderThickness="0" Padding="6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center" Click="SortBySource_Click" Style="{StaticResource InstalledTableHeaderButtonStyle}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Origem" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <FontIcon x:Name="SortSourceIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" IconSize="Size16" x:Name="SortSourceIcon" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -687,7 +689,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <FontIcon Grid.Column="0" Style="{StaticResource PageStatusIconStyle}" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Grid.Column="0" Style="{StaticResource PageStatusIconStyle}" />
                     <TextBlock Grid.Column="1" Style="{StaticResource PageStatusPrimaryTextStyle}">
                         <Run Text="Selecionados: " />
                         <Run Text="{Binding SelectedCount, Mode=OneWay}" />
@@ -706,13 +708,13 @@
                     </ComboBox>
                     <StackPanel Orientation="Horizontal">
                         <ToggleButton x:Name="ListViewToggleButton" AutomationProperties.AutomationId="ListViewToggleButton" Style="{StaticResource UpdatesViewModeToggleStyle}" IsChecked="True" Click="ListViewToggleButton_Click" ToolTipService.ToolTip="Visualização em tabela" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}">
-                            <FontIcon FontSize="16" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                            <ic:FluentIcon Icon="AppsList" IconVariant="Color" IconSize="Size24" />
                         </ToggleButton>
                         <ToggleButton x:Name="GridViewToggleButton" AutomationProperties.AutomationId="GridViewToggleButton" Style="{StaticResource UpdatesViewModeToggleStyle}" Click="GridViewToggleButton_Click" ToolTipService.ToolTip="Visualização em cartões" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}">
-                            <FontIcon FontSize="16" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                            <ic:FluentIcon Icon="AppsListDetail" IconVariant="Color" IconSize="Size20" />
                         </ToggleButton>
                         <ToggleButton x:Name="IconsViewToggleButton" AutomationProperties.AutomationId="IconsViewToggleButton" Style="{StaticResource UpdatesViewModeToggleStyle}" Click="IconsViewToggleButton_Click" ToolTipService.ToolTip="Visualização em ícones" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}">
-                            <FontIcon FontSize="16" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                            <ic:FluentIcon Icon="Apps" IconVariant="Color" IconSize="Size16" />
                         </ToggleButton>
                     </StackPanel>
                 </StackPanel>
@@ -732,7 +734,7 @@
                             <TextBlock Text="Os pacotes abaixo estão configurados para não receber atualizações." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Top" Padding="6" Click="CloseIgnoredOverlay_Click" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Fechar atualizações ignoradas">
-                            <FontIcon FontSize="16" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                            <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" IconSize="Size16" FontSize="16" />
                         </Button>
                     </Grid>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="350">
@@ -752,7 +754,7 @@
                                                 </StackPanel>
                                                 <Button Grid.Column="1" FontSize="11" Padding="8,4" Click="RestoreIgnoredUpdate_Click">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                                        <ic:FluentIcon Icon="ArrowUndo" IconVariant="Regular" IconSize="Size16" />
                                                         <TextBlock Text="Restaurar" VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </Button>
@@ -767,7 +769,7 @@
                     <Grid Grid.Row="2" Margin="0,16,0,0">
                         <Button HorizontalAlignment="Left" Click="RestoreAllIgnored_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                                <ic:FluentIcon Icon="ArrowUndo" IconVariant="Regular" IconSize="Size16" />
                                 <TextBlock Text="Restaurar todas" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>

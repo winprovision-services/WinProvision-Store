@@ -48,6 +48,8 @@ public sealed partial class ApplicationPreferencesService
     public bool AutoUpdateAtStartup { get; private set; }
     public bool AutoMaintenanceUpdates { get; private set; }
     public bool AutoMaintenanceDrivers { get; private set; }
+    public bool AutomaticCloudBackupEnabled { get; private set; } = true;
+    public bool UseViperOfficeDownload { get; private set; }
     public bool BackgroundUpdatesEnabled => AutoUpdateAtStartup || AutoMaintenanceUpdates;
     public BackgroundUpdateMode UpdateMode { get; private set; } = BackgroundUpdateMode.InstallAutomatically;
     public BackgroundUpdateScope UpdateScope { get; private set; } = BackgroundUpdateScope.AllSupportedPackages;
@@ -85,6 +87,8 @@ public sealed partial class ApplicationPreferencesService
                     _savedAutoUpdateEnabled = saved.AutoUpdateAtStartup;
                     AutoMaintenanceUpdates = saved.AutoMaintenanceUpdates;
                     AutoMaintenanceDrivers = saved.AutoMaintenanceDrivers;
+                    AutomaticCloudBackupEnabled = saved.AutomaticCloudBackupEnabled;
+                    UseViperOfficeDownload = saved.UseViperOfficeDownload;
                 }
             }
         }
@@ -176,6 +180,18 @@ public sealed partial class ApplicationPreferencesService
         UpdateStartupRegistration();
     }
 
+    public void SetAutomaticCloudBackup(bool enabled)
+    {
+        bool previous = AutomaticCloudBackupEnabled;
+        AutomaticCloudBackupEnabled = enabled;
+        try { Save(); }
+        catch
+        {
+            AutomaticCloudBackupEnabled = previous;
+            throw;
+        }
+    }
+
     public void SetUpdateAutomationOptions(
         BackgroundUpdateMode mode,
         BackgroundUpdateScope scope,
@@ -213,6 +229,53 @@ public sealed partial class ApplicationPreferencesService
     }
 
     public int AutoUpdatePackageCount => _autoUpdatePackageKeys.Count;
+
+    public void SetUseViperOfficeDownload(bool enabled)
+    {
+        if (UseViperOfficeDownload == enabled) return;
+        bool previous = UseViperOfficeDownload;
+        UseViperOfficeDownload = enabled;
+        try { Save(); }
+        catch
+        {
+            UseViperOfficeDownload = previous;
+            throw;
+        }
+    }
+
+    public PortableApplicationPreferences ExportPortablePreferences() => new(
+        Theme, LaunchAtStartup, AutoUpdateAtStartup, AutoMaintenanceUpdates, AutoMaintenanceDrivers,
+        AutomaticCloudBackupEnabled, UpdateMode, UpdateScope, UpdateSchedule, UpdateScheduleTime,
+        UpdateScheduleDay, UpdateIntervalMinutes, UpdateNotificationsEnabled,
+        _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(), UseViperOfficeDownload);
+
+    public void ImportPortablePreferences(PortableApplicationPreferences value)
+    {
+        if (!Enum.IsDefined(value.Theme) || !Enum.IsDefined(value.UpdateMode) || !Enum.IsDefined(value.UpdateScope)
+            || !Enum.IsDefined(value.UpdateSchedule) || !Enum.IsDefined(value.UpdateScheduleDay)
+            || value.UpdateIntervalMinutes is < 15 or > 1440
+            || !TimeOnly.TryParseExact(value.UpdateScheduleTime, "HH:mm", out _))
+            throw new ArgumentException("O arquivo contém opções inválidas.");
+        Theme = value.Theme;
+        LaunchAtStartup = value.LaunchAtStartup;
+        AutoUpdateAtStartup = value.AutoUpdateAtStartup;
+        AutoMaintenanceUpdates = value.AutoMaintenanceUpdates;
+        AutoMaintenanceDrivers = value.AutoMaintenanceDrivers;
+        AutomaticCloudBackupEnabled = value.AutomaticCloudBackupEnabled;
+        UpdateMode = value.UpdateMode;
+        UpdateScope = value.UpdateScope;
+        UpdateSchedule = value.UpdateSchedule;
+        UpdateScheduleTime = value.UpdateScheduleTime;
+        UpdateScheduleDay = value.UpdateScheduleDay;
+        UpdateIntervalMinutes = value.UpdateIntervalMinutes;
+        UpdateNotificationsEnabled = value.UpdateNotificationsEnabled;
+        UseViperOfficeDownload = value.UseViperOfficeDownload;
+        _autoUpdatePackageKeys.Clear();
+        foreach (string key in value.AutoUpdatePackageKeys ?? [])
+            if (!string.IsNullOrWhiteSpace(key) && key.Length <= 512) _autoUpdatePackageKeys.Add(key);
+        Save();
+        UpdateStartupRegistration();
+    }
 
     private static string GetAutoUpdatePackageKey(string id, string source)
     {
@@ -257,7 +320,8 @@ public sealed partial class ApplicationPreferencesService
             UpdateScheduleTime,
             UpdateScheduleDay,
             _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
-            AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc)));
+            AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc,
+            AutomaticCloudBackupEnabled, UseViperOfficeDownload)));
     }
 
     private bool? _savedAutoUpdateEnabled;
@@ -275,5 +339,15 @@ public sealed partial class ApplicationPreferencesService
         bool AutoMaintenanceDrivers = false,
         int UpdateIntervalMinutes = 60,
         bool UpdateNotificationsEnabled = true,
-        DateTimeOffset? UpdateScheduleAnchorUtc = null);
+        DateTimeOffset? UpdateScheduleAnchorUtc = null,
+        bool AutomaticCloudBackupEnabled = true,
+        bool UseViperOfficeDownload = false);
 }
+
+public sealed record PortableApplicationPreferences(
+    AppThemePreference Theme, bool LaunchAtStartup, bool AutoUpdateAtStartup,
+    bool AutoMaintenanceUpdates, bool AutoMaintenanceDrivers, bool AutomaticCloudBackupEnabled,
+    BackgroundUpdateMode UpdateMode, BackgroundUpdateScope UpdateScope, BackgroundUpdateSchedule UpdateSchedule,
+    string UpdateScheduleTime, DayOfWeek UpdateScheduleDay, int UpdateIntervalMinutes,
+    bool UpdateNotificationsEnabled, string[] AutoUpdatePackageKeys,
+    bool UseViperOfficeDownload = false);

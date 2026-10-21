@@ -20,6 +20,8 @@ public class StoreService : IAsyncDisposable
     private readonly string _cacheDirectory;
     private readonly string _legacyCacheFilePath;
     private readonly string _catalogManifestCacheFilePath;
+    private readonly string _wingetCatalogCachePath;
+    private readonly string _wingetSearchCachePath;
     private readonly string _catalogManifestEtagPath;
     private readonly string _catalogManifestLastModifiedPath;
     private readonly string _catalogDetailsCacheDirectory;
@@ -42,6 +44,7 @@ public class StoreService : IAsyncDisposable
     private Task<List<AppEntry>>? _refreshTask;
     private CancellationTokenSource? _refreshCts;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _detailLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, (WingetCdnCatalog.App App, DateTimeOffset Expires)> _wingetApps = new(StringComparer.OrdinalIgnoreCase);
     private string? _loadedSearchIndexCacheFilePath;
     private string? _catalogSha256;
     private string? _loadedIndexSha256;
@@ -67,13 +70,16 @@ public class StoreService : IAsyncDisposable
     internal StoreService(HttpClient? httpClient, IconService? iconService, string cacheDirectory)
     {
         _ownsHttpClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler())) { Timeout = TimeSpan.FromSeconds(15) };
+        _httpClient = httpClient ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler
+            { AllowAutoRedirect = false })) { Timeout = TimeSpan.FromSeconds(30) };
         _iconService = iconService ?? new IconService();
 
         _cacheDirectory = cacheDirectory;
 
         _legacyCacheFilePath = Path.Combine(_cacheDirectory, "apps.json");
         _catalogManifestCacheFilePath = Path.Combine(_cacheDirectory, "catalog-v2-manifest.json");
+        _wingetCatalogCachePath = Path.Combine(_cacheDirectory, "winget-v1-catalog.json");
+        _wingetSearchCachePath = Path.Combine(_cacheDirectory, "winget-v1-search.json");
         _catalogManifestEtagPath = _catalogManifestCacheFilePath + ".etag";
         _catalogManifestLastModifiedPath = _catalogManifestCacheFilePath + ".lastmodified";
         _catalogDetailsCacheDirectory = Path.Combine(_cacheDirectory, "catalog-v2-details");
@@ -144,6 +150,8 @@ public class StoreService : IAsyncDisposable
 
     private async Task<AppEntry> LoadDetailsCoreAsync(AppEntry app, CancellationToken cancellationToken, bool allowRefresh)
     {
+        if (string.Equals(app.CatalogDetailBaseUrl, WingetCdnCatalog.BaseUrl.TrimEnd('/'), StringComparison.Ordinal))
+            return await LoadWingetDetailsAsync(app, cancellationToken);
         int cacheGeneration = Volatile.Read(ref _cacheGeneration);
         if (string.IsNullOrWhiteSpace(app.CatalogDetailPath))
         {
@@ -248,7 +256,7 @@ public class StoreService : IAsyncDisposable
         details.CatalogDetailSha256 = summary.CatalogDetailSha256;
         details.CatalogDetailBaseUrl = summary.CatalogDetailBaseUrl;
         details.CatalogDetailCatalogSha256 = summary.CatalogDetailCatalogSha256;
-        details.Media = summary.Media;
+        details.Media ??= summary.Media;
         details.IconUrl = _iconService.ResolveIconUrl(details);
         details.StoreBannerUrl = _iconService.ResolveBannerUrl(details);
         if (string.Equals(details.Source, "msstore", StringComparison.OrdinalIgnoreCase))
@@ -262,48 +270,66 @@ public class StoreService : IAsyncDisposable
         && !Path.IsPathRooted(path)
         && !path.Split('/').Any(segment => segment is "" or "." or "..");
 
+    private async Task<WingetCdnCatalog.App> GetWingetAppAsync(AppEntry summary, CancellationToken token)
+    {
+        if (_wingetApps.TryGetValue(summary.Id, out var cached)
+            && cached.Expires > DateTimeOffset.UtcNow
+            && cached.App.Entry.CatalogDetailCatalogSha256 == summary.CatalogDetailCatalogSha256)
+            return cached.App;
+        WingetCdnCatalog.App app = await WingetCdnCatalog.LoadAppAsync(_httpClient, summary, token);
+        _wingetApps[summary.Id] = (app, DateTimeOffset.UtcNow.AddMinutes(5));
+        return app;
+    }
+
+    public async Task<string[]> GetAvailableVersionsAsync(AppEntry summary, CancellationToken token = default)
+    {
+        if (!string.Equals(summary.Source, "winget", StringComparison.OrdinalIgnoreCase)) return [];
+        WingetCdnCatalog.App app = await GetWingetAppAsync(summary, token);
+        return app.Versions.Select(item => item.Number).ToArray();
+    }
+
+    public async Task<IReadOnlyList<CatalogInstaller>> GetVersionInstallersAsync(AppEntry summary,
+        string? version, CancellationToken token = default)
+    {
+        WingetCdnCatalog.App app = await GetWingetAppAsync(summary, token);
+        PackageManifest detail = await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, version, token);
+        return detail.Installers;
+    }
+
+    private async Task<AppEntry> LoadWingetDetailsAsync(AppEntry summary, CancellationToken token)
+    {
+        WingetCdnCatalog.App app = await GetWingetAppAsync(summary, token);
+        PackageManifest detail = await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, null, token);
+        AppEntry result = app.Entry;
+        result.Installers = detail.Installers;
+        result.PublisherUrl = detail.PublisherUrl;
+        result.LicenseUrl = detail.LicenseUrl;
+        result.ReleaseNotesUrl = detail.ReleaseNotesUrl;
+        result.ReleaseDate = detail.ReleaseDate;
+        return CompleteDetails(result, summary);
+    }
+
     /// <summary>Momento em que o manifesto do catálogo v2 foi gravado localmente.</summary>
     public DateTime? LastCatalogSyncUtc =>
-        File.Exists(_catalogManifestCacheFilePath) ? File.GetLastWriteTimeUtc(_catalogManifestCacheFilePath) : null;
+        File.Exists(_wingetCatalogCachePath) ? File.GetLastWriteTimeUtc(_wingetCatalogCachePath) : null;
 
     private bool TryLoadLocalCatalog()
     {
         try
         {
-            if (!File.Exists(_catalogManifestCacheFilePath))
-                return TryLoadLegacyCatalog();
-
-            var manifest = WinProvision.Core.Services.AotJson.Deserialize<CatalogManifest>(
-                File.ReadAllText(_catalogManifestCacheFilePath), _jsonOptions);
-            if (!IsValidManifest(manifest))
-                throw new JsonException("Manifesto local do catálogo v2 inválido.");
-
-            string indexPath = GetSearchIndexCachePath(manifest!.CatalogSha256!);
-            if (!File.Exists(indexPath))
-                return TryLoadLegacyCatalog();
-
-            using var indexStream = File.OpenRead(indexPath);
-            string indexHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(indexStream)).ToLowerInvariant();
-            if (!string.Equals(indexHash, manifest.IndexSha256, StringComparison.Ordinal))
-                throw new JsonException("O índice local não corresponde ao hash do manifesto.");
-            indexStream.Position = 0;
-            var catalog = AotJson.Deserialize<List<AppEntry>>(indexStream, _jsonOptions);
-            if (catalog is null || catalog.Count != manifest.AppCount || catalog.Count == 0 || !ValidateSearchEntries(catalog))
-                throw new JsonException("Índice local do catálogo v2 incompleto ou inválido.");
-
-            SetCatalogRoute(catalog, CatalogV2BaseUrl, manifest.CatalogSha256!);
-            catalog = MergeMsStoreCatalog(catalog, TryLoadLocalMsStoreCatalog());
-
-            _catalogSha256 = manifest.CatalogSha256;
-            _loadedIndexSha256 = manifest.IndexSha256;
-            _loadedSearchIndexCacheFilePath = indexPath;
-            SetCachedCatalog(catalog);
+            if (!File.Exists(_wingetCatalogCachePath) || !File.Exists(_wingetSearchCachePath)) return false;
+            var snapshot = WingetCdnCatalog.ParseSnapshot(File.ReadAllBytes(_wingetCatalogCachePath),
+                File.ReadAllBytes(_wingetSearchCachePath));
+            _catalogSha256 = snapshot.IndexSha256;
+            _loadedIndexSha256 = snapshot.IndexSha256;
+            _loadedSearchIndexCacheFilePath = _wingetSearchCachePath;
+            SetCachedCatalog(snapshot.Apps);
             return true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Cache local do catálogo v2 inválido: {ex.Message}");
-            return TryLoadLegacyCatalog();
+            Debug.WriteLine($"[StoreService] Cache local WinGet v1 inválido: {ex.Message}");
+            return false;
         }
     }
 
@@ -459,6 +485,46 @@ public class StoreService : IAsyncDisposable
         int generation = Volatile.Read(ref _cacheGeneration);
         try
         {
+            WingetCdnCatalog.Snapshot snapshot = await WingetCdnCatalog.LoadIndexAsync(_httpClient, cancellationToken);
+            if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
+            if (!forceRefresh && _cachedCatalog.Count == snapshot.Apps.Count
+                && string.Equals(_loadedIndexSha256, snapshot.IndexSha256, StringComparison.Ordinal))
+            {
+                await AtomicFile.WriteAllBytesAsync(_wingetCatalogCachePath, snapshot.CatalogBytes, cancellationToken);
+                return _cachedCatalog;
+            }
+            var installedIds = _cachedCatalog.Where(app => app.IsInstalled)
+                .Select(app => app.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var app in snapshot.Apps) app.IsInstalled = installedIds.Contains(app.Id);
+            PopulateIcons(snapshot.Apps);
+            Directory.CreateDirectory(_cacheDirectory);
+            await AtomicFile.WriteAllBytesAsync(_wingetSearchCachePath, snapshot.IndexBytes, cancellationToken);
+            await AtomicFile.WriteAllBytesAsync(_wingetCatalogCachePath, snapshot.CatalogBytes, cancellationToken);
+            if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
+            _catalogSha256 = snapshot.IndexSha256;
+            _loadedIndexSha256 = snapshot.IndexSha256;
+            _loadedSearchIndexCacheFilePath = _wingetSearchCachePath;
+            _wingetApps.Clear();
+            SetCachedCatalog(snapshot.Apps);
+            CatalogUpdated?.Invoke(_cachedCatalog);
+            return _cachedCatalog;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[StoreService] Catálogo WinGet v1 indisponível: {ex.Message}");
+            return _cachedCatalog;
+        }
+    }
+
+    private async Task<List<AppEntry>> FetchAndSaveLegacyRemoteCatalogAsync(
+        CancellationToken cancellationToken = default,
+        bool forceRefresh = false,
+        bool revalidateRemote = false)
+    {
+        int generation = Volatile.Read(ref _cacheGeneration);
+        try
+        {
             Task<RemoteTextResult> manifestDownload = FetchTextWithCacheAsync(
                 CatalogManifestUrl, _catalogManifestCacheFilePath, _catalogManifestEtagPath,
                 _catalogManifestLastModifiedPath, forceRefresh || revalidateRemote, cancellationToken);
@@ -579,6 +645,7 @@ public class StoreService : IAsyncDisposable
         _catalogSha256 = null;
         _loadedIndexSha256 = null;
         _loadedSearchIndexCacheFilePath = null;
+        _wingetApps.Clear();
 
         lock (_refreshSync)
         {
@@ -600,6 +667,8 @@ public class StoreService : IAsyncDisposable
                 File.Delete(_legacyCacheFilePath);
             if (File.Exists(_catalogManifestCacheFilePath))
                 File.Delete(_catalogManifestCacheFilePath);
+            if (File.Exists(_wingetCatalogCachePath)) File.Delete(_wingetCatalogCachePath);
+            if (File.Exists(_wingetSearchCachePath)) File.Delete(_wingetSearchCachePath);
             if (File.Exists(_screenshotIndexCacheFilePath))
                 File.Delete(_screenshotIndexCacheFilePath);
             foreach (string path in Directory.Exists(_cacheDirectory)
@@ -943,16 +1012,15 @@ public class StoreService : IAsyncDisposable
         {
             app.CatalogDetailBaseUrl = baseUrl;
             app.CatalogDetailCatalogSha256 = catalogHash;
-            app.StoreBannerUrl = IconService.ResolveCatalogMediaUrl(app, app.Media?.Banner, app.Media?.BannerSha256)
-                ?? CatalogEndpoints.ResolvePublicUrl(app.StoreBannerUrl);
-            if (string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase)
-                && app.Media?.Screenshots is { Count: > 0 })
+            bool isMicrosoftStore = string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase);
+            app.StoreBannerUrl = isMicrosoftStore
+                ? IconService.ResolveMicrosoftStoreAssetUrl(app.StoreBannerUrl)
+                : IconService.ResolveCatalogMediaUrl(app, app.Media?.Banner, app.Media?.BannerSha256)
+                    ?? CatalogEndpoints.ResolvePublicUrl(app.StoreBannerUrl);
+            if (isMicrosoftStore)
             {
-                app.StoreScreenshotUrls = app.Media.Screenshots
-                    .Select(path => IconService.ResolveCatalogMediaUrl(
-                        app,
-                        path,
-                        app.Media?.ScreenshotSha256?.GetValueOrDefault(path)))
+                app.StoreScreenshotUrls = (app.StoreScreenshotUrls ?? app.ScreenshotUrls ?? [])
+                    .Select(IconService.ResolveMicrosoftStoreAssetUrl)
                     .Where(url => !string.IsNullOrWhiteSpace(url))
                     .Cast<string>()
                     .ToList();
@@ -994,9 +1062,9 @@ public class StoreService : IAsyncDisposable
             string? searchIndexPath = _loadedSearchIndexCacheFilePath;
             return searchIndexPath is null ||
                    !File.Exists(searchIndexPath) ||
-                   !File.Exists(_catalogManifestCacheFilePath) ||
+                   !File.Exists(_wingetCatalogCachePath) ||
                    DateTime.UtcNow - File.GetLastWriteTimeUtc(searchIndexPath) >= CatalogCacheTtl ||
-                   DateTime.UtcNow - File.GetLastWriteTimeUtc(_catalogManifestCacheFilePath) >= CatalogCacheTtl;
+                   DateTime.UtcNow - File.GetLastWriteTimeUtc(_wingetCatalogCachePath) >= CatalogCacheTtl;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

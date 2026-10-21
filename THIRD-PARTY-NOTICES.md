@@ -8,7 +8,8 @@ O código do WinProvision Store é distribuído sob a licença MIT em `LICENSE`.
 - Pacotes NuGet: os componentes Microsoft, CommunityToolkit.Mvvm e demais dependências declaradas nos arquivos de projeto mantêm as licenças de seus respectivos pacotes.
 - Microsoft.WindowsPackageManager.InProcCom 1.29.380: SDK oficial Microsoft sob MIT. As DLLs nativas verificadas e o `NOTICE.txt` do pacote acompanham cada host em `Tool/winget-com`.
 - Materiais de marca: a licença da fonte Inter usada no wordmark está em `src/WinProvision.Store/Assets/ThirdParty/Inter-OFL.txt`.
+- FluentIcons.WinUI 2.2.344: controle WinUI para Fluent UI System Icons sob MIT; licença do controle em `Tools/FluentUI/LICENSE.txt` e licença dos ícones da Microsoft em `Tools/FluentUI/FluentSystemIcons-LICENSE.txt`.
 
-Os ícones da interface usam os recursos nativos do Windows/WinUI. O cliente não distribui fontes de ícones extraídas de outras bibliotecas.
+Os ícones funcionais e de navegação da interface usam Fluent UI System Icons. As imagens e marcas dos aplicativos do catálogo permanecem fornecidas pelas respectivas fontes.
 
 O SDK WebView2 mantém o texto de licença original em `src/WinProvision.Store/Assets/ThirdParty/WebView2-LICENSE.txt`. O Microsoft Edge WebView2 Runtime é um componente externo do sistema, com termos próprios; não é relicenciado como MIT por este projeto.

@@ -73,7 +73,7 @@ public sealed partial class InstalledPackagesPage : Page
         for (int index = 0; index < sortIcons.Length; index++)
         {
             sortIcons[index].Visibility = index == activeSort ? Visibility.Visible : Visibility.Collapsed;
-            sortIcons[index].Glyph = ViewModel.SortAscending ? "\uE70E" : "\uE70D";
+            sortIcons[index].Icon = ViewModel.SortAscending ? FluentIcons.Common.Icon.ChevronUp : FluentIcons.Common.Icon.ChevronDown;
         }
         bool filtersActive = !ViewModel.FilterWinget || !ViewModel.FilterStore || !ViewModel.FilterLocal
             || ViewModel.OnlyRemovable || !ViewModel.HideSystemComponents || ViewModel.OnlySelected;

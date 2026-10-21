@@ -149,7 +149,7 @@ public sealed partial class OperationsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string OutputTitle { get; set; } = "";
     [ObservableProperty] public partial string OutputText { get; set; } = "";
     public bool ShowFailureBadge => HasFailedOperations && !IsQueueExpanded;
-    public string ExpanderGlyph => IsQueueExpanded ? "\uE70E" : "\uE70D";
+    public FluentIcons.Common.Icon ExpanderIcon => IsQueueExpanded ? FluentIcons.Common.Icon.ChevronUp : FluentIcons.Common.Icon.ChevronDown;
     public string QueueDescription => HasPending ? $"Fila de operações, {PendingCount} pendente(s)" : "Fila de operações";
     public string HeaderText => _queue.TotalCount == 0 ? "Operações" : $"{_queue.CompletedCount} de {_queue.TotalCount} operações concluídas";
     public IRelayCommand CancelAllCommand { get; }
@@ -169,7 +169,7 @@ public sealed partial class OperationsViewModel : ObservableObject, IDisposable
         Refresh();
     }
     partial void OnHasFailedOperationsChanged(bool value) => OnPropertyChanged(nameof(ShowFailureBadge));
-    partial void OnIsQueueExpandedChanged(bool value) { OnPropertyChanged(nameof(ShowFailureBadge)); OnPropertyChanged(nameof(ExpanderGlyph)); }
+    partial void OnIsQueueExpandedChanged(bool value) { OnPropertyChanged(nameof(ShowFailureBadge)); OnPropertyChanged(nameof(ExpanderIcon)); }
     public void SelectOutput(OperationViewModel item)
     {
         OutputTitle = $"Saída da Operação: {item.Operation.AppName}";

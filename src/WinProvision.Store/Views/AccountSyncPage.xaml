@@ -1,4 +1,4 @@
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.AccountSyncPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="14" Loaded="Page_Loaded" Unloaded="Page_Unloaded">
+<Page xmlns:ic="using:FluentIcons.WinUI" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.AccountSyncPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="14" Loaded="Page_Loaded" Unloaded="Page_Unloaded">
   <Page.Resources>
     <services:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <x:Double x:Key="AccountFormMaxWidth">760</x:Double>
@@ -16,7 +16,7 @@
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Border Grid.Column="0" Style="{StaticResource PageHeaderIconTileStyle}">
-          <FontIcon Style="{StaticResource PageHeaderSymbolIconStyle}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          <ic:FluentIcon Icon="Person" IconSize="Size24" IconVariant="Color" Style="{StaticResource PageHeaderSymbolIconStyle}" />
         </Border>
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
           <TextBlock Text="Conta &amp; Sincronização" Style="{StaticResource FluentPageTitleStyle}" x:Name="AccountPageTitle" />
@@ -34,7 +34,7 @@
                   <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Person" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Conta GitHub" FontSize="16" FontWeight="SemiBold" />
@@ -46,7 +46,7 @@
                   <TextBlock Text="Sua conta ainda não está conectada." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12" />
                   <Button x:Name="ConnectButton" AutomationProperties.AutomationId="ConnectButton" HorizontalAlignment="Left" IsEnabled="{Binding CanStartAuthentication}" Style="{StaticResource PagePrimaryActionButtonStyle}" Command="{Binding ConnectCommand}">
                     <StackPanel Orientation="Horizontal">
-                      <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <ic:FluentIcon Icon="LinkMultiple" IconVariant="Color" IconSize="Size16" FontSize="16" Margin="0,0,8,0" />
                       <TextBlock Text="Conectar ao GitHub" VerticalAlignment="Center" />
                     </StackPanel>
                   </Button>
@@ -58,7 +58,7 @@
                     <StackPanel Orientation="Horizontal">
                       <TextBlock x:Name="OAuthUserCodeText" Text="{Binding UserCode}" FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" Margin="0,0,12,0" />
                       <Button Style="{StaticResource StoreActionButtonStyle}" MinHeight="32" Padding="10,0" Click="CopyOAuthCodeButton_Click" ToolTipService.ToolTip="Copiar código" x:Name="CopyOAuthCodeButton" AutomationProperties.AutomationId="CopyOAuthCodeButton" AutomationProperties.Name="Copiar código de autorização">
-                        <FontIcon Glyph="" FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                        <ic:FluentIcon Icon="Clipboard" IconVariant="Color" IconSize="Size16" FontSize="16" />
                       </Button>
                     </StackPanel>
                   </Border>
@@ -68,7 +68,7 @@
                   </StackPanel>
                   <Button x:Name="CancelOAuthButton" AutomationProperties.AutomationId="CancelOAuthButton" HorizontalAlignment="Left" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding CancelAuthenticationCommand}">
                     <StackPanel Orientation="Horizontal">
-                      <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" />
                       <TextBlock Text="Cancelar" VerticalAlignment="Center" />
                     </StackPanel>
                   </Button>
@@ -84,7 +84,7 @@
                   </Grid.ColumnDefinitions>
                   <Border Width="56" Height="56" CornerRadius="28" Background="{ThemeResource SystemAccentColorPrimaryBrush}" controls:RoundedClip.IsEnabled="True">
                     <Grid>
-                      <FontIcon FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (services:AsyncImage.HasContent), ElementName=AvatarImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <ic:FluentIcon Icon="Person" IconVariant="Color" IconSize="Size28" FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (services:AsyncImage.HasContent), ElementName=AvatarImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                       <Image x:Name="AvatarImage" Stretch="UniformToFill" Visibility="{Binding (services:AsyncImage.HasContent), ElementName=AvatarImage, Converter={StaticResource BoolToVisibilityConverter}}" services:AsyncImage.SourceUrl="{Binding AvatarUrl}" services:AsyncImage.DecodePixelWidth="112" />
                     </Grid>
                   </Border>
@@ -94,7 +94,7 @@
                   </StackPanel>
                   <Button x:Name="DisconnectButton" AutomationProperties.AutomationId="DisconnectButton" Grid.Column="3" VerticalAlignment="Center" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding DisconnectCommand}" ToolTipService.ToolTip="Desvincular conta">
                     <StackPanel Orientation="Horizontal">
-                      <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" />
                       <TextBlock Text="Desvincular" VerticalAlignment="Center" />
                     </StackPanel>
                   </Button>
@@ -110,12 +110,12 @@
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <FontIcon FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="ArrowSync" IconVariant="Color" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock Text="Sincronização" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="SyncActiveText" Text="Ativa ●" Margin="8,0,0,0" Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
                   </StackPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" x:Name="LastSyncPanel">
-                    <FontIcon FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="History" IconVariant="Color" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock Text="Última sincronização:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="LastSyncText" Text="{Binding LastSyncText}" Margin="6,0,0,0" />
                   </StackPanel>
@@ -132,7 +132,7 @@
                   <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Cloud" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Backup e restauração" FontSize="16" FontWeight="SemiBold" />
@@ -140,13 +140,69 @@
                 </StackPanel>
               </Grid>
               <TextBlock x:Name="LocalBackupStatusText" Text="{Binding LocalBackupStatus}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="52,4,0,16" TextWrapping="Wrap" />
+              <ToggleSwitch Header="Backup automático no Gist" OnContent="Ativado" OffContent="Desativado" IsOn="{Binding AutomaticCloudBackupEnabled, Mode=TwoWay}" Margin="52,0,0,12" AutomationProperties.AutomationId="AutomaticCloudBackupToggle" />
               <controls:WrapPanel Margin="52,0,0,0" x:Name="AccountActionsPanel">
                 <Button x:Name="BackupButton" AutomationProperties.AutomationId="BackupButton" IsEnabled="{Binding CanSaveBackup}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,8" Command="{Binding SaveBackupCommand}">
                   <StackPanel Orientation="Horizontal">
-                    <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                    <ic:FluentIcon Icon="Cloud" IconVariant="Color" IconSize="Size16" FontSize="16" Margin="0,0,8,0" />
                     <TextBlock Text="Fazer backup" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
+              </controls:WrapPanel>
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource StoreCardSurfaceStyle}" x:Name="CloudFilesCard" Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Arquivos JSON na nuvem">
+            <StackPanel Spacing="10">
+              <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="Backups no GitHub" FontSize="16" FontWeight="SemiBold" />
+                  <TextBlock Text="Expanda um backup para ver seus aplicativos. Selecione um arquivo para importar ou excluir." Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Atualizar" Command="{Binding RefreshCloudFilesCommand}" IsEnabled="{Binding CanRefreshCloudFiles}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="RefreshCloudFilesButton" />
+              </Grid>
+              <ListView x:Name="CloudFilesList" ItemsSource="{Binding CloudFiles}" SelectedItem="{Binding SelectedCloudFile, Mode=TwoWay}" MaxHeight="420" SelectionMode="Single" AutomationProperties.AutomationId="CloudFilesList">
+                <ListView.ItemTemplate>
+                  <DataTemplate>
+                    <Expander HorizontalAlignment="Stretch">
+                      <Expander.Header>
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Details}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding FileName}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                      </Expander.Header>
+                      <StackPanel Spacing="8" Padding="8,4,8,8">
+                        <TextBlock Text="{Binding Description}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                        <ItemsControl ItemsSource="{Binding Collections}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <StackPanel Spacing="4" Margin="0,4,0,8">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding AppCount}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                <ItemsControl ItemsSource="{Binding Apps}">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                      <StackPanel Margin="12,2,0,4">
+                                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Details}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap" />
+                                      </StackPanel>
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Expander>
+                  </DataTemplate>
+                </ListView.ItemTemplate>
+              </ListView>
+              <controls:WrapPanel>
+                <Button Content="Importar selecionado" Command="{Binding RestoreSelectedCloudFileCommand}" IsEnabled="{Binding CanRestoreSelectedCloudFile}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="ImportSelectedCloudFileButton" />
+                <Button Content="Excluir selecionado" Command="{Binding DeleteSelectedCloudFileCommand}" IsEnabled="{Binding CanDeleteSelectedCloudFile}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="DeleteSelectedCloudFileButton" />
+                <Button Content="Excluir todos os Gists do app" Command="{Binding DeleteAllAppGistsCommand}" IsEnabled="{Binding CanRefreshCloudFiles}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,8" AutomationProperties.AutomationId="DeleteAllAppGistsButton" />
               </controls:WrapPanel>
             </StackPanel>
           </Border>
@@ -154,7 +210,7 @@
       </ScrollViewer>
       <Border Grid.Row="2" Style="{StaticResource PageStatusBarStyle}">
         <StackPanel Orientation="Horizontal">
-          <FontIcon Style="{StaticResource PageStatusIconStyle}" />
+          <ic:FluentIcon Style="{StaticResource PageStatusIconStyle}" />
           <TextBlock x:Name="AccountStatusText" Text="{Binding StatusText}" Style="{StaticResource PageStatusTextStyle}" />
         </StackPanel>
       </Border>

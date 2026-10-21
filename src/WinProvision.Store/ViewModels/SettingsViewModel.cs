@@ -55,6 +55,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);
         _isInitializing = false;
         ReloadScheduledMaintenance();
+        LoadPortabilitySettings();
     }
 
     partial void OnSelectedThemeOptionChanged(SettingsThemeOption? value)

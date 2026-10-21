@@ -1,4 +1,4 @@
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.SettingsPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="14">
+<Page xmlns:ic="using:FluentIcons.WinUI" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.SettingsPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="14">
   <Page.Resources>
     <services:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
   </Page.Resources>
@@ -15,7 +15,7 @@
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <Border Grid.Column="0" Style="{StaticResource PageHeaderIconTileStyle}">
-        <FontIcon Style="{StaticResource PageHeaderSymbolIconStyle}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+        <ic:FluentIcon Icon="Settings" IconSize="Size24" IconVariant="Color" Style="{StaticResource PageHeaderSymbolIconStyle}" />
       </Border>
       <StackPanel Grid.Column="1" VerticalAlignment="Center">
         <TextBlock x:Name="SettingsTitleTextBlock" Text="Configurações" Style="{StaticResource FluentPageTitleStyle}" />
@@ -34,11 +34,13 @@
       </Grid.ColumnDefinitions>
       <Button x:Name="BackButton" AutomationProperties.AutomationId="BackButton" Grid.Row="0" Grid.Column="0" Visibility="Collapsed" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Click="BackButton_Click" ToolTipService.ToolTip="Voltar às categorias de configurações">
         <StackPanel Orientation="Horizontal">
-          <FontIcon FontSize="16" Margin="0,0,8,0" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" />
           <TextBlock Text="Voltar" VerticalAlignment="Center" />
         </StackPanel>
       </Button>
-      <AutoSuggestBox x:Name="SettingsSearchBox" AutomationProperties.AutomationId="SettingsSearchBox" CornerRadius="18" QueryIcon="Find" Grid.Row="0" Grid.Column="2" PlaceholderText="Pesquisar configurações" Width="320" MinHeight="36" VerticalAlignment="Center" AutomationProperties.Name="Pesquisar configurações" TextChanged="SettingsSearchBox_TextChanged" QuerySubmitted="SettingsSearchBox_QuerySubmitted" />
+      <AutoSuggestBox x:Name="SettingsSearchBox" AutomationProperties.AutomationId="SettingsSearchBox" CornerRadius="18" Grid.Row="0" Grid.Column="2" PlaceholderText="Pesquisar configurações" Width="320" MinHeight="36" VerticalAlignment="Center" AutomationProperties.Name="Pesquisar configurações" TextChanged="SettingsSearchBox_TextChanged" QuerySubmitted="SettingsSearchBox_QuerySubmitted">
+        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size16" /></AutoSuggestBox.QueryIcon>
+      </AutoSuggestBox>
       <TextBlock x:Name="SettingsSearchResultText" Text="{Binding SearchResultSummary}" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
     </Grid>
     <Grid Grid.Row="2" MaxWidth="760" HorizontalAlignment="Stretch">
@@ -55,13 +57,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Settings" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Preferências gerais" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Método de instalação, atualizador e gerenciamento das configurações." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardElevator" AutomationProperties.AutomationId="CardElevator" AutomationProperties.Name="WinProvision Elevator" Tag="Elevator" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -73,13 +75,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Shield" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="WinProvision Elevator" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Pedidos de administrador, autorização da sessão e integridade do helper." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardMaintenance" AutomationProperties.AutomationId="CardMaintenance" AutomationProperties.Name="Manutenção agendada" Tag="Maintenance" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -91,13 +93,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Clock" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Manutenção agendada" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Verificações periódicas, atualizações automáticas e notificações." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardInterface" AutomationProperties.AutomationId="CardInterface" AutomationProperties.Name="Interface e inicialização" Tag="Interface" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -109,13 +111,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="PaintBrush" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Interface e inicialização" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Tema do aplicativo e inicialização com o Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardNotifications" AutomationProperties.AutomationId="CardNotifications" AutomationProperties.Name="Notificações" Tag="Notifications" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -127,13 +129,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Alert" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Notificações" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Escolha avisos de atualizações, erros, sucessos e resumos de lotes." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardExecution" AutomationProperties.AutomationId="CardExecution" AutomationProperties.Name="Operações e downloads" Tag="Execution" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -145,13 +147,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="ArrowClockwiseDashes" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Operações e downloads" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Limites simultâneos, pasta padrão e nomes dos instaladores baixados." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
             <Button x:Name="CardOperations" AutomationProperties.AutomationId="CardOperations" AutomationProperties.Name="Armazenamento e cache" Tag="Operations" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
@@ -163,13 +165,13 @@
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource LayerFillColorDefaultBrush}">
-                  <FontIcon FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                  <ic:FluentIcon Icon="Database" IconVariant="Color" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Armazenamento e cache" FontSize="15" FontWeight="SemiBold" />
                   <TextBlock Text="Gerencie arquivos temporários das operações de pacotes." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
-                <FontIcon Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
             </Button>
           </StackPanel>
@@ -187,7 +189,7 @@
                         <ColumnDefinition Width="16" />
                         <ColumnDefinition Width="Auto" />
                       </Grid.ColumnDefinitions>
-                      <FontIcon FontSize="20" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                      <ic:FluentIcon Icon="Settings" IconVariant="Color" IconSize="Size20" FontSize="20" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                       <StackPanel Grid.Column="2" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,3,0,0" />
@@ -221,6 +223,7 @@
                   <ComboBoxItem Content="API COM do WinGet" Tag="ComApi" />
                   <ComboBoxItem Content="WinProvision API" Tag="WinProvisionApi" />
                   <ComboBoxItem Content="WinGet CLI" Tag="WingetCli" />
+                  <ComboBoxItem Content="WinGet-Pkgs + Viper" Tag="WinGetPkgsViper" />
                 </ComboBox>
               </Grid>
             </Border>
@@ -397,12 +400,19 @@
               <ToggleSwitch Header="Erros nas operações" IsOn="{Binding NotifyErrors, Mode=TwoWay}" OnContent="Ativados" OffContent="Desativados" />
               <ToggleSwitch Header="Operações concluídas com sucesso" IsOn="{Binding NotifySuccess, Mode=TwoWay}" OnContent="Ativadas" OffContent="Desativadas" />
               <ToggleSwitch Header="Resumos de lotes" IsOn="{Binding NotifyBatchSummary, Mode=TwoWay}" OnContent="Ativados" OffContent="Desativados" />
-              <TextBlock Text="Lotes com falhas usam a categoria Erros. A manutenção agendada também respeita seu próprio controle de notificações." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <TextBlock Text="Avisos de sucesso em lote exigem que Operações concluídas com sucesso e Resumos de lotes estejam ativados. Falhas usam Erros. A manutenção agendada também respeita seu próprio controle de notificações." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
               <Button x:Name="SaveNotificationCategoriesButton" Content="Salvar notificações" Command="{Binding SaveNotificationsCommand}" Style="{StaticResource AccentButtonStyle}" />
             </StackPanel>
           </Border>
         </StackPanel>
         <StackPanel x:Name="PanelExecution" Visibility="Collapsed" Spacing="12">
+          <Border x:Name="OfficeOfflineDownloadCard" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12" Padding="18">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Download offline do Office" FontSize="18" FontWeight="SemiBold" />
+              <ToggleSwitch x:Name="OfficeViperDownloadToggle" AutomationProperties.AutomationId="OfficeViperDownloadToggle" Header="Mecanismo de download offline" IsOn="{Binding UseViperOfficeDownload, Mode=TwoWay}" OnContent="WinProvision Viper — paralelo" OffContent="ODT — padrão" AutomationProperties.Name="Escolher o mecanismo de download offline do Office" />
+              <TextBlock Text="O Viper baixa os componentes oficiais em paralelo e aceita um produto e um idioma por vez. O ODT é o padrão para máxima compatibilidade. A escolha é salva imediatamente e vale para novas configurações criadas na página Office." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+          </Border>
           <Border x:Name="ConcurrencyCard" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12" Padding="18">
             <StackPanel Spacing="12">
               <TextBlock Text="Operações simultâneas" FontSize="18" FontWeight="SemiBold" />
@@ -438,9 +448,34 @@
               </ComboBox>
               <TextBlock Text="Exemplo: Fabricante.App-2.4-x64.exe. Quando o WinGet não informa a versão ou arquitetura, o nome fornecido por ele é preservado com o ID. Arquivos existentes nunca são sobrescritos; nomes repetidos recebem um número." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
               <TextBlock Text="A pasta se aplica aos downloads avulsos de instaladores. Destinos explícitos têm prioridade. Mídia offline, arquivos temporários de instalação e a atualização do próprio app mantêm seus destinos próprios." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <ToggleSwitch Header="Avisar se o domínio do instalador mudar numa atualização" IsOn="{Binding WarnInstallerHostChange, Mode=TwoWay}" OnContent="Ativado" OffContent="Desativado" />
             </StackPanel>
           </Border>
           <Button x:Name="SaveExecutionOptionsButton" Content="Salvar operações e downloads" Command="{Binding SaveExecutionOptionsCommand}" Style="{StaticResource AccentButtonStyle}" />
+          <Border Padding="18" Margin="0,12,0,0" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Fontes WinGet" FontSize="18" FontWeight="SemiBold" />
+              <TextBlock Text="Fontes personalizadas ficam disponíveis para consultas e operações do WinGet. A fonte padrão não pode ser removida daqui." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <TextBox Header="Nome da fonte" Text="{Binding SourceName, Mode=TwoWay}" />
+              <TextBox Header="URL HTTPS" Text="{Binding SourceUrl, Mode=TwoWay}" />
+              <controls:WrapPanel>
+                <Button Content="Adicionar fonte" Command="{Binding AddSourceCommand}" />
+                <Button Content="Remover fonte pelo nome" Command="{Binding RemoveSourceCommand}" />
+                <Button Content="Atualizar lista" Command="{Binding RefreshSourcesCommand}" />
+              </controls:WrapPanel>
+              <TextBlock Text="{Binding SourcesText}" TextWrapping="Wrap" AutomationProperties.Name="Fontes WinGet configuradas" />
+            </StackPanel>
+          </Border>
+          <Border Padding="18" Margin="0,12,0,0" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Configurações portáteis" FontSize="18" FontWeight="SemiBold" />
+              <TextBlock Text="Transfira preferências do aplicativo, manutenção agendada, operações e downloads. Credenciais, coleções e dados de conta não são incluídos. Importar também atualiza opções de inicialização desta conta do Windows." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              <controls:WrapPanel>
+                <Button Content="Exportar configurações" Command="{Binding ExportSettingsCommand}" />
+                <Button Content="Importar configurações" Command="{Binding ImportSettingsCommand}" />
+              </controls:WrapPanel>
+            </StackPanel>
+          </Border>
         </StackPanel>
         <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
             <TextBlock Text="Catálogo de aplicativos" Margin="0,0,0,8" FontSize="18" FontWeight="SemiBold" />
@@ -511,7 +546,7 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-          <FontIcon Style="{StaticResource PageStatusIconStyle}" Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          <ic:FluentIcon Icon="Settings" IconVariant="Color" IconSize="Size16" Style="{StaticResource PageStatusIconStyle}" />
           <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Style="{StaticResource PageStatusTextStyle}" />
         </StackPanel>
         <TextBlock x:Name="VersionText" Text="{Binding VersionText}" Grid.Column="1" Margin="16,0,0,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12" VerticalAlignment="Center" />

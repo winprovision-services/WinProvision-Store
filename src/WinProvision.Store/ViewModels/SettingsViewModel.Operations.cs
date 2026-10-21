@@ -18,6 +18,16 @@ public sealed partial class SettingsViewModel
     public Task EnsureUpdateCheckAsync() => _hasCheckedForUpdates ? Task.CompletedTask : CheckUpdateCommand.ExecuteAsync(null);
     public string VersionText => $"Versão {AppUpdateService.GetCurrentVersion().ToString(3)}";
     public bool LaunchAtStartup => _preferences.LaunchAtStartup;
+    public bool UseViperOfficeDownload
+    {
+        get => _preferences.UseViperOfficeDownload;
+        set
+        {
+            if (value == _preferences.UseViperOfficeDownload) return;
+            Run(() => _preferences.SetUseViperOfficeDownload(value), "Mecanismo de download offline do Office salvo.");
+            OnPropertyChanged();
+        }
+    }
     public string SelectedMethodName
     {
         get => _installation.PreferredMethod.ToString();
@@ -33,6 +43,7 @@ public sealed partial class SettingsViewModel
         PackageInstallMethod.ComApi => "Usa somente o WinGet COM.",
         PackageInstallMethod.WinProvisionApi => "Usa somente a WinProvision API.",
         PackageInstallMethod.WingetCli => "Usa somente o WinGet CLI.",
+        PackageInstallMethod.WinGetPkgsViper => "Consulta o manifesto no WinGet-Pkgs, baixa com Viper, valida SHA-256 e instala silenciosamente quando compatível.",
         _ => "Seleciona a rota disponível e usa fallback quando necessário."
     };
     [ObservableProperty] public partial string UpdateSubtitle { get; set; } = "Verifique se existe uma nova versão.";

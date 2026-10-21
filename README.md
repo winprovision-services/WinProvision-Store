@@ -29,11 +29,14 @@ winprovision --version
 ## Recursos
 
 - Pesquise aplicativos por nome e consulte seus detalhes.
+- Pesquise também a origem Microsoft Store pelo WinGet; a Display Catalog fornece os metadados e URLs de ícones e banners em tempo real, sem publicar arquivos de mídia da Store no R2.
 - Instale, atualize e remova aplicativos, acompanhando o resultado das operações.
+- Nas opções de instalação de pacotes WinGet, as versões publicadas pela CDN aparecem automaticamente. O escopo por usuário ou máquina depende dos instaladores da versão selecionada. A verificação de hash pode ser ignorada explicitamente no fluxo WinGet para uma operação, com menor segurança; permanece ativa por padrão.
+- Escolha **WinGet-Pkgs + Viper** como método preferencial para usar o detalhe da versão publicado na CDN, conferir seu SHA-256, baixar com Viper, conferir o instalador e instalar silenciosamente quando o formato for compatível. Se a URL estável do fornecedor já entregar outro binário, a operação informa que o catálogo está temporariamente desatualizado e pode ser tentada novamente após a sincronização seguinte.
 - Organize listas de aplicativos em coleções e prepare arquivos para uso offline.
 - Configure os aplicativos do Office e escolha instalação online ou mídia offline com download pelo ODT ou pelo WinProvision Viper.
 - Exporte e importe listas JSON pela CLI.
-- Conecte sua conta GitHub, opcionalmente, para sincronizar coleções.
+- Conecte sua conta GitHub, opcionalmente, para sincronizar coleções, escolher qual JSON do Gist importar e gerenciar esses arquivos.
 - Use os temas claro e escuro e a navegação por teclado.
 - Agende verificações e atualizações pela CLI, em intervalos fixos ou agendas diária/semanal, com execução imediata e notificações do Windows em **Configurações → Manutenção agendada**.
 - Escolha notificações por categoria e configure limites simultâneos, pasta padrão e nomes dos instaladores em **Configurações → Notificações** e **Operações e downloads**.
@@ -68,7 +71,7 @@ O projeto utiliza .NET 10, C# 14, WinUI 3 e CommunityToolkit.Mvvm. Requer Window
 .\scripts\package.ps1
 ```
 
-A solução é `WinProvision.Store.sln`. A publicação padrão é x64 e autossuficiente, em `artifacts/publish/win-x64`. O instalador é gerado em `artifacts/installer`. A configuração ARM64 ainda precisa de validação em execução.
+A solução para abrir no Visual Studio é `WinProvision.Store.slnx` (a versão `.sln` permanece disponível). Para executar a interface, use `Debug | x64` e o perfil de inicialização compartilhado **WinProvision Store**. Se o Visual Studio tiver guardado a CLI como projeto inicial desta solução, escolha esse perfil na lista ao lado do botão Iniciar. A publicação padrão é x64 e autossuficiente, em `artifacts/publish/win-x64`. O instalador é gerado em `artifacts/installer`. A configuração ARM64 ainda precisa de validação em execução.
 
 ## Validação
 

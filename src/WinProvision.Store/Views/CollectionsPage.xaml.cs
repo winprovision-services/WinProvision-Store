@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using FluentIcons.Common;
 using Windows.System;
 using WinProvision.Core.Models;
 using WinProvision.Store.ViewModels;
@@ -88,7 +89,7 @@ public sealed partial class CollectionsPage : Page
         for (int index = 0; index < sortIcons.Length; index++)
         {
             sortIcons[index].Visibility = index == activeSort ? Visibility.Visible : Visibility.Collapsed;
-            sortIcons[index].Glyph = ViewModel.SortAscending ? "\uE70E" : "\uE70D";
+            sortIcons[index].Icon = ViewModel.SortAscending ? Icon.ChevronUp : Icon.ChevronDown;
         }
         InstallSelectedButton.ApplyTemplate();
         VisualStateManager.GoToState(InstallSelectedButton, ViewModel.CanInstall ? "Normal" : "Disabled", false);

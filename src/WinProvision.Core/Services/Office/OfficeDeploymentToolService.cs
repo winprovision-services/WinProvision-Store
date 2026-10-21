@@ -328,6 +328,16 @@ public class OfficeDeploymentToolService : IDisposable
     private async Task<OdtProcessResult> RunConfigureDetailedCoreAsync(OfficeInstallRequest request,
         Action<string>? onStatus = null, CancellationToken cancellationToken = default, Action<InstallProgressUpdate>? onProgress = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        string? validationError = OfficeConfigXmlBuilder.ValidateRequest(request);
+        if (validationError is not null)
+            throw new ArgumentException(validationError, nameof(request));
+        if (OfficeInstallIdempotence.IsAlreadyInstalled(request, new OfficeInstalledProductsDetector().GetInstalledProducts()))
+        {
+            onStatus?.Invoke("Os produtos do Office selecionados já estão instalados.");
+            return new OdtProcessResult { Success = true, AlreadyInstalled = true, ProcessStarted = false };
+        }
+
         var prepared = await PrepareConfigurationAsync(request, onStatus, cancellationToken, onProgress).ConfigureAwait(false);
 
         onStatus?.Invoke($"Instalando {request.Plan.DisplayName}...");

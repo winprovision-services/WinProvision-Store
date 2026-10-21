@@ -20,6 +20,7 @@ namespace WinProvision.Core.Services;
 public static partial class OperationRunner
 {
     private static Func<string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>>? _installHandler;
+    private static Func<string, string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, string?, string?, Task<WingetExecutionResult>>? _versionInstallHandler;
     private static Action<string, string>? _successfulInstallObserver;
     private static Func<bool, Action<string>?, CancellationToken, Task>? _installWarmupHandler;
     private static Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, Task<WingetExecutionResult>>? _updateHandler;
@@ -35,6 +36,12 @@ public static partial class OperationRunner
         Func<string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>> installHandler)
     {
         _installHandler = installHandler ?? throw new ArgumentNullException(nameof(installHandler));
+    }
+
+    public static void ConfigureVersionInstallHandler(
+        Func<string, string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, string?, string?, Task<WingetExecutionResult>> handler)
+    {
+        _versionInstallHandler = handler ?? throw new ArgumentNullException(nameof(handler));
     }
 
     public static void ConfigureSuccessfulInstallObserver(Action<string, string> observer)
@@ -139,13 +146,17 @@ public static partial class OperationRunner
             onLogReceived($"Instalando {appName} ({appId}) pela fonte {source}.");
 
             // Se não há handler configurado, usa winget.exe diretamente
+            bool useVersionHandler = !string.IsNullOrWhiteSpace(version)
+                && _versionInstallHandler is not null
+                && !interactive && !requiresElevation && !ignoreSecurityHash
+                && string.IsNullOrWhiteSpace(customArguments);
             bool requiresWingetCli = interactive
                 || requiresElevation
                 || !string.IsNullOrWhiteSpace(installLocation)
-                || !string.IsNullOrWhiteSpace(version)
+                || (!useVersionHandler && !string.IsNullOrWhiteSpace(version))
                 || !string.IsNullOrWhiteSpace(customArguments)
-                || !string.IsNullOrWhiteSpace(scope)
-                || !string.IsNullOrWhiteSpace(architecture)
+                || (!useVersionHandler && !string.IsNullOrWhiteSpace(scope))
+                || (!useVersionHandler && !string.IsNullOrWhiteSpace(architecture))
                 || ignoreSecurityHash;
             if (requiresWingetCli && _installHandler is not null)
                 onLogReceived("Opções avançadas solicitadas; usando o WinGet CLI para aplicar escopo, arquitetura, interação e hash.");
@@ -156,7 +167,10 @@ public static partial class OperationRunner
                 onProgress(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
             }
 
-            var result = _installHandler is null || requiresWingetCli
+            var result = useVersionHandler && !requiresWingetCli
+                ? await _versionInstallHandler!(appId, version!, onLogReceived,
+                    item.CancellationTokenSource.Token, installLocation, onProgress, source, scope, architecture)
+                : _installHandler is null || requiresWingetCli
                 ? await executor.InstallAppAsync(
                     appId,
                     onLogReceived,
@@ -233,7 +247,8 @@ public static partial class OperationRunner
         bool ignoreSecurityHash = false,
         string? scope = null,
         string? architecture = null,
-        bool useSavedPackageOptions = true)
+        bool useSavedPackageOptions = true,
+        string? version = null)
     {
         PackageInstallOptions? savedOptions = useSavedPackageOptions
             ? _packageInstallOptionsProvider?.Invoke(appId, source)
@@ -242,6 +257,7 @@ public static partial class OperationRunner
         ignoreSecurityHash |= savedOptions?.IgnoreSecurityHash == true;
         scope ??= savedOptions?.Scope;
         architecture ??= savedOptions?.Architecture;
+        version ??= savedOptions?.Version;
 
         var item = queue.Enqueue(appName, OperationKind.Update, iconUrl);
         item.StatusText = "Preparando atualização...";
@@ -260,6 +276,7 @@ public static partial class OperationRunner
             // precisam chegar aos argumentos da CLI para honrar elevação, escopo, arquitetura,
             // interação e hash.
             bool useWingetCli = updateHandler is null || elevated || interactive || ignoreSecurityHash
+                || !string.IsNullOrWhiteSpace(version)
                 || !string.IsNullOrWhiteSpace(scope) || !string.IsNullOrWhiteSpace(architecture);
             if (useWingetCli)
             {
@@ -278,7 +295,8 @@ public static partial class OperationRunner
                     architecture: architecture,
                     requiresElevation: elevated,
                     interactive: interactive,
-                    ignoreSecurityHash: ignoreSecurityHash)
+                    ignoreSecurityHash: ignoreSecurityHash,
+                    version: version)
                 : await updateHandler!(
                     appId,
                     onLogReceived,
@@ -469,6 +487,22 @@ public static partial class OperationRunner
                         installedAppsService?.MarkUninstalled();
                     return apiUninstall.Value;
                 }
+            }
+
+            // WinGet --silent não repassa necessariamente /SUPPRESSMSGBOXES ao
+            // desinstalador Inno. Use o comando registrado com os switches Inno
+            // antes de entregar a remoção ao WinGet, para suprimir perguntas
+            // personalizadas e manter a resposta padrão do fabricante.
+            if (UninstallerEngineService.HasInnoSetupUninstaller(appDetail))
+            {
+                item.StatusText = "Desinstalando silenciosamente...";
+                bool removed = await uninstallerEngine.RunSilentUninstallAsync(appDetail, item.CancellationTokenSource.Token);
+                item.IsIndeterminate = false;
+                item.Progress = removed ? 100 : 0;
+                item.State = removed ? OperationState.Completed : OperationState.Failed;
+                item.StatusText = removed ? "Remoção concluída." : "Não foi possível remover o aplicativo silenciosamente.";
+                if (removed) installedAppsService?.MarkUninstalled();
+                return removed;
             }
 
             // Tenta desinstalação padrão primeiro
@@ -690,6 +724,8 @@ public static partial class OperationRunner
             bool success = officeResult.Success;
             item.RebootRequired = officeResult.RebootRequired;
             item.Progress = 100;
+            if (officeResult.AlreadyInstalled)
+                item.StatusText = "Os produtos do Office selecionados já estão instalados.";
             if (officeResult.ElevationCanceled) item.Cancel();
             item.State = success
                 ? OperationState.Completed

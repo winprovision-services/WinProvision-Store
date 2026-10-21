@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using FluentIcons.WinUI;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Composition;
 using System.Numerics;
@@ -52,20 +53,26 @@ public sealed partial class OperationsQueuePanel : UserControl
         if (!CloseOutput() && ViewModel is { } model) model.IsQueueOpen = false;
         args.Handled = true;
     }
-    private static FontIcon Icon(Symbol symbol) => new() { Glyph = char.ConvertFromUtf32((int)symbol), FontSize = 16 };
-    private static void Add(MenuFlyout menu, string text, Symbol symbol, Action action)
+    private static FluentIcon CreateIcon(FluentIcons.Common.Icon icon) => new()
     {
-        var item = new MenuFlyoutItem { Text = text, Icon = Icon(symbol) };
+        Icon = icon,
+        IconVariant = FluentIcons.Common.IconVariant.Regular,
+        IconSize = FluentIcons.Common.IconSize.Size16,
+        FontSize = 16
+    };
+    private static void Add(MenuFlyout menu, string text, FluentIcons.Common.Icon icon, Action action)
+    {
+        var item = new MenuFlyoutItem { Text = text, Icon = CreateIcon(icon) };
         item.Click += (_, _) => action();
         menu.Items.Add(item);
     }
     internal MenuFlyout CreateBulkMenu()
     {
         var menu = new MenuFlyout();
-        Add(menu, "Limpar operações com êxito", Symbol.Accept, () => ViewModel?.ClearSuccessfulCommand.Execute(null));
-        Add(menu, "Limpar todas as concluídas", Symbol.Clear, () => ViewModel?.ClearCommand.Execute(null));
+        Add(menu, "Limpar operações com êxito", FluentIcons.Common.Icon.Checkmark, () => ViewModel?.ClearSuccessfulCommand.Execute(null));
+        Add(menu, "Limpar todas as concluídas", FluentIcons.Common.Icon.Dismiss, () => ViewModel?.ClearCommand.Execute(null));
         menu.Items.Add(new MenuFlyoutSeparator());
-        Add(menu, "Cancelar todas as operações", Symbol.Cancel, () => ViewModel?.CancelAllCommand.Execute(null));
+        Add(menu, "Cancelar todas as operações", FluentIcons.Common.Icon.Dismiss, () => ViewModel?.CancelAllCommand.Execute(null));
         return menu;
     }
     private void BulkMenuButton_Click(object sender, RoutedEventArgs args)
@@ -75,11 +82,11 @@ public sealed partial class OperationsQueuePanel : UserControl
     internal MenuFlyout CreateItemMenu(OperationViewModel item)
     {
         var menu = new MenuFlyout();
-        Add(menu, "Ver saída do terminal", Symbol.Document, () => ShowOutput(item));
-        Add(menu, "Copiar saída do terminal", Symbol.Copy, () => ViewModel?.CopyLogCommand.Execute(item));
+        Add(menu, "Ver saída do terminal", FluentIcons.Common.Icon.Document, () => ShowOutput(item));
+        Add(menu, "Copiar saída do terminal", FluentIcons.Common.Icon.Copy, () => ViewModel?.CopyLogCommand.Execute(item));
         menu.Items.Add(new MenuFlyoutSeparator());
-        if (item.Operation.CanCancel) Add(menu, "Cancelar operação", Symbol.Cancel, () => item.CancelCommand.Execute(null));
-        Add(menu, "Remover da lista", Symbol.Delete, () => ViewModel?.RemoveCommand.Execute(item));
+        if (item.Operation.CanCancel) Add(menu, "Cancelar operação", FluentIcons.Common.Icon.Dismiss, () => item.CancelCommand.Execute(null));
+        Add(menu, "Remover da lista", FluentIcons.Common.Icon.Delete, () => ViewModel?.RemoveCommand.Execute(item));
         return menu;
     }
     private void ItemMoreButton_Click(object sender, RoutedEventArgs args)

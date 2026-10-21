@@ -23,6 +23,10 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     private string? _availableUpdateVersion;
     private string? _installLocation;
     private bool _forcePerUserInstall;
+    private bool _updatingScope;
+    private int _scopeLoadGeneration;
+    public bool CanInstallForUser { get; private set; }
+    public bool CanInstallForMachine { get; private set; }
     public AppEntry? App => _app;
     public string? IconUrl => _app?.IconUrl;
     public string[] Screenshots { get; private set; } = [];
@@ -61,6 +65,13 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string SelectedLocationText { get; set; } = string.Empty;
     [ObservableProperty] public partial bool InstallAllUsersCheckBoxIsChecked { get; set; } = false;
     [ObservableProperty] public partial bool InteractiveInstallCheckBoxIsChecked { get; set; } = false;
+    [ObservableProperty] public partial bool IgnoreSecurityHashCheckBoxIsChecked { get; set; } = false;
+    [ObservableProperty] public partial bool IsWinGetVersionOptionsVisible { get; set; } = false;
+    [ObservableProperty] public partial bool IsLoadingVersions { get; set; } = false;
+    [ObservableProperty] public partial bool CanLoadVersions { get; set; } = true;
+    [ObservableProperty] public partial string SelectedInstallVersion { get; set; } = "Mais recente";
+    private IEnumerable<string> _installVersions = (string[])["Mais recente"];
+    public IEnumerable<string> InstallVersions { get => _installVersions; set => SetProperty(ref _installVersions, value); }
     [ObservableProperty] public partial bool InstallAllUsersCheckBoxIsEnabled { get; set; } = true;
     [ObservableProperty] public partial bool InteractiveInstallCheckBoxIsEnabled { get; set; } = true;
     [ObservableProperty] public partial bool IsInstallArchitecturePanelVisible { get; set; } = false;
@@ -124,6 +135,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     {
         if (_app is not null) _app.PropertyChanged -= App_PropertyChanged;
         _app = app;
+        _scopeLoadGeneration++;
         IsSelfPackage = app.IsSelf;
         SelfInstalledVersionText = app.IsSelf ? $"Instalado — versão {AppUpdateService.GetCurrentVersion().ToString(3)}" : string.Empty;
         if (app.IsSelf) app.IsInstalled = true;
@@ -208,9 +220,16 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             SelectedLocationText = "Local padrão do sistema";
             InstallAllUsersCheckBoxIsChecked = false;
             InteractiveInstallCheckBoxIsChecked = false;
+            IgnoreSecurityHashCheckBoxIsChecked = false;
+            InstallVersions = (string[])["Mais recente"];
+            SelectedInstallVersion = "Mais recente";
+            IsLoadingVersions = false;
+            CanLoadVersions = true;
         }
         bool supportsWinGetOptions = !IsMicrosoftStoreSource(app.Source);
-        InstallAllUsersCheckBoxIsEnabled = supportsWinGetOptions;
+        IsWinGetVersionOptionsVisible = string.Equals(app.Source, "winget", StringComparison.OrdinalIgnoreCase);
+        InstallAllUsersCheckBoxIsEnabled = false;
+        CanInstallForUser = CanInstallForMachine = false;
         InteractiveInstallCheckBoxIsEnabled = supportsWinGetOptions;
         var supportedArchitectures = (app.Architectures ?? [])
             .Where(value => value is not null)
@@ -232,10 +251,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         IsInstallArchitecturePanelVisible = supportsWinGetOptions && supportedArchitectures.Length > 1
             ;
 
-        UpdateInstallCommandPreview();
-
         _app.PropertyChanged += App_PropertyChanged;
         UpdateInstallActionsVisibility();
+        UpdateInstallCommandPreview();
         if (isOfficeStoreOffer)
         {
             DependenciesText = "Gerenciado pela Microsoft Store";
@@ -249,7 +267,77 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public void Clear() { if (_app is not null) _app.PropertyChanged -= App_PropertyChanged; _app = null; OnPropertyChanged(nameof(App)); OnPropertyChanged(nameof(IconUrl)); }
     public void SetLocation(string location) { _installLocation = location; SelectedLocationText = location; UpdateInstallCommandPreview(); }
-    public void SetUserScope(bool allUsers) { InstallAllUsersCheckBoxIsChecked = allUsers; _forcePerUserInstall = !allUsers; UpdateInstallCommandPreview(); }
+    public async Task LoadInstallVersionsAsync(CancellationToken token)
+    {
+        if (_app is not { } app || !IsWinGetVersionOptionsVisible || IsLoadingVersions) return;
+        IsLoadingVersions = true;
+        CanLoadVersions = false;
+        try
+        {
+            string[] versions = await _metadata.LoadVersionsAsync(app, token);
+            if (_app != app || token.IsCancellationRequested) return;
+            InstallVersions = new[] { "Mais recente" }.Concat(versions).ToArray();
+            if (!InstallVersions.Contains(SelectedInstallVersion, StringComparer.OrdinalIgnoreCase))
+                SelectedInstallVersion = "Mais recente";
+            StatusText = versions.Length == 0 ? "O catálogo não informou versões disponíveis." : string.Empty;
+            await LoadSelectedVersionScopeAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) { if (_app == app) StatusText = $"Não foi possível consultar versões: {ex.Message}"; }
+        finally { if (_app == app) { IsLoadingVersions = false; CanLoadVersions = true; } }
+    }
+    public async Task LoadSelectedVersionScopeAsync(CancellationToken token)
+    {
+        if (_app is not { } app || !IsWinGetVersionOptionsVisible) return;
+        string selected = SelectedInstallVersion;
+        string architecture = SelectedArchitecture;
+        int generation = ++_scopeLoadGeneration;
+        bool requestedMachine = InstallAllUsersCheckBoxIsChecked;
+        bool requestedUser = _forcePerUserInstall;
+        InstallButtonIsEnabled = InstallChevronButtonIsEnabled = false;
+        InstallAllUsersCheckBoxIsEnabled = false;
+        CanInstallForUser = CanInstallForMachine = false;
+        try
+        {
+            var installers = await _metadata.LoadVersionInstallersAsync(app,
+                selected == "Mais recente" ? null : selected, token);
+            if (_app != app || generation != _scopeLoadGeneration
+                || SelectedInstallVersion != selected || SelectedArchitecture != architecture
+                || token.IsCancellationRequested) return;
+            if (architecture != "Automática")
+                installers = installers.Where(item => item.Architecture is null or "neutral"
+                    || string.Equals(item.Architecture, architecture, StringComparison.OrdinalIgnoreCase)).ToArray();
+            bool user = installers.Any(item => string.Equals(item.Scope, "user", StringComparison.OrdinalIgnoreCase));
+            bool machine = installers.Any(item => string.Equals(item.Scope, "machine", StringComparison.OrdinalIgnoreCase));
+            CanInstallForUser = user;
+            CanInstallForMachine = machine;
+            _updatingScope = true;
+            try
+            {
+                if (machine && !user) { InstallAllUsersCheckBoxIsChecked = true; _forcePerUserInstall = false; }
+                else if (user && !machine) { InstallAllUsersCheckBoxIsChecked = false; _forcePerUserInstall = true; }
+                else if (!user && !machine) { InstallAllUsersCheckBoxIsChecked = false; _forcePerUserInstall = false; }
+                else { InstallAllUsersCheckBoxIsChecked = requestedMachine; _forcePerUserInstall = requestedUser; }
+                InstallAllUsersCheckBoxIsEnabled = user && machine;
+            }
+            finally { _updatingScope = false; }
+            UpdateInstallCommandPreview();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) { if (_app == app) StatusText = $"Não foi possível consultar escopos: {ex.Message}"; }
+        finally
+        {
+            if (_app == app && generation == _scopeLoadGeneration)
+                InstallButtonIsEnabled = InstallChevronButtonIsEnabled = true;
+        }
+    }
+    public void SetUserScope(bool allUsers)
+    {
+        if (_updatingScope || allUsers && !CanInstallForMachine || !allUsers && !CanInstallForUser) return;
+        InstallAllUsersCheckBoxIsChecked = allUsers;
+        _forcePerUserInstall = !allUsers;
+        UpdateInstallCommandPreview();
+    }
     public void CopyInstallCommand()
     { StatusText = _clipboard.TrySetText(InstallCommandPreviewTextBox) ? "Comando WinGet copiado para a área de transferência." : "Não foi possível copiar o comando WinGet."; }
     private void UpdateInstallActionsVisibility()
@@ -513,7 +601,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         PersistPackageOptionsCheckBoxIsEnabled = supported;
         PersistPackageOptionsCheckBoxIsChecked = saved is not null;
         PersistPackageOptionsHintText = supported
-            ? "Escopo, arquitetura e interação podem ser reutilizados em atualizações. A pasta escolhida vale para novas instalações."
+            ? "Escopo, arquitetura e interação podem ser reutilizados em atualizações. A pasta vale para novas instalações; versão e hash valem só para a operação atual."
             : IsMicrosoftStoreSource(app.Source)
                 ? "Pacotes da Microsoft Store usam as opções definidas pelo próprio WinGet."
                 : "Opções reutilizáveis estão disponíveis apenas para pacotes WinGet.";
@@ -647,7 +735,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         string? architecture = SelectedArchitecture as string;
         var args = new List<string>
         {
-            "winget install --id",
+            IsUpdateButtonVisible ? "winget upgrade --id" : "winget install --id",
             QuotePowerShellArgument(_app.Id),
             "--exact --source",
             QuotePowerShellArgument(source)
@@ -669,6 +757,14 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             args.Add("--location");
             args.Add(QuotePowerShellArgument(_installLocation));
         }
+        if (IsWinGetVersionOptionsVisible && !string.IsNullOrWhiteSpace(SelectedInstallVersion)
+            && SelectedInstallVersion != "Mais recente")
+        {
+            args.Add("--version");
+            args.Add(QuotePowerShellArgument(SelectedInstallVersion));
+        }
+        if (IsWinGetVersionOptionsVisible && IgnoreSecurityHashCheckBoxIsChecked)
+            args.Add("--ignore-security-hash");
         args.Add("--accept-source-agreements --accept-package-agreements");
 
         InstallCommandPreviewTextBox = string.Join(" ", args);
@@ -722,7 +818,10 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         InteractiveInstallCheckBoxIsChecked || IsMicrosoftStoreSource(_app?.Source),
         InstallAllUsersCheckBoxIsChecked ? "machine" : _forcePerUserInstall ? "user" : null,
         SelectedArchitecture == "Automática" ? null : SelectedArchitecture,
-        false, _installLocation);
+        IsWinGetVersionOptionsVisible && IgnoreSecurityHashCheckBoxIsChecked,
+        _installLocation,
+        Version: IsWinGetVersionOptionsVisible && !string.IsNullOrWhiteSpace(SelectedInstallVersion)
+            && SelectedInstallVersion != "Mais recente" ? SelectedInstallVersion : null);
     public void Dispose() => Clear();
 
 }

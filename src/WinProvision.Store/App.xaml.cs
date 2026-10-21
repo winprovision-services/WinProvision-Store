@@ -125,6 +125,7 @@ public partial class App : Application
         services.AddSingleton<WinUiBackupSyncService>(provider => new WinUiBackupSyncService(
             provider.GetRequiredService<CollectionsViewModel>(),
             provider.GetRequiredService<IAccountBackupService>(),
+            provider.GetRequiredService<ApplicationPreferencesService>(),
             enableAutomaticSync: !IsSmokeTest));
         services.AddSingleton<AccountSyncViewModel>();
         services.AddTransient<AccountSyncPage>();
@@ -223,7 +224,7 @@ public partial class App : Application
         var details = _services.GetRequiredService<AppDetailsViewModel>();
         var installed = _services.GetRequiredService<InstalledPackagesViewModel>();
         var collections = _services.GetRequiredService<CollectionsViewModel>();
-        var commands = new[] { _services.GetRequiredService<HomeViewModel>().RefreshCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().UpdateSelectedCommand.ExecutionTask, installed.RefreshCommand.ExecutionTask, installed.RemoveSelectedCommand.ExecutionTask, installed.DownloadSelectedCommand.ExecutionTask, collections.InstallSelectedCommand.ExecutionTask, collections.DownloadSelectedCommand.ExecutionTask, collections.ExportOfflineCommand.ExecutionTask, details.InstallCommand.ExecutionTask, details.UpdateCommand.ExecutionTask, details.UninstallCommand.ExecutionTask, account.ConnectCommand.ExecutionTask, account.SaveBackupCommand.ExecutionTask, account.RestoreFromCloudCommand.ExecutionTask, account.ImportJsonCommand.ExecutionTask, account.ExportJsonCommand.ExecutionTask, more.CheckStatusCommand.ExecutionTask, more.OpenLogCommand.ExecutionTask, more.RefreshLogCommand.ExecutionTask };
+        var commands = new[] { _services.GetRequiredService<HomeViewModel>().RefreshCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().UpdateSelectedCommand.ExecutionTask, installed.RefreshCommand.ExecutionTask, installed.RemoveSelectedCommand.ExecutionTask, installed.DownloadSelectedCommand.ExecutionTask, collections.InstallSelectedCommand.ExecutionTask, collections.DownloadSelectedCommand.ExecutionTask, collections.ExportOfflineCommand.ExecutionTask, details.InstallCommand.ExecutionTask, details.UpdateCommand.ExecutionTask, details.UninstallCommand.ExecutionTask, account.ConnectCommand.ExecutionTask, account.SaveBackupCommand.ExecutionTask, account.RestoreFromCloudCommand.ExecutionTask, account.RefreshCloudFilesCommand.ExecutionTask, account.RestoreSelectedCloudFileCommand.ExecutionTask, account.DeleteSelectedCloudFileCommand.ExecutionTask, account.DeleteAllAppGistsCommand.ExecutionTask, account.ImportJsonCommand.ExecutionTask, account.ExportJsonCommand.ExecutionTask, more.CheckStatusCommand.ExecutionTask, more.OpenLogCommand.ExecutionTask, more.RefreshLogCommand.ExecutionTask };
         foreach (var command in commands) if (command is not null) { try { await command; } catch (Exception exception) { WinProvisionLog.Warning(exception, "ShutdownCommand"); } }
         await AsyncImage.ShutdownAsync();
         await _services.GetRequiredService<OperationsQueueService>().WaitForIdleAsync();

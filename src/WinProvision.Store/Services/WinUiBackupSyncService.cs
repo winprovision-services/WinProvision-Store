@@ -11,6 +11,7 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
     private readonly CollectionsViewModel _collections;
     private readonly IAccountBackupService _backup;
+    private readonly ApplicationPreferencesService _preferences;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly object _gate = new();
     private readonly HashSet<Task> _activeSyncs = [];
@@ -23,10 +24,12 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
     public WinUiBackupSyncService(
         CollectionsViewModel collections,
         IAccountBackupService backup,
+        ApplicationPreferencesService preferences,
         bool enableAutomaticSync = true)
     {
         _collections = collections;
         _backup = backup;
+        _preferences = preferences;
         _debounceTimer = new Timer(DebounceElapsed, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         if (enableAutomaticSync)
             _collections.BackupSnapshotChanged += Collections_BackupSnapshotChanged;
@@ -36,8 +39,13 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         string json = WinProvision.Core.Services.AotJson.Serialize(snapshot, WinProvisionJsonOptions.Profile);
-        _debounceTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-        return SyncSerializedAsync(json, cancellationToken);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _debounceTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _pendingSnapshot = null;
+        }
+        return SyncSerializedAsync(json, cancellationToken, waitForTurn: true);
     }
 
     private void Collections_BackupSnapshotChanged(ProfileBackupSet snapshot)
@@ -107,7 +115,7 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
         if (json is null)
             return;
 
-        WinUiBackupSyncResult result = await SyncSerializedAsync(json, CancellationToken.None).ConfigureAwait(false);
+        WinUiBackupSyncResult result = await SyncSerializedAsync(json, CancellationToken.None, waitForTurn: false).ConfigureAwait(false);
         if (result.AlreadyRunning)
         {
             lock (_gate)
@@ -121,9 +129,11 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
         }
     }
 
-    private async Task<WinUiBackupSyncResult> SyncSerializedAsync(string json, CancellationToken cancellationToken)
+    private async Task<WinUiBackupSyncResult> SyncSerializedAsync(string json, CancellationToken cancellationToken, bool waitForTurn)
     {
-        if (!await _syncLock.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        if (waitForTurn)
+            await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        else if (!await _syncLock.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             return new(false, false, false, "Já existe uma sincronização em andamento.", true);
 
         bool localSucceeded = false;
@@ -137,7 +147,7 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
             await _backup.SaveLocalAsync(snapshot, cancellationToken).ConfigureAwait(false);
             localSucceeded = true;
 
-            if (_backup.IsConnected)
+            if (_backup.IsConnected && (waitForTurn || _preferences.AutomaticCloudBackupEnabled))
             {
                 cloudAttempted = true;
                 GitHubBackupUploadResult result = await _backup.UploadCloudAsync(snapshot, cancellationToken).ConfigureAwait(false);

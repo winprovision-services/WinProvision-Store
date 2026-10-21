@@ -1,4 +1,4 @@
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.HomePage" Background="Transparent" x:Name="HomeRoot" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged">
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:ic="using:FluentIcons.WinUI" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.HomePage" Background="Transparent" x:Name="HomeRoot" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged">
     <Page.Resources>
         <CornerRadius x:Key="DiscoverSearchCornerRadius">18</CornerRadius>
         <Style x:Key="DiscoverSearchTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource AutoSuggestBoxTextBoxStyle}">
@@ -31,7 +31,7 @@
                     Click="StorefrontApp_Click">
                 <StackPanel VerticalAlignment="Center">
                     <Grid Width="40" Height="40" HorizontalAlignment="Center">
-                        <FontIcon FontSize="24" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=TileAppImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                        <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size24" FontSize="24" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=TileAppImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                         <Image x:Name="TileAppImage" Stretch="Uniform" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource NativeAppIconUrl}}" conv:AsyncImage.DecodePixelWidth="64" />
                     </Grid>
                     <TextBlock Text="{Binding Name}" FontSize="11" TextAlignment="Center" ToolTipService.ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" MaxHeight="30" Margin="0,6,0,0" />
@@ -55,7 +55,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid Width="56" Height="56">
-                        <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="32" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=DiscoverAppIcon1, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                        <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size32" FontSize="32" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=DiscoverAppIcon1, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                         <Image Stretch="Uniform" x:Name="DiscoverAppIcon1" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource NativeAppIconUrl}}" conv:AsyncImage.DecodePixelWidth="112" />
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -92,7 +92,7 @@
                     <ItemsControl ItemsSource="{Binding Apps}" ItemTemplate="{StaticResource StorefrontRowTemplate}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <controls:UniformGrid Columns="2" />
+                                <controls:UniformGrid Columns="{Binding ShelfColumns, ElementName=HomeRoot}" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
@@ -112,7 +112,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Width="28" Height="28" CornerRadius="{StaticResource CompactCornerRadius}" VerticalAlignment="Center">
                         <Grid>
-                            <FontIcon Glyph="" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="20" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=DiscoverAppIcon2, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                            <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size20" FontSize="20" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=DiscoverAppIcon2, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                             <Image Stretch="Uniform" x:Name="DiscoverAppIcon2" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource NativeAppIconUrl}}" conv:AsyncImage.DecodePixelWidth="64" />
                         </Grid>
                     </Border>
@@ -149,7 +149,7 @@
                                     </Style>
                                 </Border.Style>
                                 <Grid>
-                                    <FontIcon FontSize="18" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=ListIconImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                                    <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size16" FontSize="18" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=ListIconImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                                     <Image x:Name="ListIconImage" Stretch="UniformToFill" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource NativeAppIconUrl}}" conv:AsyncImage.DecodePixelWidth="80" />
                                 </Grid>
                             </Border>
@@ -217,7 +217,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource PageHeaderIconTileStyle}">
-                        <FontIcon Style="{StaticResource PageHeaderSymbolIconStyle}" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                        <ic:FluentIcon Icon="Home" IconSize="Size24" IconVariant="Color" Style="{StaticResource PageHeaderSymbolIconStyle}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="Descobrir" Style="{StaticResource PageTitleStyle}" />
@@ -226,7 +226,8 @@
                     </StackPanel>
                 </Grid>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <AutoSuggestBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Style="{StaticResource StoreSearchBoxStyle}" Grid.Column="2" VerticalAlignment="Center" Width="260" MinWidth="180" MaxWidth="340" PlaceholderText="Pesquisar aplicativos..." AutomationProperties.Name="Pesquisar aplicativos" AutomationProperties.AutomationId="DiscoverSearchBox" TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" Padding="0" QueryIcon="Find" CornerRadius="{StaticResource DiscoverSearchCornerRadius}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" TextBoxStyle="{StaticResource DiscoverSearchTextBoxStyle}" Height="36">
+                    <AutoSuggestBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Style="{StaticResource StoreSearchBoxStyle}" Grid.Column="2" VerticalAlignment="Center" Width="260" MinWidth="180" MaxWidth="340" PlaceholderText="Pesquisar aplicativos..." AutomationProperties.Name="Pesquisar aplicativos" AutomationProperties.AutomationId="DiscoverSearchBox" TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" Padding="0" CornerRadius="{StaticResource DiscoverSearchCornerRadius}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" TextBoxStyle="{StaticResource DiscoverSearchTextBoxStyle}" Height="36">
+                        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="GlobeSearch" IconVariant="Regular" IconSize="Size24" Foreground="{ThemeResource TextFillColorPrimaryBrush}" /></AutoSuggestBox.QueryIcon>
                         </AutoSuggestBox>
                 </StackPanel>
             </Grid>
@@ -269,7 +270,7 @@
                                 <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="12,0,12,12" Padding="4" CornerRadius="{StaticResource ControlCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                 <StackPanel Orientation="Horizontal" Spacing="2">
                                     <Button x:Name="HeroBannerPreviousButton" Padding="4" MinWidth="40" MinHeight="40" CornerRadius="{StaticResource CompactCornerRadius}" Click="HeroBannerPrevious_Click" ToolTipService.ToolTip="Banner anterior" AutomationProperties.Name="Banner anterior" AutomationProperties.AutomationId="DiscoverHeroPreviousButton" Background="Transparent" BorderThickness="0">
-                                        <FontIcon FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                                        <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" IconSize="Size16" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                                     </Button>
                                     <Button x:Name="HeroBannerDot0" Tag="0" Padding="4" MinWidth="40" MinHeight="40" CornerRadius="{StaticResource CompactCornerRadius}" Click="HeroBannerDot_Click" ToolTipService.ToolTip="Primeiro banner" AutomationProperties.Name="Mostrar banner 1" AutomationProperties.AutomationId="DiscoverHeroBannerDot1" Background="Transparent" BorderThickness="0">
                                         <Rectangle x:Name="HeroBannerIndicator0" Width="14" Height="4" RadiusX="2" RadiusY="2" Fill="{ThemeResource SystemAccentColorPrimaryBrush}" />
@@ -281,7 +282,7 @@
                                         <Rectangle x:Name="HeroBannerIndicator2" Width="14" Height="4" RadiusX="2" RadiusY="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" />
                                     </Button>
                                     <Button x:Name="HeroBannerNextButton" Padding="4" MinWidth="40" MinHeight="40" CornerRadius="{StaticResource CompactCornerRadius}" Click="HeroBannerNext_Click" ToolTipService.ToolTip="Próximo banner" AutomationProperties.Name="Próximo banner" AutomationProperties.AutomationId="DiscoverHeroNextButton" Background="Transparent" BorderThickness="0">
-                                        <FontIcon FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                                        <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                                     </Button>
                                     <ToggleButton x:Name="HeroRotationToggleButton" Width="40" Height="40" Padding="4"
                                                   IsChecked="True" Checked="HeroRotationToggleButton_Toggled"
@@ -289,7 +290,7 @@
                                                   ToolTipService.ToolTip="Pausar rotação automática"
                                                   AutomationProperties.Name="Pausar rotação automática"
                                                   AutomationProperties.AutomationId="DiscoverHeroRotationToggleButton">
-                                        <FontIcon x:Name="HeroRotationIcon" Glyph="&#xE769;" FontFamily="{ThemeResource SymbolThemeFontFamily}" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                        <ic:FluentIcon Icon="Pause" IconVariant="Regular" IconSize="Size16" x:Name="HeroRotationIcon" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                                     </ToggleButton>
                                 </StackPanel>
                                 </Border>
@@ -320,13 +321,12 @@
                     <controls:UniformGrid x:Name="StorefrontShelves" Visibility="{Binding IsBrowsing, Converter={StaticResource BoolToVisibilityConverter}}" Columns="2" Margin="0,0,0,16">
                         <Border x:Name="PopularShelfCard" Style="{StaticResource StoreCardSurfaceStyle}" Margin="0,0,8,8">
                             <StackPanel>
-                                <controls:DockPanel Margin="0,0,0,16">
+                                <controls:DockPanel Margin="0,0,0,8">
                                     <Button x:Name="PopularMoreButton" AutomationProperties.AutomationId="PopularMoreButton" Width="32" Height="32" Padding="0" Click="PopularMoreButton_Click" ToolTipService.ToolTip="Ver mais aplicativos populares" AutomationProperties.Name="Ver mais aplicativos populares" controls:DockPanel.Dock="Right" Background="Transparent" BorderThickness="0">
-                                        <FontIcon x:Name="PopularMoreIcon" FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                                        <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" x:Name="PopularMoreIcon" FontSize="16" />
                                     </Button>
                                     <TextBlock Text="Em alta na WinProvision Store" Style="{StaticResource FluentCardTitleStyle}" VerticalAlignment="Center" />
                                 </controls:DockPanel>
-                                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,0,0,8" />
                                 <ItemsControl ItemsSource="{Binding PopularApps}" ItemTemplate="{StaticResource StorefrontRowTemplate}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
@@ -342,15 +342,14 @@
                                 </TextBlock>
                             </StackPanel>
                         </Border>
-                        <Border x:Name="StoreShelfCard" Style="{StaticResource StoreCardSurfaceStyle}" Margin="8,0,0,8">
+                        <Border x:Name="StoreShelfCard" Style="{StaticResource StoreCardSurfaceStyle}" Margin="8,0,0,8" Visibility="Collapsed">
                             <StackPanel>
-                                <controls:DockPanel Margin="0,0,0,16">
+                                <controls:DockPanel Margin="0,0,0,8">
                                     <Button x:Name="StoreMoreButton" AutomationProperties.AutomationId="StoreMoreButton" Width="32" Height="32" Padding="0" Click="StoreMoreButton_Click" ToolTipService.ToolTip="Ver mais aplicativos da Microsoft Store" AutomationProperties.Name="Ver mais aplicativos da Microsoft Store" controls:DockPanel.Dock="Right" Background="Transparent" BorderThickness="0">
-                                        <FontIcon x:Name="StoreMoreIcon" FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                                        <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" x:Name="StoreMoreIcon" FontSize="16" />
                                     </Button>
                                     <TextBlock Text="Mais populares na Microsoft Store" Style="{StaticResource FluentCardTitleStyle}" VerticalAlignment="Center" />
                                 </controls:DockPanel>
-                                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,0,0,8" />
                                 <ItemsControl ItemsSource="{Binding StoreHighlights}" ItemTemplate="{StaticResource StorefrontRowTemplate}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
@@ -413,7 +412,7 @@
                                                         </Grid.ColumnDefinitions>
                                                         <Border Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0" CornerRadius="{StaticResource ControlCornerRadius}">
                                                             <Grid>
-                                                                <FontIcon FontSize="18" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=CategoryIconImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                                                                <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size16" FontSize="18" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=CategoryIconImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
                                                                 <Image x:Name="CategoryIconImage" Stretch="Uniform" conv:AsyncImage.SourceUrl="{Binding IconUrl, Converter={StaticResource NativeAppIconUrl}}" conv:AsyncImage.DecodePixelWidth="80" />
                                                             </Grid>
                                                         </Border>
@@ -458,7 +457,7 @@
                     <Border x:Name="EmptySearchResultPanel" Visibility="{Binding HasEmptyResults, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource PageEmptyStateCardStyle}" Margin="0,8,12,12" IsHitTestVisible="False">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360">
                                     <Border Style="{StaticResource PageEmptyStateIconTileStyle}" Width="48" Height="48">
-                                        <FontIcon FontSize="24" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                                    <ic:FluentIcon Icon="Search" IconSize="Size24" IconVariant="Regular" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
                                     <TextBlock Text="Nenhum aplicativo encontrado" Style="{StaticResource PageEmptyStateTitleStyle}" />
                                     <TextBlock Text="Tente pesquisar pelo nome do aplicativo, pelo publicador ou pelo ID do pacote." Style="{StaticResource PageEmptyStateMessageStyle}" />
@@ -484,13 +483,13 @@
                             <ComboBoxItem Content="WinGet" />
                         </ComboBox>
                         <ToggleButton x:Name="ListViewToggleButton" AutomationProperties.Name="Visualização em lista" AutomationProperties.AutomationId="DiscoverListViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" Click="ListViewToggleButton_Click" ToolTipService.ToolTip="Visualização em lista">
-                            <FontIcon FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                            <ic:FluentIcon Icon="AppsList" IconVariant="Color" IconSize="Size24" />
                         </ToggleButton>
                         <ToggleButton x:Name="GridViewToggleButton" AutomationProperties.Name="Visualização em cartões" AutomationProperties.AutomationId="DiscoverGridViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" IsChecked="True" Click="GridViewToggleButton_Click" ToolTipService.ToolTip="Visualização em cartões">
-                            <FontIcon FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                            <ic:FluentIcon Icon="AppsListDetail" IconVariant="Color" IconSize="Size20" />
                         </ToggleButton>
                         <ToggleButton x:Name="IconsViewToggleButton" AutomationProperties.Name="Visualização em ícones" AutomationProperties.AutomationId="DiscoverIconsViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" Click="IconsViewToggleButton_Click" ToolTipService.ToolTip="Visualização em ícones">
-                            <FontIcon FontSize="16" FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="" />
+                            <ic:FluentIcon Icon="Apps" IconVariant="Color" IconSize="Size16" />
                         </ToggleButton>
                     </StackPanel>
                 </Grid>

@@ -46,9 +46,9 @@ public class InstalledAppsService
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
-            // O inventário do winget é a fonte principal para apps do catálogo: compara
-            // PackageIdentifier exato e não mantém entradas órfãs deixadas no Registro.
-            // O Registro continua como fallback quando o export não está disponível.
+            // O inventário do winget permite comparar PackageIdentifier exato. O export
+            // pode omitir um pacote que winget list e o Registro ainda reconhecem;
+            // nesses casos o nome registrado complementa o inventário.
             Task<List<InstalledAppDetail>> registryTask = Task.Run(GetDesktopAppsFromRegistry, cancellationToken);
             Task<(bool Succeeded, List<string> PackageIds)>? wingetTask = _wingetExecutor is null
                 ? null
@@ -114,8 +114,9 @@ public class InstalledAppsService
     /// </summary>
     public bool IsInstalled(string displayName, string? packageId = null)
     {
-        if (_hasWingetSnapshot && !string.IsNullOrWhiteSpace(packageId))
-            return _wingetInstalledIds.Contains(packageId.Trim());
+        if (_hasWingetSnapshot && !string.IsNullOrWhiteSpace(packageId)
+            && _wingetInstalledIds.Contains(packageId.Trim()))
+            return true;
 
         if (string.IsNullOrWhiteSpace(displayName))
             return false;

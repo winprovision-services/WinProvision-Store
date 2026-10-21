@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -21,6 +22,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
     private readonly CollectionsViewModel _collections;
     private readonly IPresentationService _presentation;
     private readonly IUiDispatcher _dispatcher;
+    private readonly ApplicationPreferencesService _preferences;
     private bool _disposed;
 
     [ObservableProperty]
@@ -56,6 +58,21 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string StatusText { get; set; } = "";
 
+    public ObservableCollection<CloudBackupFileRow> CloudFiles { get; } = new();
+
+    [ObservableProperty]
+    public partial CloudBackupFileRow? SelectedCloudFile { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsLoadingCloudFiles { get; private set; }
+
+    [ObservableProperty]
+    public partial bool AutomaticCloudBackupEnabled { get; set; }
+
+    public bool CanRefreshCloudFiles => IsConnected && !IsBusy && !IsLoadingCloudFiles;
+    public bool CanRestoreSelectedCloudFile => CanRefreshCloudFiles && SelectedCloudFile?.CanImport == true;
+    public bool CanDeleteSelectedCloudFile => CanRefreshCloudFiles && SelectedCloudFile is not null;
+
     public bool CanStartAuthentication => !IsAuthenticating;
     public bool CanSaveBackup => !IsBusy;
     public bool CanImportCloudBackup => IsConnected && !IsBusy;
@@ -68,13 +85,16 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
         WinUiBackupSyncService syncService,
         CollectionsViewModel collections,
         IPresentationService presentation,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        ApplicationPreferencesService preferences)
     {
         _backup = backup;
         _syncService = syncService;
         _collections = collections;
         _presentation = presentation;
         _dispatcher = dispatcher;
+        _preferences = preferences;
+        AutomaticCloudBackupEnabled = preferences.AutomaticCloudBackupEnabled;
         _syncService.SyncAttempted += SyncService_SyncAttempted;
         Refresh();
     }
@@ -95,12 +115,42 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
         RestoreFromCloudCommand.NotifyCanExecuteChanged();
         ImportJsonCommand.NotifyCanExecuteChanged();
         ExportJsonCommand.NotifyCanExecuteChanged();
+        NotifyCloudCommands();
     }
 
     partial void OnIsConnectedChanged(bool value)
     {
         OnPropertyChanged(nameof(CanImportCloudBackup));
         RestoreFromCloudCommand.NotifyCanExecuteChanged();
+        NotifyCloudCommands();
+    }
+
+    partial void OnSelectedCloudFileChanged(CloudBackupFileRow? value) => NotifyCloudCommands();
+    partial void OnIsLoadingCloudFilesChanged(bool value) => NotifyCloudCommands();
+
+    partial void OnAutomaticCloudBackupEnabledChanged(bool value)
+    {
+        if (_preferences is not null && _preferences.AutomaticCloudBackupEnabled != value)
+        {
+            try { _preferences.SetAutomaticCloudBackup(value); }
+            catch (Exception exception)
+            {
+                WinProvisionLog.Error(exception, "AccountSyncViewModel.AutomaticCloudBackup");
+                StatusText = $"Não foi possível salvar a preferência de backup automático. {exception.Message}";
+                AutomaticCloudBackupEnabled = _preferences.AutomaticCloudBackupEnabled;
+            }
+        }
+    }
+
+    private void NotifyCloudCommands()
+    {
+        OnPropertyChanged(nameof(CanRefreshCloudFiles));
+        OnPropertyChanged(nameof(CanRestoreSelectedCloudFile));
+        OnPropertyChanged(nameof(CanDeleteSelectedCloudFile));
+        RefreshCloudFilesCommand.NotifyCanExecuteChanged();
+        RestoreSelectedCloudFileCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCloudFileCommand.NotifyCanExecuteChanged();
+        DeleteAllAppGistsCommand.NotifyCanExecuteChanged();
     }
 
     public void Refresh()
@@ -194,6 +244,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
 
                     Refresh();
                     StatusText = $"Conta vinculada como {ConnectedLogin}.";
+                    await RefreshCloudFilesAsync(cancellationToken);
                     return;
                 }
 
@@ -241,6 +292,8 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
     private void Disconnect()
     {
         _backup.Disconnect();
+        CloudFiles.Clear();
+        SelectedCloudFile = null;
         Refresh();
         StatusText = "Conta desconectada. O backup local continua disponível.";
     }
@@ -268,7 +321,9 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
                         ? "Backup salvo no computador e na nuvem."
                         : result.CloudAttempted
                             ? $"Backup salvo no computador, mas não na nuvem. {result.ErrorMessage}"
-                            : "Backup salvo no computador. Conecte o GitHub para sincronizar.";
+                            : _backup.IsConnected
+                                ? "Backup salvo no computador. O envio automático ao Gist está desativado."
+                                : "Backup salvo no computador. Conecte o GitHub para sincronizar.";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -289,11 +344,27 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
     private async Task RestoreFromCloudAsync(CancellationToken cancellationToken)
     {
         IsBusy = true;
-        StatusText = "Baixando backup da nuvem...";
+        StatusText = "Consultando arquivos JSON na nuvem...";
         _collections.StatusText = StatusText;
         try
         {
-            GitHubBackupDownloadResult result = await _backup.DownloadCloudAsync(cancellationToken);
+            IReadOnlyList<CloudBackupFile> files = await _backup.ListCloudFilesAsync(cancellationToken);
+            CloudBackupFile[] importable = files.Where(file => file.CanImport).ToArray();
+            if (importable.Length == 0)
+            {
+                StatusText = "Não há arquivos JSON compatíveis para importar no Gist de backup.";
+                return;
+            }
+            int? selectedIndex = await _presentation.ChooseAsync("Escolha o JSON para importar",
+                importable.Select(file => $"{file.FileName} — {file.Description} — {file.CollectionCount} coleção(ões), {file.AppCount} aplicativo(s)").ToArray());
+            if (selectedIndex is null || selectedIndex < 0 || selectedIndex >= importable.Length)
+            {
+                StatusText = "Importação cancelada.";
+                return;
+            }
+            CloudBackupFile selectedFile = importable[selectedIndex.Value];
+            StatusText = $"Baixando {selectedFile.FileName}...";
+            GitHubBackupDownloadResult result = await _backup.DownloadCloudFileAsync(selectedFile.FileName, cancellationToken);
             if (!result.Success || result.BackupSet is null)
             {
                 StatusText = result.ErrorMessage ?? "Ainda não existe um backup de perfil na nuvem.";
@@ -302,8 +373,8 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
 
             int imported = _collections.ImportJsonBackup(
                 WinProvision.Core.Services.AotJson.Serialize(result.BackupSet, WinProvisionJsonOptions.Profile),
-                "Backup da nuvem");
-            StatusText = $"Backup da nuvem restaurado: {imported} coleção(ões) adicionada(s).";
+                selectedFile.FileName);
+            StatusText = $"{selectedFile.FileName} importado: {imported} coleção(ões) adicionada(s).";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -320,6 +391,115 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
             Refresh();
             _collections.StatusText = StatusText;
         }
+    }
+
+    private async Task RefreshCloudFilesAsync(CancellationToken cancellationToken)
+    {
+        if (!IsConnected) return;
+        IsLoadingCloudFiles = true;
+        try
+        {
+            var files = await _backup.ListCloudFilesAsync(cancellationToken);
+            string? selectedName = SelectedCloudFile?.FileName;
+            CloudFiles.Clear();
+            foreach (var file in files)
+                CloudFiles.Add(new CloudBackupFileRow(file));
+            SelectedCloudFile = CloudFiles.FirstOrDefault(file => file.FileName == selectedName)
+                ?? CloudFiles.FirstOrDefault(file => file.IsPrimary && file.CanImport)
+                ?? CloudFiles.FirstOrDefault(file => file.CanImport);
+            StatusText = files.Count == 0 ? "Ainda não há arquivos JSON no Gist de backup." :
+                $"{files.Count} arquivo(s) JSON encontrado(s) no Gist de backup.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "AccountSyncViewModel.RefreshCloudFiles");
+            StatusText = $"Não foi possível listar os arquivos do Gist. {exception.Message}";
+        }
+        finally { IsLoadingCloudFiles = false; Refresh(); }
+    }
+
+    private async Task RestoreSelectedCloudFileAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedCloudFile is not { CanImport: true } selected) return;
+        IsBusy = true;
+        try
+        {
+            var result = await _backup.DownloadCloudFileAsync(selected.FileName, cancellationToken);
+            if (!result.Success || result.BackupSet is null)
+            {
+                StatusText = result.ErrorMessage ?? "O JSON selecionado não pôde ser importado.";
+                return;
+            }
+            int imported = _collections.ImportJsonBackup(AotJson.Serialize(result.BackupSet, WinProvisionJsonOptions.Profile), selected.FileName);
+            StatusText = $"{imported} coleção(ões) importada(s) de {selected.FileName}.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { StatusText = "Importação cancelada."; }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "AccountSyncViewModel.RestoreSelectedCloudFile");
+            StatusText = $"Não foi possível importar o JSON. {exception.Message}";
+        }
+        finally { IsBusy = false; Refresh(); }
+    }
+
+    private async Task DeleteSelectedCloudFileAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedCloudFile is not { } selected) return;
+        bool confirmed = await _presentation.ConfirmAsync("Excluir JSON do Gist",
+            $"Excluir '{selected.FileName}' do Gist de backup? Esta ação não apaga as coleções deste computador. Se for o backup principal, a próxima sincronização poderá criá-lo novamente.",
+            "Excluir arquivo");
+        if (!confirmed) return;
+        IsBusy = true;
+        try
+        {
+            var result = await _backup.DeleteCloudFileAsync(selected.FileName, cancellationToken);
+            if (!result.Success)
+            {
+                StatusText = result.Error ?? "O GitHub não confirmou a exclusão.";
+                return;
+            }
+            CloudFiles.Remove(selected);
+            SelectedCloudFile = CloudFiles.FirstOrDefault(file => file.CanImport);
+            StatusText = $"{selected.FileName} excluído do Gist.";
+            Refresh();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { StatusText = "Exclusão cancelada."; }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "AccountSyncViewModel.DeleteSelectedCloudFile");
+            StatusText = $"Não foi possível excluir o JSON. {exception.Message}";
+        }
+        finally { IsBusy = false; Refresh(); }
+    }
+
+    private async Task DeleteAllAppGistsAsync(CancellationToken cancellationToken)
+    {
+        bool confirmed = await _presentation.ConfirmAsync("Excluir todos os Gists do WinProvision",
+            "Excluir permanentemente todos os Gists de backup e bootstrap criados pelo WinProvision nesta conta GitHub? Os backups locais e as coleções deste computador serão preservados. O envio automático ao Gist será desativado.",
+            "Excluir todos");
+        if (!confirmed) return;
+        IsBusy = true;
+        try
+        {
+            _preferences.SetAutomaticCloudBackup(false);
+            AutomaticCloudBackupEnabled = false;
+            var result = await _backup.DeleteAllAppGistsAsync(cancellationToken);
+            CloudFiles.Clear();
+            SelectedCloudFile = null;
+            StatusText = result.Error is null
+                ? $"{result.DeletedCount} Gist(s) do WinProvision excluído(s). O backup automático na nuvem está desativado."
+                : result.TotalCount == 0 ? result.Error
+                : $"{result.DeletedCount} de {result.TotalCount} Gist(s) excluído(s). {result.Error}";
+            Refresh();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { StatusText = "Exclusão cancelada. Atualize a lista para conferir os Gists restantes."; }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "AccountSyncViewModel.DeleteAllAppGists");
+            StatusText = $"Não foi possível excluir todos os Gists. {exception.Message}";
+        }
+        finally { IsBusy = false; }
     }
 
     private async Task ImportJsonAsync(CancellationToken cancellationToken)

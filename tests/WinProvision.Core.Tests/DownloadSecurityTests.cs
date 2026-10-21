@@ -19,7 +19,7 @@ public sealed class DownloadSecurityTests
         try
         {
             await Assert.ThrowsAsync<HttpRequestException>(() => api.GetIndexAsync());
-            Assert.Equal(2, handler.Requests.Count); // Only the two original catalog endpoints.
+            Assert.Single(handler.Requests); // Only the current catalog endpoint.
             Assert.All(handler.Requests, uri => Assert.Equal(Uri.UriSchemeHttps, uri.Scheme));
         }
         finally

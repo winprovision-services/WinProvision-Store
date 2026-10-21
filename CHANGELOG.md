@@ -1,6 +1,16 @@
 # Histórico de alterações
 
-## Não lançado
+## 1.0.11 - 21 de outubro de 2026
+
+- O mecanismo de download offline do Office agora é escolhido em **Configurações → Operações e downloads**. A preferência é salva imediatamente, acompanha a exportação de configurações e se aplica a novas configurações criadas na página Office; configurações Office já salvas preservam sua escolha.
+- Ícones de função migrados para Fluent UI System Icons com cores de tema. Modos de visualização, pesquisa e detalhes receberam ajustes visuais; controles de instalação usam cantos e caixas de seleção coerentes com o restante da interface.
+- Ícones dos aplicativos do Office passam a usar `office/media` na CDN e escala visual padronizada. A detecção de aplicativos instalados recebe uma consulta complementar para reconhecer entradas como UniGetUI.
+
+- Busca e API própria migradas para `winget/v1` da CDN. O índice e cada detalhe de versão são validados por SHA-256; versões aparecem automaticamente nas opções, e o escopo oferecido acompanha os instaladores da versão escolhida. A busca consulta a origem `msstore` pelo WinGet e enriquece resultados e banners com a Display Catalog da Microsoft; o editorial resolve IDs pela mesma origem para preencher banners e populares sem depender de sugestões aproximadas. Imagens da Store são carregadas pelas URLs da API e não são publicadas no R2.
+
+- Instalações WinGet-Pkgs + Viper com dependências ou formato incompatível agora seguem pelo WinGet, preservando a versão escolhida e evitando a falha prematura `NoApplicableInstallers` (como no Alacritty). O progresso do Viper é exibido em vermelho.
+
+- Novo método opcional WinGet-Pkgs + Viper: consulta o manifesto YAML oficial, baixa o instalador com SHA-256 obrigatório e executa silenciosamente os formatos compatíveis. A escolha de versão do pacote também funciona nessa rota; outras fontes continuam pelo WinGet. Preferências antigas mantêm o método anterior.
 
 - Viper: downloads de URLs assinadas que mudam a cada requisição (GitHub Releases, Azure Blob, S3) deixam de falhar com “o servidor mudou o arquivo”; a identidade vem do ETag forte e do tamanho, e sem ETag basta o mesmo host/caminho. Conexão derrubada no meio do corpo (IOException com SocketException) passa a ser repetida, e o progresso de transferência única é limitado a 200 ms como na segmentada.
 

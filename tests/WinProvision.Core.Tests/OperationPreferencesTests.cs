@@ -24,6 +24,13 @@ public sealed class OperationPreferencesTests
             Assert.True(options.Allows(NotificationCategory.Updates));
             Assert.False(options.Allows(NotificationCategory.Success));
             Assert.False(options.Allows(NotificationCategory.BatchSummary));
+            Assert.False(options.AllowsSuccessfulOperation(isBatch: false));
+            Assert.False(options.AllowsSuccessfulOperation(isBatch: true));
+            var enabled = new OperationPreferences();
+            Assert.True(enabled.AllowsSuccessfulOperation(isBatch: false));
+            Assert.True(enabled.AllowsSuccessfulOperation(isBatch: true));
+            Assert.False((enabled with { NotifySuccess = false }).AllowsSuccessfulOperation(isBatch: true));
+            Assert.False((enabled with { NotifyBatchSummary = false }).AllowsSuccessfulOperation(isBatch: true));
             Assert.Throws<ArgumentException>(() => service.Save(options with { ParallelOperations = 0 }));
             Assert.Throws<ArgumentException>(() => service.Save(options with { ParallelDownloads = 9 }));
             Assert.Throws<ArgumentException>(() => service.Save(options with { DownloadDirectory = "relative" }));

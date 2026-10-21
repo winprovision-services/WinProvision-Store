@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using FluentIcons.Common;
 using WinProvision.Core.Models;
 using WinProvision.Store.Services;
 using WinProvision.Store.ViewModels;
@@ -24,7 +25,7 @@ public sealed partial class HomePage : Page
     public int ShelfColumns { get => (int)GetValue(ShelfColumnsProperty); set => SetValue(ShelfColumnsProperty, value); }
     internal bool IsHeroRotationPaused => _heroRotationPaused;
     [WinRT.GeneratedBindableCustomProperty]
-    public sealed partial record CategoryChip(string Tag, string Label, string Icon, bool IsSelected);
+    public sealed partial record CategoryChip(string Tag, string Label, Icon Icon, bool IsSelected);
     public HomePage(HomeViewModel viewModel)
     {
         ViewModel = viewModel;
@@ -33,9 +34,10 @@ public sealed partial class HomePage : Page
         DataContext = Storefront;
         CategoryList.ItemsSource = new System.Collections.ObjectModel.ObservableCollection<CategoryChip>
         {
-            new("all", "Todos", "\uE8A9", true), new("productivity", "Produtividade", "\uE7C3", false),
-            new("development", "Desenvolvimento", "\uE943", false), new("utilities", "Utilitários", "\uEC7A", false),
-            new("multimedia", "Multimídia", "\uE768", false), new("security", "Segurança", "\uE83D", false)
+            new("all", "Todos", Icon.Apps, true), new("productivity", "Produtividade", Icon.Document, false),
+            new("development", "Desenvolvimento", Icon.Code, false), new("utilities", "Utilitários", Icon.Toolbox, false),
+            new("multimedia", "Multimídia", Icon.Video, false), new("security", "Segurança", Icon.Shield, false),
+            new("gaming", "Jogos", Icon.Trophy, false), new("browsers", "Navegadores", Icon.Globe, false)
         };
         _heroTimer = DispatcherQueue.CreateTimer(); _heroTimer.Interval = TimeSpan.FromSeconds(8);
         _heroTimer.Tick += (_, _) => Storefront.SetHeroBanner(Storefront.HeroBannerIndex + 1);
@@ -85,8 +87,8 @@ public sealed partial class HomePage : Page
         var shelf = Storefront.CurrentShelf;
         PopularShelfCard.Visibility = shelf == StorefrontViewModel.ShelfView.Store ? Visibility.Collapsed : Visibility.Visible;
         StoreShelfCard.Visibility = shelf == StorefrontViewModel.ShelfView.Popular ? Visibility.Collapsed : Visibility.Visible;
-        PopularMoreIcon.Glyph = shelf == StorefrontViewModel.ShelfView.Popular ? "\uE76B" : "\uE76C";
-        StoreMoreIcon.Glyph = shelf == StorefrontViewModel.ShelfView.Store ? "\uE76B" : "\uE76C";
+        PopularMoreIcon.Icon = shelf == StorefrontViewModel.ShelfView.Popular ? Icon.ChevronLeft : Icon.ChevronRight;
+        StoreMoreIcon.Icon = shelf == StorefrontViewModel.ShelfView.Store ? Icon.ChevronLeft : Icon.ChevronRight;
         RefreshHeroTimer(); UpdateStorefrontLayout(ActualWidth);
     }
     private void Page_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateStorefrontLayout(args.NewSize.Width);
@@ -99,7 +101,7 @@ public sealed partial class HomePage : Page
         HeroPromotions.Visibility = promotions ? Visibility.Visible : Visibility.Collapsed;
         StorefrontHeroGrid.Height = width < 700 ? 300 : compact ? 360 : 440;
         StorefrontShelves.Columns = compact || Storefront.CurrentShelf != StorefrontViewModel.ShelfView.Overview ? 1 : 2;
-        ShelfColumns = width < 760 ? 1 : 2;
+        ShelfColumns = width < 760 ? 1 : width < 1200 ? 2 : 3;
         AppsColumns = width < 700 ? 1 : width < 1100 ? 2 : 3;
         SearchCardsLayout.MaximumRowsOrColumns = AppsColumns;
     }
@@ -131,7 +133,7 @@ public sealed partial class HomePage : Page
         _heroRotationPaused = !isPlaying;
         string action = isPlaying ? "Pausar" : "Retomar";
         string label = $"{action} rotação automática";
-        HeroRotationIcon.Glyph = isPlaying ? "\uE769" : "\uE768";
+        HeroRotationIcon.Icon = isPlaying ? Icon.Pause : Icon.Play;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(HeroRotationToggleButton, label);
         ToolTipService.SetToolTip(HeroRotationToggleButton, label);
         RefreshHeroTimer();

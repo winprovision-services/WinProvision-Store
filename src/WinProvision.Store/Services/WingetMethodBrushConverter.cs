@@ -10,6 +10,7 @@ public sealed partial class WingetMethodBrushConverter : IValueConverter
     {
         WingetMethod.ComApi => "AppOperationComBrush",
         WingetMethod.OwnApi => "AppOperationApiBrush",
+        WingetMethod.WinGetPkgsViper => "AppOperationViperBrush",
         WingetMethod.WingetExe => "AppOperationWingetBrush",
         _ => "AppOperationDefaultBrush"
     }];

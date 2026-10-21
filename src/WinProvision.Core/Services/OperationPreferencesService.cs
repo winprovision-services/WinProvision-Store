@@ -15,11 +15,13 @@ public sealed record OperationPreferences
     public int ParallelDownloads { get; init; } = 3;
     public string? DownloadDirectory { get; init; }
     public InstallerNameStyle InstallerNames { get; init; } = InstallerNameStyle.PackageVersion;
+    public bool WarnInstallerHostChange { get; init; } = true;
     public bool Allows(NotificationCategory category) => category switch
     {
         NotificationCategory.Updates => NotifyUpdates, NotificationCategory.Errors => NotifyErrors,
         NotificationCategory.Success => NotifySuccess, NotificationCategory.BatchSummary => NotifyBatchSummary, _ => false
     };
+    public bool AllowsSuccessfulOperation(bool isBatch) => NotifySuccess && (!isBatch || NotifyBatchSummary);
     public void Validate()
     {
         if (ParallelOperations is < 1 or > 4 || ParallelDownloads is < 1 or > 8 || !Enum.IsDefined(InstallerNames))

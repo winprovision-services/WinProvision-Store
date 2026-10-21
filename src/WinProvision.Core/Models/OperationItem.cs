@@ -30,7 +30,8 @@ public enum WingetMethod
     Unknown,
     ComApi,
     OwnApi,
-    WingetExe
+    WingetExe,
+    WinGetPkgsViper
 }
 
 /// <summary>
@@ -64,6 +65,7 @@ public partial class OperationItem : INotifyPropertyChanged, IDisposable
     }
 
     public Guid Id { get; } = Guid.NewGuid();
+    public DateTimeOffset? StartedAt { get; private set; }
     public string AppName { get; }
     public OperationKind Kind { get; }
     public string? IconUrl { get; }
@@ -152,6 +154,8 @@ public partial class OperationItem : INotifyPropertyChanged, IDisposable
         {
             if (SetField(ref _state, value))
             {
+                if (value == OperationState.Running)
+                    StartedAt ??= DateTimeOffset.Now;
                 CanCancel = value is OperationState.Queued or OperationState.Running;
 
                 // Ao encerrar, substitui a última etapa técnica (ex.: "Preparando...")

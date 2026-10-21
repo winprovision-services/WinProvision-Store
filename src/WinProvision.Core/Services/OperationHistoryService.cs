@@ -10,7 +10,9 @@ namespace WinProvision.Core.Services;
 public sealed class OperationHistoryService
 {
     private const int MaximumEntries = 200;
+    private const int MaximumDetailsLength = 16_384;
     private readonly string _filePath;
+    private readonly string _taskLogPath;
 
     private readonly System.Threading.Lock _gate = new();
     private readonly List<OperationHistoryEntry> _entries = [];
@@ -20,25 +22,36 @@ public sealed class OperationHistoryService
         get { lock (_gate) return _entries.ToArray(); }
     }
 
-    public OperationHistoryService()
+    public OperationHistoryService(string? filePath = null)
     {
         string directory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "WinProvisionStore");
-        _filePath = Path.Combine(directory, "operation-history.json");
+        _filePath = filePath ?? Path.Combine(directory, "operation-history.json");
+        _taskLogPath = filePath is null
+            ? Path.Combine(directory, "operation-tasks.log")
+            : Path.ChangeExtension(_filePath, ".log");
         Load();
     }
+
+    public string TaskLogPath => _taskLogPath;
 
     public void Record(OperationItem item)
     {
         lock (_gate)
         {
             if (!item.IsFinished || _entries.Any(entry => entry.OperationId == item.Id)) return;
-            _entries.Insert(0, new OperationHistoryEntry(
-                item.Id, item.AppName, item.Kind, item.State, DateTimeOffset.Now, item.Method));
+            string details = item.GetFullLog();
+            if (details.Length > MaximumDetailsLength)
+                details = "… saída anterior omitida …" + Environment.NewLine + details[^MaximumDetailsLength..];
+            var entry = new OperationHistoryEntry(
+                item.Id, item.AppName, item.Kind, item.State, DateTimeOffset.Now, item.Method,
+                item.StartedAt, details);
+            _entries.Insert(0, entry);
             if (_entries.Count > MaximumEntries)
                 _entries.RemoveRange(MaximumEntries, _entries.Count - MaximumEntries);
             Save();
+            AppendTaskLog(entry);
         }
         Changed?.Invoke();
     }
@@ -49,6 +62,12 @@ public sealed class OperationHistoryService
         {
             _entries.Clear();
             Save();
+            try
+            {
+                if (File.Exists(_taskLogPath)) File.Delete(_taskLogPath);
+                if (File.Exists(_taskLogPath + ".previous")) File.Delete(_taskLogPath + ".previous");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { CoreLog.Warning(ex, "OperationHistoryService.ClearLog"); }
         }
         Changed?.Invoke();
     }
@@ -85,6 +104,26 @@ public sealed class OperationHistoryService
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             CoreLog.Warning(ex, "OperationHistoryService");
+        }
+    }
+
+    private void AppendTaskLog(OperationHistoryEntry entry)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_taskLogPath)!);
+            string details = SensitiveDataRedactor.Redact(entry.LogDetails);
+            string text = $"{entry.KindLabel} · {SensitiveDataRedactor.Redact(entry.AppName)} — {entry.StateLabel}{Environment.NewLine}" +
+                $"{entry.StartLine}{Environment.NewLine}{entry.EndLine}{Environment.NewLine}{entry.DurationLine}{Environment.NewLine}{entry.MethodLine}{Environment.NewLine}" +
+                $"{Environment.NewLine}-- Saída da operação{Environment.NewLine}{details}{Environment.NewLine}{Environment.NewLine}" +
+                "——————————————————————————————————————————" + Environment.NewLine + Environment.NewLine;
+            if (File.Exists(_taskLogPath) && new FileInfo(_taskLogPath).Length >= 10L * 1024 * 1024)
+                File.Move(_taskLogPath, _taskLogPath + ".previous", overwrite: true);
+            File.AppendAllText(_taskLogPath, text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            CoreLog.Warning(ex, "OperationHistoryService.TaskLog");
         }
     }
 }

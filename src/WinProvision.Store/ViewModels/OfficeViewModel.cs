@@ -30,6 +30,7 @@ public sealed partial class OfficeViewModel : ObservableObject
     private readonly IOfficeConfigurationExportService _configurationExport;
     private readonly IClipboardService _clipboard;
     private readonly IDesktopIntegrationService _desktop;
+    private readonly ApplicationPreferencesService _preferences;
     private bool _isApplyingAutoUpdates;
 
     public ObservableCollection<OfficeAppToggleViewModel> AppToggleItems { get; } = new();
@@ -80,9 +81,6 @@ public sealed partial class OfficeViewModel : ObservableObject
     public partial bool DownloadBeforeInstall { get; set; }
 
     [ObservableProperty]
-    public partial bool UseViperOfficeDownload { get; set; }
-
-    [ObservableProperty]
     public partial bool IsAdvancedExpanded { get; set; }
 
     [ObservableProperty]
@@ -99,6 +97,11 @@ public sealed partial class OfficeViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool HasNoInstalledProducts { get; private set; } = true;
+
+    [ObservableProperty]
+    public partial bool CanInstallSelectedProducts { get; private set; } = true;
+
+    private IReadOnlyList<OfficeInstalledProduct> _installedProducts = [];
 
     [ObservableProperty]
     public partial string InstalledSummary { get; private set; } = "Verifique o estado do Office.";
@@ -138,7 +141,8 @@ public sealed partial class OfficeViewModel : ObservableObject
         IPresentationService presentation,
         IOfficeConfigurationExportService configurationExport,
         IClipboardService clipboard,
-        IDesktopIntegrationService desktop)
+        IDesktopIntegrationService desktop,
+        ApplicationPreferencesService preferences)
     {
         _officeService = officeService;
         _installedDetector = installedDetector;
@@ -148,6 +152,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         _configurationExport = configurationExport;
         _clipboard = clipboard;
         _desktop = desktop;
+        _preferences = preferences;
 
         InstallCommand = new AsyncRelayCommand(InstallOfficeAsync);
         RemoveCommand = new AsyncRelayCommand(RemoveOfficeAsync);
@@ -184,6 +189,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     partial void OnSelectedCategoryChanged(OfficeCategoryOption? value) => LoadPlansForCategory();
     partial void OnSelectedPlanChanged(OfficePlan? value) => ConfigureSelectedPlan();
     partial void OnSelectedChannelChanged(OfficeChannelOption? value) => RefreshAdditionalProductOptions();
+    partial void OnSelectedVisioProductChanged(OfficePlan? value) => RefreshInstallAvailability();
+    partial void OnSelectedProjectProductChanged(OfficePlan? value) => RefreshInstallAvailability();
 
     private void AppToggle_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
@@ -195,6 +202,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         OnPropertyChanged(nameof(HasVisioSelected));
         OnPropertyChanged(nameof(HasProjectSelected));
         OnPropertyChanged(nameof(HasAdditionalProductSelected));
+        RefreshInstallAvailability();
     }
 
     public void SelectAllApps()
@@ -265,6 +273,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         OnPropertyChanged(nameof(IsChannelEnabled));
         OnPropertyChanged(nameof(ChannelToolTip));
         RefreshAdditionalProductOptions();
+        RefreshInstallAvailability();
     }
 
     private void RefreshAdditionalProductOptions()
@@ -311,6 +320,15 @@ public sealed partial class OfficeViewModel : ObservableObject
             project.IsEnabled = ProjectProductOptions.Count > 0 && !IsProjectPlan(selectedPlan);
             if (!project.IsEnabled) project.IsOn = false;
         }
+        RefreshInstallAvailability();
+    }
+
+    private void RefreshInstallAvailability()
+    {
+        CanInstallSelectedProducts = SelectedPlan is { } plan &&
+            !OfficeInstallIdempotence.IsAlreadyInstalled(
+                new OfficeInstallRequest(plan, 64, "pt-br", [], AdditionalProducts: GetAdditionalProducts()),
+                _installedProducts);
     }
 
     private static bool IsVisioPlan(OfficePlan plan) => plan.ProductId.StartsWith("Visio", StringComparison.OrdinalIgnoreCase);
@@ -329,7 +347,8 @@ public sealed partial class OfficeViewModel : ObservableObject
             return null;
         }
 
-        if (DownloadBeforeInstall && UseViperOfficeDownload
+        bool useViperDownload = _preferences.UseViperOfficeDownload;
+        if (DownloadBeforeInstall && useViperDownload
             && (AdditionalLanguages.Any(item => item.IsOn) || GetAdditionalProducts().Count > 0))
         {
             StatusText = "O download paralelo Viper aceita um produto e um idioma por vez. Remova produtos/idiomas adicionais ou selecione ODT.";
@@ -348,7 +367,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             ChannelOverride: plan.SupportsSelectableChannel ? SelectedChannel?.Id : null,
             AutoUpdatesEnabled: RequestedAutoUpdatesEnabled,
             AdditionalProducts: GetAdditionalProducts(), DownloadBeforeInstall: DownloadBeforeInstall,
-            UseViperDownload: UseViperOfficeDownload);
+            UseViperDownload: useViperDownload);
         if (DownloadBeforeInstall)
             request = request with { SourcePath = _officeService.GetPayloadCachePath(request) };
 
@@ -431,12 +450,18 @@ public sealed partial class OfficeViewModel : ObservableObject
         OfficeInstallRequest? request = CreateInstallRequest();
         if (request is null)
             return;
+        RefreshInstalledProducts();
+        if (OfficeInstallIdempotence.IsAlreadyInstalled(request, _installedDetector.GetInstalledProducts()))
+        {
+            StatusText = "Os produtos do Office selecionados já estão instalados.";
+            return;
+        }
         StatusText = $"Instalando {request.Plan.DisplayName}...";
         try
         {
             bool success = await OperationRunner.RunOfficeInstallAsync(_queue, _officeService, request);
             StatusText = success
-                ? $"{request.Plan.DisplayName} instalado/reparado com sucesso."
+                ? $"{request.Plan.DisplayName} instalado com sucesso."
                 : "Falha ao instalar o Office. Veja a fila de operações para detalhes.";
             RefreshInstalledProducts();
         }
@@ -533,6 +558,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     public void RefreshInstalledProducts()
     {
         IReadOnlyList<OfficeInstalledProduct> installed = _installedDetector.GetInstalledProducts();
+        _installedProducts = installed;
+        RefreshInstallAvailability();
         OfficeInstalledProduct[] suiteProducts = installed.Where(product => !IsAdditionalProductId(product.ProductId)).ToArray();
         HasInstalledProducts = installed.Count > 0;
         UninstallToolTip = HasInstalledProducts ? "Remover todas as instalações do Office" : "Instale o Office antes de desinstalar.";
@@ -542,10 +569,10 @@ public sealed partial class OfficeViewModel : ObservableObject
         foreach (var (id, name, icon) in OfficeAppCatalog.CoreApps)
         {
             OfficeAppStatusRow row = suiteProducts.Length == 0
-                ? new(name, icon, "Não instalado", "None", "\uE711", GetOfficeIconScale(id))
+                ? new(name, icon, "Não instalado", "None", OfficeIconSizing.GetScale(id))
                 : suiteProducts.Any(product => product.ExcludedApps.Any(excluded => excluded.Equals(id, StringComparison.OrdinalIgnoreCase)))
-                    ? new(name, icon, "Excluído", "Excluded", "\uE7BA", GetOfficeIconScale(id))
-                    : new(name, icon, "Instalado", "Installed", "\uE73E", GetOfficeIconScale(id));
+                    ? new(name, icon, "Excluído", "Excluded", OfficeIconSizing.GetScale(id))
+                    : new(name, icon, "Instalado", "Installed", OfficeIconSizing.GetScale(id));
             if (row.StatusKind == "Installed")
                 installedCount++;
             InstalledApps.Add(row);
@@ -557,7 +584,7 @@ public sealed partial class OfficeViewModel : ObservableObject
                 product.ProductId.Equals(id, StringComparison.OrdinalIgnoreCase) ||
                 product.ProductId.StartsWith(id, StringComparison.OrdinalIgnoreCase));
             InstalledApps.Add(new(name, icon, isInstalled ? "Instalado" : "Não instalado",
-                isInstalled ? "Installed" : "None", isInstalled ? "\uE73E" : "\uE711", GetOfficeIconScale(id)));
+                isInstalled ? "Installed" : "None", OfficeIconSizing.GetScale(id)));
             if (isInstalled)
                 installedCount++;
         }
@@ -603,9 +630,23 @@ public sealed partial class OfficeViewModel : ObservableObject
         }
     }
 
-    private static double GetOfficeIconScale(string id) => id is "Publisher" or "Visio" or "Project" ? 1.8 : 1.0;
     private static bool IsAdditionalProductId(string id) =>
         id.StartsWith("Visio", StringComparison.OrdinalIgnoreCase) || id.StartsWith("Project", StringComparison.OrdinalIgnoreCase);
+}
+
+internal static class OfficeIconSizing
+{
+    // Área desenhada próxima de 90% da caixa; os PNGs têm margens transparentes diferentes.
+    public static double GetScale(string id) => id switch
+    {
+        "Word" => 1.05,
+        "Excel" or "OneNote" => 0.96,
+        "Outlook" or "PowerPoint" => 0.94,
+        "Teams" => 0.93,
+        "Access" => 0.90,
+        "Publisher" or "Visio" or "Project" => 1.8,
+        _ => 1.0
+    };
 }
 
 [WinRT.GeneratedBindableCustomProperty]
@@ -615,7 +656,7 @@ public sealed partial class OfficeAppToggleViewModel : ObservableObject
     public string DisplayName { get; }
     public string CardDisplayName => Id == "PowerPoint" ? "Power\nPoint" : DisplayName;
     public string IconUrl { get; }
-    public double IconScale => Id is "Publisher" or "Visio" or "Project" ? 1.8 : 1.0;
+    public double IconScale => OfficeIconSizing.GetScale(Id);
     public bool IsAdditionalProduct { get; }
 
     [ObservableProperty]
@@ -641,4 +682,4 @@ public sealed partial record OfficeChannelOption(string Id, string Label);
 [WinRT.GeneratedBindableCustomProperty]
 public sealed partial record OfficeSelectorOption(string Id, string Label);
 [WinRT.GeneratedBindableCustomProperty]
-public sealed partial record OfficeAppStatusRow(string DisplayName, string IconUrl, string StatusText, string StatusKind, string StatusGlyph, double IconScale);
+public sealed partial record OfficeAppStatusRow(string DisplayName, string IconUrl, string StatusText, string StatusKind, double IconScale);

@@ -59,12 +59,91 @@ public sealed partial class StorefrontViewModel : INotifyPropertyChanged, IDispo
 
     private static readonly Dictionary<string, string[]> CategoryTagMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["productivity"] = ["productivity", "produtividade", "office", "business", "negócios"],
-        ["development"] = ["development", "developer", "programming", "desenvolvimento", "programação"],
-        ["utilities"] = ["utilities", "tools", "system", "utilitários", "ferramentas", "sistema"],
-        ["multimedia"] = ["multimedia", "photo", "video", "music", "multimídia", "foto", "vídeo", "música"],
-        ["security"] = ["security", "antivirus", "privacy", "segurança", "antivírus", "privacidade"],
+        ["productivity"] =
+        [
+            "productivity", "productivity suite", "office", "office suite", "business", "business tools",
+            "work", "workflow", "task management", "project management", "note taking", "notes", "calendar",
+            "email", "document", "spreadsheet", "presentation", "collaboration", "communication",
+            "produtividade", "suíte de escritório", "escritório", "negócios", "trabalho", "fluxo de trabalho",
+            "gerenciamento de tarefas", "gestão de projetos", "anotações", "notas", "calendário", "documentos",
+            "planilhas", "apresentações", "colaboração", "comunicação"
+        ],
+        ["development"] =
+        [
+            "development", "developer", "dev tools", "programming", "coding", "code editor", "ide",
+            "software development", "web development", "debugging", "version control", "git", "database",
+            "api", "sdk", "terminal", "shell", "virtualization", "container", "devops", "development tools",
+            "desenvolvimento", "desenvolvedor", "ferramentas de desenvolvimento", "programação", "código",
+            "editor de código", "depuração", "controle de versão", "banco de dados", "virtualização", "contêiner"
+        ],
+        ["utilities"] =
+        [
+            "utilities", "utility", "tools", "system", "system tools", "file management", "file manager",
+            "backup", "disk", "storage", "network", "remote access", "automation", "compression", "archive",
+            "clipboard", "keyboard", "mouse", "display", "customization", "tweaks", "monitoring", "hardware",
+            "driver", "drivers", "cleaner", "search", "launcher", "utilities tools", "utilitários", "ferramentas",
+            "sistema", "ferramentas do sistema", "gerenciamento de arquivos", "arquivos", "cópia de segurança",
+            "armazenamento", "rede", "acesso remoto", "automação", "compactação", "área de transferência",
+            "teclado", "personalização", "monitoramento", "hardware", "drivers", "limpeza", "pesquisa", "inicializador"
+        ],
+        ["multimedia"] =
+        [
+            "multimedia", "media", "audio", "music", "video", "photo", "photography", "image", "graphics",
+            "design", "drawing", "painting", "animation", "streaming", "media player", "video editor", "audio editor",
+            "screen recording", "screenshot", "camera", "podcast", "multimídia", "mídia", "áudio", "música",
+            "vídeo", "foto", "fotografia", "imagem", "imagens", "gráficos", "desenho", "pintura", "animação",
+            "reprodução de mídia", "edição de vídeo", "edição de áudio", "gravação de tela", "captura de tela", "câmera"
+        ],
+        ["security"] =
+        [
+            "security", "antivirus", "anti-virus", "endpoint protection", "firewall", "vpn", "privacy", "encryption",
+            "password manager", "authentication", "two-factor", "2fa", "malware", "ransomware", "internet security",
+            "network security", "secure browsing", "identity protection", "segurança", "antivírus", "proteção", "firewall",
+            "privacidade", "criptografia", "gerenciador de senhas", "autenticação", "verificação em duas etapas",
+            "proteção contra malware", "segurança de rede", "navegação segura", "proteção de identidade"
+        ],
+        ["gaming"] =
+        [
+            "game", "games", "gaming", "game store", "games store", "game launcher", "games launcher",
+            "gaming platform", "video game", "video games", "jogo", "jogos", "jogos eletrônicos",
+            "loja de jogos", "plataforma de jogos"
+        ],
+        ["browsers"] =
+        [
+            "browser", "browsers", "web browser", "web browsers", "internet browser", "internet browsers",
+            "web-browser", "internet-browser", "desktop browser", "mobile browser", "browser software", "browser app",
+            "opera-browser", "firefox-browser", "arc-browser", "tor-browser", "zen-browser",
+            "chromium", "gecko", "firefox", "opera", "vivaldi", "brave", "waterfox", "librewolf", "floorp",
+            "web browsing", "internet browsing", "private browser", "privacy browser", "secure browser", "anonymous browser",
+            "web navigator", "internet navigator", "tor browser", "chromium-based browser", "firefox-based browser",
+            "navegador", "navegadores", "navegador web", "navegadores web", "navegador da web",
+            "navegador de internet", "navegadores de internet", "navegação web", "navegação na internet",
+            "navegador para desktop", "navegador privado", "navegador seguro", "navegação privada"
+        ],
     };
+
+    private static readonly Dictionary<string, string[]> FeaturedCategoryAppIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["gaming"] = ["Valve.Steam", "EpicGames.EpicGamesLauncher", "RockstarGames.Launcher", "HydraLauncher.Hydra"],
+        ["security"] = ["Emsisoft.EmergencyKit", "Malwarebytes.Malwarebytes", "ESET.Nod32", "IObit.MalwareFighter"],
+        ["communication"] = ["Microsoft.Teams.Free", "Zoom.Zoom", "SlackTechnologies.Slack", "Discord.Discord"],
+        ["multimedia"] = ["Spotify.Spotify", "VideoLAN.VLC", "OBSProject.OBSStudio", "GIMP.GIMP"],
+        ["utilities"] = ["Microsoft.PowerToys", "M2Team.NanaZip", "ShareX.ShareX", "Rufus.Rufus"],
+        ["productivity"] = ["Obsidian.Obsidian", "Notion.Notion", "TheDocumentFoundation.LibreOffice", "Anki.Anki"],
+        ["development"] = ["Microsoft.VisualStudioCode", "Microsoft.VisualStudio.2022.Community", "Git.Git", "Docker.DockerDesktop"]
+    };
+    private static readonly string[] FeaturedPopularAppIds =
+    [
+        "Devolutions.UniGetUI", "Microsoft.PowerToys", "7zip.7zip", "Google.Chrome"
+    ];
+    private static readonly string[] FeaturedPopularStoreIds =
+    ["9NKSQGP7F2NH", "9WZDNCRFJ3TJ", "9NXQXXLFST89", "9N0866FS04W8"];
+    private static readonly string[] FeaturedBrowserIds =
+    [
+        "Google.Chrome", "Mozilla.Firefox.pt-br", "Vivaldi.Vivaldi", "Opera.Opera",
+        "Microsoft.Edge", "Mozilla.Firefox", "Brave.Brave", "Zen-Team.Zen-Browser", "TorProject.TorBrowser",
+        "Waterfox.Waterfox", "LibreWolf.LibreWolf", "Ablaze.Floorp", "Alex313031.Thorium"
+    ];
 
     // Apenas marcas conhecidas entram nos banners; a lista não limita o catálogo.
     private static readonly string[] FamiliarStoreAppNames =
@@ -423,22 +502,13 @@ public sealed partial class FeaturedCategoryShelf
                 _featuredCatalog = await _featuredCatalogService.LoadAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (_featuredCatalog is not null)
-            {
-                List<AppEntry> curated = ResolveFeaturedApps(_featuredCatalog.Hero)
+            List<AppEntry> curated = _featuredCatalog is null
+                ? []
+                : ResolveFeaturedApps(_featuredCatalog.Hero)
                     .Where(app => !string.IsNullOrWhiteSpace(app.StoreBannerUrl))
                     .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
                     .Take(3)
                     .ToList();
-                if (curated.Count > 0)
-                {
-                    ApplyFeaturedBanners(curated);
-                    _storeBannerWeek = week;
-                    _storeBannersLoaded = true;
-                    UpdatePopularApps();
-                    return;
-                }
-            }
 
             List<AppEntry> availableStoreApps = _allApps
                 .Where(IsEligibleFeaturedStoreApp)
@@ -451,6 +521,7 @@ public sealed partial class FeaturedCategoryShelf
                 if (_storeBannerSearchWeek != week)
                 {
                     var discovered = new System.Collections.Concurrent.ConcurrentBag<AppEntry>();
+                    var storePackageIds = new System.Collections.Concurrent.ConcurrentBag<string>();
                     await Parallel.ForEachAsync(
                         FeaturedStoreSearchTerms,
                         new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = cancellationToken },
@@ -465,8 +536,50 @@ public sealed partial class FeaturedCategoryShelf
                                     discovered.Add(app);
                                 }
                             }
+
+                            try
+                            {
+                                foreach (UpgradablePackage package in await _wingetExecutor.SearchPackagesAsync(
+                                             term, "msstore", exact: false, byId: false, cancellationToken))
+                                    if (!string.IsNullOrWhiteSpace(package.Id))
+                                        storePackageIds.Add(package.Id);
+                            }
+                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[HomePage] Busca WinGet msstore falhou para '{term}': {ex.Message}");
+                            }
                         });
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    if (!storePackageIds.IsEmpty)
+                    {
+                        try
+                        {
+                            foreach (AppEntry app in await _msStoreCatalogService.FetchAsync(
+                                         storePackageIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), cancellationToken))
+                            {
+                                if (IsEligibleFeaturedStoreApp(app))
+                                {
+                                    app.IconUrl = _iconService.ResolveIconUrl(app);
+                                    app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
+                                    discovered.Add(app);
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[HomePage] Falha ao enriquecer produtos msstore do WinGet: {ex.Message}");
+                        }
+                    }
+
                     _searchedStoreBannerApps = discovered.ToList();
                     _storeBannerSearchWeek = week;
                 }
@@ -486,8 +599,10 @@ public sealed partial class FeaturedCategoryShelf
                 .Take(StoreFeaturedCandidatePoolSize)
                 .ToList();
 
-            List<AppEntry> featured = candidatePool
+            List<AppEntry> featured = curated.Concat(candidatePool
                 .OrderBy(app => GetWeeklyBannerOrderKey(app, week), StringComparer.Ordinal)
+                .Take(6))
+                .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
                 .Take(6)
                 .ToList();
 
@@ -554,7 +669,7 @@ public sealed partial class FeaturedCategoryShelf
         app.Source.Equals("msstore", StringComparison.OrdinalIgnoreCase)
         && !string.IsNullOrWhiteSpace(app.StoreBannerUrl)
         && IsFamiliarStoreApp(app)
-        && app.StoreRating is > StoreFeaturedMinimumRating and <= 5
+        && app.StoreRating is >= StoreFeaturedMinimumRating and <= 5
         && app.StoreRatingCount >= StoreFeaturedMinimumRatingCount;
 
     public void SetHeroBanner(int index)
@@ -573,6 +688,8 @@ public sealed partial class FeaturedCategoryShelf
         app.RegionTags.Count == 0 || app.RegionTags.Contains("BR", StringComparer.OrdinalIgnoreCase);
 
     private static bool HasKnownPtBrSupport(AppEntry app) =>
+        string.Equals(app.CatalogDetailBaseUrl, WingetCdnCatalog.BaseUrl.TrimEnd('/'), StringComparison.Ordinal)
+        ||
         string.Equals(app.PackageLocale, "pt-BR", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsFamiliarStoreApp(AppEntry app) =>
@@ -679,15 +796,76 @@ public sealed partial class FeaturedCategoryShelf
         }
     }
 
-    private static bool MatchesCategory(AppEntry app, string[] keywords)
+    private static int GetFeaturedBrowserPriority(string appId)
     {
-        IEnumerable<string> metadata = app.Tags
+        int index = Array.FindIndex(FeaturedBrowserIds,
+            id => id.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? int.MaxValue : index;
+    }
+
+    private IEnumerable<AppEntry> GetFeaturedCategoryApps(
+        string categoryId, List<AppEntry> curatedApps, IEnumerable<AppEntry> tagMatches)
+    {
+        if (!FeaturedCategoryAppIds.TryGetValue(categoryId, out string[]? preferredIds))
+            return curatedApps.Concat(tagMatches.OrderByDescending(app => app.Score));
+
+        List<AppEntry> candidates = _allApps.Concat(curatedApps).ToList();
+        IEnumerable<AppEntry> preferredApps = preferredIds
+            .Select(id => candidates.FirstOrDefault(app => app.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            .OfType<AppEntry>();
+
+        return preferredApps.Concat(curatedApps).Concat(tagMatches.OrderByDescending(app => app.Score));
+    }
+
+    private static bool MatchesCategory(AppEntry app, string category)
+    {
+        if (!CategoryTagMap.TryGetValue(category, out string[]? keywords))
+            return false;
+
+        if (category.Equals("browsers", StringComparison.OrdinalIgnoreCase)
+            && FeaturedBrowserIds.Contains(app.Id, StringComparer.OrdinalIgnoreCase))
+            return true;
+
+        IEnumerable<string[]> metadata = app.Tags
             .Concat((string?[])[app.StoreCategory, app.StoreSubCategory])
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!);
+            .Select(value => NormalizeCategoryWords(value!));
 
-        return metadata.Any(value => keywords.Any(keyword =>
-            value.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
+        string[][] normalizedKeywords = keywords
+            .Select(NormalizeCategoryWords)
+            .Where(words => words.Length > 0)
+            .ToArray();
+
+        return metadata.Any(words => normalizedKeywords.Any(keyword => ContainsWordSequence(words, keyword)));
+    }
+
+    private static string[] NormalizeCategoryWords(string value) => string.Join(' ', value
+        .Normalize(NormalizationForm.FormD)
+        .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+        .Select(char.ToLowerInvariant)
+        .Select(character => char.IsLetterOrDigit(character) ? character : ' '))
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool ContainsWordSequence(string[] words, string[] phrase)
+    {
+        if (phrase.Length == 0 || phrase.Length > words.Length)
+            return false;
+
+        for (int start = 0; start <= words.Length - phrase.Length; start++)
+        {
+            bool matches = true;
+            for (int offset = 0; offset < phrase.Length; offset++)
+                if (!words[start + offset].Equals(phrase[offset], StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+
+            if (matches)
+                return true;
+        }
+
+        return false;
     }
 
     private const int StorePopularMinimumRatingCount = 50;
@@ -706,21 +884,39 @@ public sealed partial class FeaturedCategoryShelf
             foreach (FeaturedCategory category in _featuredCatalog.Categories)
             {
                 var shelf = new FeaturedCategoryShelf { Title = category.Title };
-                foreach (AppEntry app in ResolveFeaturedApps(category.Apps).Take(4))
+                List<AppEntry> curatedApps = ResolveFeaturedApps(category.Apps);
+                IEnumerable<AppEntry> tagMatches = CategoryTagMap.ContainsKey(category.Id)
+                    ? _allApps.Where(app => MatchesCategory(app, category.Id))
+                    : [];
+                IEnumerable<AppEntry> apps = GetFeaturedCategoryApps(category.Id, curatedApps, tagMatches);
+
+                foreach (AppEntry app in apps.DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase).Take(4))
                     shelf.Apps.Add(app);
                 if (shelf.Apps.Count > 0) FeaturedCategories.Add(shelf);
             }
         }
 
-        int limit = _shelfView == ShelfView.Popular ? 48 : 6;
-        List<AppEntry> selectedStoreApps = SelectPopularStoreApps(_allApps.Concat(StoreBannerApps),
-            _shelfView == ShelfView.Store ? 48 : 6);
+        var browserShelf = new FeaturedCategoryShelf { Title = "Navegadores" };
+        foreach (AppEntry app in _allApps
+                     .Where(app => MatchesCategory(app, "browsers"))
+                     .OrderBy(app => GetFeaturedBrowserPriority(app.Id))
+                     .ThenByDescending(app => app.Score)
+                     .ThenByDescending(app => app.GitHubStars ?? 0)
+                     .Take(4))
+            browserShelf.Apps.Add(app);
+        if (browserShelf.Apps.Count > 0)
+            FeaturedCategories.Add(browserShelf);
+
+        int limit = _shelfView == ShelfView.Popular ? 48 : FeaturedPopularAppIds.Length;
+        List<AppEntry> selectedStoreApps = SelectPopularStoreApps(
+            _allApps.Concat(_searchedStoreBannerApps).Concat(StoreBannerApps),
+            _shelfView == ShelfView.Store ? 48 : FeaturedPopularStoreIds.Length);
         HashSet<string> storeProductKeys = selectedStoreApps
             .Select(GetProductIdentityKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         PopularApps.Clear();
-        IEnumerable<AppEntry> ranked = _featuredCatalog is { Popular.Count: > 0 }
+        IEnumerable<AppEntry> catalogPopular = _featuredCatalog is { Popular.Count: > 0 }
             ? ResolveFeaturedApps(_featuredCatalog.Popular)
             : _allApps
                      .Where(app => app.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
@@ -730,6 +926,11 @@ public sealed partial class FeaturedCategoryShelf
                      .OrderByDescending(app => app.Score)
                      .ThenByDescending(app => app.GitHubStars ?? 0)
                      .Take(limit);
+        IEnumerable<AppEntry> preferredPopular = FeaturedPopularAppIds
+            .Select(id => _allApps.FirstOrDefault(app => app.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            .OfType<AppEntry>();
+        IEnumerable<AppEntry> ranked = preferredPopular.Concat(catalogPopular)
+            .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase);
         foreach (AppEntry app in ranked.Take(limit))
             PopularApps.Add(app);
 
@@ -750,7 +951,8 @@ public sealed partial class FeaturedCategoryShelf
                           && app.StoreRating is >= StorePopularMinimumRating and <= 5
                           && app.StoreRatingCount is > 0)
             .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(IsFamiliarStoreApp)
+            .OrderBy(app => GetFeaturedStorePriority(app.Id))
+            .ThenByDescending(IsFamiliarStoreApp)
             .ThenByDescending(GetStoreRatingScore)
             .ThenByDescending(app => app.StoreRatingCount ?? 0)
             .ThenByDescending(app => app.Score)
@@ -775,6 +977,13 @@ public sealed partial class FeaturedCategoryShelf
         }
 
         return popularApps;
+    }
+
+    private static int GetFeaturedStorePriority(string appId)
+    {
+        int index = Array.FindIndex(FeaturedPopularStoreIds,
+            id => id.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? int.MaxValue : index;
     }
 
     private static double GetStoreRatingScore(AppEntry app) =>
@@ -835,7 +1044,7 @@ public sealed partial class FeaturedCategoryShelf
 
         bool categoryBrowsing = string.IsNullOrWhiteSpace(query) && _selectedCategoryTag != "all";
         IEnumerable<AppEntry> source = categoryBrowsing
-            ? InterleaveCatalogSources(MergeProductEntries(_allApps.Concat(StoreBannerApps)
+            ? InterleaveCatalogSources(MergeProductEntries(_allApps.Concat(_searchedStoreBannerApps).Concat(StoreBannerApps)
                 .Where(app =>
                     MatchesSelectedCatalogSource(app)
                     && ((app.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
@@ -844,11 +1053,10 @@ public sealed partial class FeaturedCategoryShelf
                         || (app.Source.Equals("msstore", StringComparison.OrdinalIgnoreCase)
                             && HasRealIcon(app) && HasKnownPtBrSupport(app)
                             && MatchesLocalRegion(app))))
-                .Where(app => CategoryTagMap.TryGetValue(_selectedCategoryTag, out string[]? keywords)
-                              && MatchesCategory(app, keywords))))
+                .Where(app => MatchesCategory(app, _selectedCategoryTag))))
             : string.IsNullOrWhiteSpace(query)
             ? _shelfView == ShelfView.Store
-                ? SelectPopularStoreApps(_allApps.Concat(StoreBannerApps), 48)
+                ? SelectPopularStoreApps(_allApps.Concat(_searchedStoreBannerApps).Concat(StoreBannerApps), 48)
                 : _allApps.Where(app => app.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
                                              && HasRealIcon(app) && HasKnownPtBrSupport(app)
                                              && app.Score >= 25 && MatchesLocalRegion(app))
@@ -856,8 +1064,8 @@ public sealed partial class FeaturedCategoryShelf
                     .ThenByDescending(app => app.GitHubStars ?? 0)
             : GetSearchResults(query);
 
-        if (_selectedCategoryTag != "all" && CategoryTagMap.TryGetValue(_selectedCategoryTag, out string[]? keywords))
-            source = source.Where(app => MatchesCategory(app, keywords));
+        if (_selectedCategoryTag != "all")
+            source = source.Where(app => MatchesCategory(app, _selectedCategoryTag));
 
         source = _catalogSortMode switch
         {
@@ -872,18 +1080,20 @@ public sealed partial class FeaturedCategoryShelf
             Apps.Add(app);
 
         bool searchCompleted = string.IsNullOrWhiteSpace(query)
-            || string.Equals(_liveSearchQuery, query, StringComparison.OrdinalIgnoreCase);
+            || _catalogLoaded;
         HasEmptyResults = results.Count == 0 && searchCompleted;
 
         StatusText = string.IsNullOrWhiteSpace(query)
             ? $"{results.Count} aplicativos nesta categoria."
             : results.Count == 0
-                ? _liveSearchQuery == query ? $"Nenhum resultado para \"{query}\"" : $"Pesquisando fontes de pacotes por \"{query}\"..."
+                ? _catalogLoaded ? $"Nenhum resultado para \"{query}\"" : $"Carregando catálogo para \"{query}\"..."
                 : results.Count == 1 ? "1 resultado." : $"Resultados: {results.Count}";
 
-        if (!string.IsNullOrWhiteSpace(query) &&
-            !string.Equals(_liveSearchQuery, query, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(_searchQueryInFlight, query, StringComparison.OrdinalIgnoreCase))
+        // O WinGet inclui a origem msstore, mas não fornece os metadados visuais da
+        // Store. A Display Catalog completa os resultados em tempo real, como no UniGetUI.
+        if (!string.IsNullOrWhiteSpace(query)
+            && !string.Equals(_liveSearchQuery, query, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(_searchQueryInFlight, query, StringComparison.OrdinalIgnoreCase))
             _ = SearchLiveCatalogsAsync(query);
     }
 
@@ -1095,7 +1305,10 @@ public sealed partial class FeaturedCategoryShelf
             if (query.Length > 0 && _catalogLoaded)
             {
                 StatusText = "Atualizando resultados da pesquisa...";
-                await SearchLiveCatalogsAsync(query);
+                _allApps = await _storeService.LoadCatalogAsync(forceRefresh: true);
+                UpdateCatalogSyncText();
+                SyncInstalledFlags(_allApps);
+                ApplyFilter();
                 return;
             }
 

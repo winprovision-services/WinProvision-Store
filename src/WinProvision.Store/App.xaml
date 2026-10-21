@@ -4,6 +4,8 @@
   <ResourceDictionary>
    <ResourceDictionary.MergedDictionaries><XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" /><ResourceDictionary Source="Styles/Shell.xaml"/><ResourceDictionary Source="Styles/Storefront.xaml"/><ResourceDictionary Source="Styles/OperationsQueue.xaml"/><ResourceDictionary Source="Styles/AppDetails.xaml"/><ResourceDictionary Source="Styles/Updates.xaml"/><ResourceDictionary Source="Styles/InstalledPackages.xaml"/><ResourceDictionary Source="Styles/Office.xaml"/></ResourceDictionary.MergedDictionaries>
    <services:BoolVisibilityConverter x:Key="BoolVisibility"/>
+   <FontFamily x:Key="SymbolThemeFontFamily">ms-appx:///FluentIcons.WinUI/Assets/SeagullFluentIcons.otf#Seagull Fluent Icons</FontFamily>
+   <Style TargetType="FontIcon"><Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}"/></Style>
    <Style x:Key="Description" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
   </ResourceDictionary>
  </Application.Resources>

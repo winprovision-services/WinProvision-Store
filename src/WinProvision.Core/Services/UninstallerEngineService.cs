@@ -186,13 +186,13 @@ public class UninstallerEngineService
 
         string arguments = existingArguments;
 
-        // Se já veio um QuietUninstallString oficial do fabricante, ele já é
-        // silencioso por definição: não anexar nada.
-        if (string.IsNullOrWhiteSpace(app.QuietUninstallString))
-        {
-            InstallerKind kind = DetectInstallerKind(fileName, rawCommand, app.Id);
+        InstallerKind kind = DetectInstallerKind(fileName, rawCommand, app.Id);
+        // O QuietUninstallString de Inno pode conter apenas /SILENT. Diálogos
+        // personalizados criados com SuppressibleMsgBox exigem /SUPPRESSMSGBOXES;
+        // a opção padrão do fornecedor (por exemplo, preservar configurações)
+        // é usada sem pedir uma decisão ao usuário.
+        if (kind == InstallerKind.InnoSetup || string.IsNullOrWhiteSpace(app.QuietUninstallString))
             arguments = AppendSilentSwitches(kind, existingArguments, rawCommand, app.Id);
-        }
 
         // Collision prevention: adquire locks para evitar conflitos
         using var globalLock = await UninstallLockManager.AcquireGlobalUninstallLockAsync(cancellationToken);
@@ -353,31 +353,11 @@ public class UninstallerEngineService
             return await TryIdBasedUninstall(app, cancellationToken);
         }
 
-        // Fallback 1: Tenta sem argumentos adicionais (usando apenas o UninstallString original)
+        // Nunca repetir o UninstallString original sem switches: em muitos pacotes ele
+        // abre uma confirmação (inclusive para apagar configurações do usuário).
+        // Também não misturar switches de motores diferentes em uma mesma tentativa.
+        // O comando silencioso próprio já foi executado acima; resta tentar o ID.
         if (WinProvisionElevationState.HasFailedThisSession) return false;
-        var result1 = await TryRunUninstallProcess(fileName, existingArguments, cancellationToken, true);
-        if (result1.Success)
-            return true;
-        if (WinProvisionElevationState.HasFailedThisSession) return false;
-
-        // Fallback 2: Tenta com parâmetros genéricos mais agressivos
-        var fallbackArgs = $"{existingArguments} /S /silent /quiet /VERYSILENT /SUPPRESSMSGBOXES /NORESTART".Trim();
-        var result2 = await TryRunUninstallProcess(fileName, fallbackArgs, cancellationToken, true);
-        if (result2.Success)
-            return true;
-        if (WinProvisionElevationState.HasFailedThisSession) return false;
-
-        // Fallback 3: Tenta com parâmetros específicos para MSI se for msiexec
-        if (fileName.Contains("msiexec", StringComparison.OrdinalIgnoreCase))
-        {
-            var msiFallback = $"{existingArguments} /x /qn /norestart REBOOT=ReallySuppress".Trim();
-            var result3 = await TryRunUninstallProcess(fileName, msiFallback, cancellationToken, true);
-            if (result3.Success)
-                return true;
-            if (WinProvisionElevationState.HasFailedThisSession) return false;
-        }
-
-        // Fallback 4: Tenta desinstalação baseada no ID se todos os métodos anteriores falharem
         return await TryIdBasedUninstall(app, cancellationToken);
     }
 
@@ -483,6 +463,15 @@ public class UninstallerEngineService
             return InstallerKind.Scoop;
 
         return InstallerKind.Unknown;
+    }
+
+    public static bool HasInnoSetupUninstaller(InstalledAppDetail app)
+    {
+        string command = !string.IsNullOrWhiteSpace(app.QuietUninstallString)
+            ? app.QuietUninstallString : app.UninstallString;
+        return TrySplitCommand(command, out string fileName, out _)
+            && IsSafeUninstallTarget(fileName)
+            && DetectInstallerKind(fileName, command, app.Id) == InstallerKind.InnoSetup;
     }
 
     /// <summary>

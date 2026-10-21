@@ -18,6 +18,9 @@ public partial class App
     {
         if (IsSmokeTest)
         {
+            var historyPath = Path.Combine(SmokeTest.OutputDirectory, "operation-history-test.json");
+            if (File.Exists(historyPath)) File.Delete(historyPath);
+            services.AddSingleton<OperationHistoryService>(_ => new OperationHistoryService(historyPath));
             services.AddSingleton(new OperationPreferencesService(Path.Combine(SmokeTest.OutputDirectory, "operation-preferences-test.json")));
             var testCollections = Path.Combine(SmokeTest.OutputDirectory, "collections-test.json");
             if (File.Exists(testCollections)) File.Delete(testCollections);

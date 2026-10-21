@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FluentIcons.Common;
 using WinProvision.Core.Models;
 
 namespace WinProvision.Store.ViewModels;
@@ -16,11 +17,11 @@ public sealed partial class PackageItemViewModel : ObservableObject
     public string IconUrl => App.IconUrl;
     public string SourceLabel => App.Office is not null || App.Source == "office" ? "Office" :
         App.CatalogSourceLabel;
-    public string SourceGlyph => SourceLabel switch
+    public Icon SourceIcon => SourceLabel switch
     {
-        "Microsoft Store" => "\uE719",
-        "Office" => "\uECA5",
-        _ => "\uE896"
+        "Microsoft Store" => Icon.StoreMicrosoft,
+        "Office" => Icon.Apps,
+        _ => Icon.ArrowDownload
     };
     public string CompatibilityNote => App.IsSelf ? "Disponível para exportação. Atualize o WinProvision Store pelo instalador externo."
         : App.Office is not null

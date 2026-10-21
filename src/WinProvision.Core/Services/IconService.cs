@@ -54,6 +54,11 @@ public partial class IconService
     /// </summary>
     public string ResolveIconUrl(AppEntry app)
     {
+        if (string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase))
+        {
+            return ResolveMicrosoftStoreAssetUrl(app.StoreIconUrl) ?? DefaultIconPackUri;
+        }
+
         if (ResolveCatalogMediaUrl(app, app.Media?.Icon, app.Media?.IconSha256) is { } catalogIcon)
             return catalogIcon;
 
@@ -67,12 +72,15 @@ public partial class IconService
     }
 
     public string? ResolveBannerUrl(AppEntry app) =>
-        ResolveCatalogMediaUrl(app, app.Media?.Banner, app.Media?.BannerSha256)
-        ?? CatalogEndpoints.ResolvePublicUrl(app.StoreBannerUrl);
+        string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase)
+            ? ResolveMicrosoftStoreAssetUrl(app.StoreBannerUrl)
+            : ResolveCatalogMediaUrl(app, app.Media?.Banner, app.Media?.BannerSha256)
+                ?? CatalogEndpoints.ResolvePublicUrl(app.StoreBannerUrl);
 
     public List<string> ResolveScreenshotUrls(AppEntry app)
     {
-        if (app.Media?.Screenshots is { Count: > 0 } paths)
+        if (!string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase)
+            && app.Media?.Screenshots is { Count: > 0 } paths)
         {
             List<string> urls = paths
                 .Select(path => ResolveCatalogMediaUrl(
@@ -86,8 +94,23 @@ public partial class IconService
                 return urls;
         }
 
-        return (app.StoreScreenshotUrls ?? app.ScreenshotUrls ?? [])
-            .Select(url => CatalogEndpoints.ResolvePublicUrl(url)!).ToList();
+        IEnumerable<string?> screenshotUrls = app.StoreScreenshotUrls ?? app.ScreenshotUrls ?? [];
+        return (string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase)
+                ? screenshotUrls.Select(ResolveMicrosoftStoreAssetUrl)
+                : screenshotUrls.Select(url => CatalogEndpoints.ResolvePublicUrl(url)))
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Cast<string>()
+            .ToList();
+    }
+
+    public static string? ResolveMicrosoftStoreAssetUrl(string? value)
+    {
+        string? resolved = CatalogEndpoints.ResolvePublicUrl(value);
+        if (!Uri.TryCreate(resolved, UriKind.Absolute, out Uri? uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || uri.Host.Equals(new Uri(CatalogEndpoints.PublicBaseUrl).Host, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return resolved;
     }
 
     public static string? ResolveCatalogMediaUrl(AppEntry app, string? mediaPath, string? sha256)

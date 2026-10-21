@@ -8,6 +8,7 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -77,6 +78,10 @@ public sealed class PackageManifest
     [JsonPropertyName("version")] public string Version { get; set; } = "";
     [JsonPropertyName("source")] public string Source { get; set; } = "winget";
     [JsonPropertyName("installers")] public List<CatalogInstaller> Installers { get; set; } = [];
+    [JsonIgnore] public string? PublisherUrl { get; set; }
+    [JsonIgnore] public string? LicenseUrl { get; set; }
+    [JsonIgnore] public string? ReleaseNotesUrl { get; set; }
+    [JsonIgnore] public DateTimeOffset? ReleaseDate { get; set; }
 }
 
 /// <summary>Compatibilidade para consumidores antigos do modelo de instalador.</summary>
@@ -161,7 +166,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
     }
 
-    private const string CatalogBaseUrl = CatalogEndpoints.CatalogBaseUrl;
+    private const string CatalogBaseUrl = WingetCdnCatalog.BaseUrl;
     private const string MsStoreCatalogBaseUrl = CatalogBaseUrl + "msstore/";
 
     private static readonly RequestRateLimitPolicy MetadataRateLimit = RequestRateLimitHandler.SharedPolicy;
@@ -174,6 +179,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private readonly string _installRecordsPath;
 
     private PackageIndex? _indexCache;
+    private readonly ConcurrentDictionary<string, (WingetCdnCatalog.App App, DateTimeOffset Expires)> _wingetApps = new(StringComparer.OrdinalIgnoreCase);
     private bool _startupRevalidationScheduled;
     private IReadOnlyDictionary<string, PackageIndexEntry> _catalogEntriesById =
         new Dictionary<string, PackageIndexEntry>(StringComparer.OrdinalIgnoreCase);
@@ -230,70 +236,39 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 ScheduleStartupRevalidation();
                 return _indexCache;
             }
-
-            if (!forceRefresh && _indexCache is null)
+            if (!forceRefresh && File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath))
             {
-                var diskCache = await ReadCacheFileAsync<PackageIndex>(IndexCachePath, ct);
-                if (diskCache is not null)
+                try
                 {
-                    try
-                    {
-                        ValidateIndex(diskCache);
-                        DateTimeOffset writtenAt = new(File.GetLastWriteTimeUtc(IndexCachePath));
-                        TimeSpan age = DateTimeOffset.UtcNow - writtenAt;
-                        if (age >= TimeSpan.Zero && age < MaxStaleCacheAge)
-                        {
-                            _indexCache = diskCache;
-                            _catalogEntriesById = diskCache.Packages
-                                .ToDictionary(entry => CatalogEntryKey(entry.Source, entry.Id), StringComparer.OrdinalIgnoreCase);
-                            ScheduleStartupRevalidation();
-                            return diskCache;
-                        }
-                    }
-                    catch (InvalidDataException)
-                    {
-                        // Cache local corrompido: consulta a origem e o substitui se ela responder.
-                    }
+                    var local = WingetCdnCatalog.ParseSnapshot(await File.ReadAllBytesAsync(WingetCatalogCachePath, ct),
+                        await File.ReadAllBytesAsync(WingetSearchCachePath, ct));
+                    _indexCache = BuildIndex(local);
+                    ScheduleStartupRevalidation();
+                    return _indexCache;
                 }
+                catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException) { }
             }
-
             try
             {
-                var sourceIndexes = await Task.WhenAll(
-                    LoadSourceIndexAsync("winget", CatalogBaseUrl, _indexCache, ct),
-                    LoadSourceIndexAsync("msstore", MsStoreCatalogBaseUrl, _indexCache, ct));
-                var combined = sourceIndexes.SelectMany(result => result.Entries).ToList();
-                DateTimeOffset generatedAt = sourceIndexes.Max(result => result.Manifest.GeneratedUtc);
-
-                var index = new PackageIndex
-                {
-                    Schema = 2,
-                    GeneratedAt = generatedAt,
-                    Count = combined.Count,
-                    Packages = combined,
-                    SourceIndexHashes = sourceIndexes.ToDictionary(
-                        result => result.Source,
-                        result => result.Manifest.IndexSha256,
-                        StringComparer.OrdinalIgnoreCase)
-                };
-                ValidateIndex(index);
-                _indexCache = index;
-                _catalogEntriesById = index.Packages
-                    .ToDictionary(entry => CatalogEntryKey(entry.Source, entry.Id), StringComparer.OrdinalIgnoreCase);
-                await WriteCacheFileAsync(IndexCachePath, WinProvision.Core.Services.AotJson.Serialize(index), ct);
+                var snapshot = await WingetCdnCatalog.LoadIndexAsync(_http, ct);
+                if (_indexCache?.SourceIndexHashes.GetValueOrDefault("winget") == snapshot.IndexSha256)
+                    return _indexCache;
+                _indexCache = BuildIndex(snapshot);
+                Directory.CreateDirectory(_cacheDir);
+                await AtomicFile.WriteAllBytesAsync(WingetSearchCachePath, snapshot.IndexBytes, ct);
+                await AtomicFile.WriteAllBytesAsync(WingetCatalogCachePath, snapshot.CatalogBytes, ct);
+                _wingetApps.Clear();
                 _startupRevalidationScheduled = true;
-                return index;
+                return _indexCache;
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException or JsonException or InvalidDataException)
             {
-                var cached = await ReadCacheFileAsync<PackageIndex>(IndexCachePath, ct);
-                if (cached is not null && IsRecentCache(IndexCachePath))
+                if (File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath)
+                    && IsRecentCache(WingetCatalogCachePath))
                 {
-                    ValidateIndex(cached);
-                    _indexCache = cached;
-                    _catalogEntriesById = cached.Packages
-                        .ToDictionary(entry => CatalogEntryKey(entry.Source, entry.Id), StringComparer.OrdinalIgnoreCase);
-                    return cached;
+                    var cached = WingetCdnCatalog.ParseSnapshot(await File.ReadAllBytesAsync(WingetCatalogCachePath, ct),
+                        await File.ReadAllBytesAsync(WingetSearchCachePath, ct));
+                    return _indexCache = BuildIndex(cached);
                 }
                 throw new HttpRequestException("Não foi possível consultar a API e não há índice local recente disponível.", ex);
             }
@@ -304,13 +279,43 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
     }
 
+    private string WingetCatalogCachePath => Path.Combine(_cacheDir, "winget-v1-catalog.json");
+    private string WingetSearchCachePath => Path.Combine(_cacheDir, "winget-v1-search.json");
+
+    private PackageIndex BuildIndex(WingetCdnCatalog.Snapshot snapshot)
+    {
+        var index = new PackageIndex
+        {
+            Schema = 3, GeneratedAt = snapshot.GeneratedAt, Count = snapshot.Apps.Count,
+            Packages = snapshot.Apps.Select(app => new PackageIndexEntry
+            {
+                Id = app.Id, Version = app.Version, Source = "winget", Architectures = app.Architectures,
+                ManifestPath = app.CatalogDetailPath, ManifestSha256 = app.CatalogDetailSha256
+            }).ToList(),
+            SourceIndexHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                { ["winget"] = snapshot.IndexSha256 }
+        };
+        _catalogEntriesById = index.Packages.ToDictionary(entry => CatalogEntryKey(entry.Source, entry.Id),
+            StringComparer.OrdinalIgnoreCase);
+        return index;
+    }
+
     /// <summary>Verifica cada catálogo remoto individualmente.</summary>
     public async Task<CatalogApiHealth> CheckCatalogHealthAsync(CancellationToken ct = default)
     {
-        var sources = await Task.WhenAll(
-            CheckSourceHealthAsync("WinGet", "winget", CatalogBaseUrl, ct),
-            CheckSourceHealthAsync("Microsoft Store", "msstore", MsStoreCatalogBaseUrl, ct));
-        return new CatalogApiHealth(DateTimeOffset.UtcNow, sources);
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            var snapshot = await WingetCdnCatalog.LoadIndexAsync(_http, ct);
+            return new CatalogApiHealth(DateTimeOffset.UtcNow,
+                [new CatalogSourceHealth("WinGet", true, snapshot.Apps.Count, snapshot.GeneratedAt, clock.Elapsed, null)]);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException)
+        {
+            return new CatalogApiHealth(DateTimeOffset.UtcNow,
+                [new CatalogSourceHealth("WinGet", false, null, null, clock.Elapsed, ex.Message)]);
+        }
     }
 
     /// <summary>Remove os índices, detalhes e instaladores em cache local, sem tocar nos catálogos remotos.</summary>
@@ -332,6 +337,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                     Directory.Delete(_cacheDir, recursive: true);
                 Directory.CreateDirectory(_cacheDir);
                 _indexCache = null;
+                _wingetApps.Clear();
                 _catalogEntriesById = new Dictionary<string, PackageIndexEntry>(StringComparer.OrdinalIgnoreCase);
             }
             finally
@@ -442,15 +448,40 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         catch (Exception exception) { CoreLog.Warning(exception, "RevalidateCatalogIndex"); }
     }
 
-    public async Task<PackageManifest?> GetPackageAsync(string id, CancellationToken ct = default, string? source = null)
+    public async Task<PackageManifest?> GetPackageAsync(string id, CancellationToken ct = default,
+        string? source = null, string? version = null)
     {
-        try { return await GetPackageCoreAsync(id, ct, source).ConfigureAwait(false); }
+        try { return await GetWingetPackageCoreAsync(id, ct, source, version).ConfigureAwait(false); }
         catch (Exception exception) when (HasIntegrityFailure(exception))
         {
             ct.ThrowIfCancellationRequested();
             await GetIndexAsync(forceRefresh: true, ct).ConfigureAwait(false);
-            return await GetPackageCoreAsync(id, ct, source).ConfigureAwait(false);
+            return await GetWingetPackageCoreAsync(id, ct, source, version).ConfigureAwait(false);
         }
+    }
+
+    private async Task<PackageManifest?> GetWingetPackageCoreAsync(string id, CancellationToken ct,
+        string? source, string? version)
+    {
+        if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)) return null;
+        await GetIndexAsync(ct: ct).ConfigureAwait(false);
+        if (!_catalogEntriesById.TryGetValue(CatalogEntryKey("winget", id), out var entry)) return null;
+        WingetCdnCatalog.App app;
+        if (_wingetApps.TryGetValue(id, out var cached) && cached.Expires > DateTimeOffset.UtcNow)
+            app = cached.App;
+        else
+        {
+            var summary = new AppEntry
+            {
+                Id = entry.Id, Source = "winget", Name = entry.Id, Version = entry.Version,
+                CatalogDetailPath = entry.ManifestPath,
+                CatalogDetailSha256 = entry.ManifestSha256,
+                CatalogDetailCatalogSha256 = _indexCache?.SourceIndexHashes.GetValueOrDefault("winget")
+            };
+            app = await WingetCdnCatalog.LoadAppAsync(_http, summary, ct).ConfigureAwait(false);
+            _wingetApps[id] = (app, DateTimeOffset.UtcNow.AddMinutes(5));
+        }
+        return await WingetCdnCatalog.LoadVersionAsync(_http, app, version, ct).ConfigureAwait(false);
     }
 
     private static bool HasIntegrityFailure(Exception exception)
@@ -798,7 +829,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             _ => new[] { "x86" }
         };
 
-        foreach (var arch in order)
+        foreach (var arch in preferred.HasValue ? order.Take(1) : order)
         {
             // Dentro da mesma arquitetura, prefere um installer com silentSupported=true
             // (ex.: pacote que publica tanto um .exe quanto um .zip pra mesma arch) —
@@ -836,7 +867,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             return available;
 
         var matching = available.Where(i => string.Equals(i.Scope, target, StringComparison.OrdinalIgnoreCase)).ToList();
-        return matching.Count > 0 ? matching : available;
+        return matching.Count > 0 ? matching : available.Where(i => string.IsNullOrWhiteSpace(i.Scope));
     }
 
     /// <summary>
@@ -852,19 +883,21 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         Action<InstallProgressUpdate>? onProgress = null,
         string? source = null,
         bool requiresElevation = false,
-        bool elevationProhibited = false)
+        bool elevationProhibited = false,
+        PackageManifest? suppliedManifest = null,
+        string? requestedVersion = null)
     {
         onLog?.Report($"[WinProvisionAPI] Consultando manifest de '{packageId}'...");
         PackageManifest? manifest;
         try
         {
-            manifest = await GetPackageAsync(packageId, ct, source).ConfigureAwait(false);
+            manifest = suppliedManifest ?? await GetPackageAsync(packageId, ct, source, requestedVersion).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or TaskCanceledException)
         {
             return new WinProvisionInstallResult(WinProvisionInstallOutcome.DownloadFailed,
                 Message: $"Falha ao consultar o catálogo da API própria: {ex.Message}");
@@ -1007,10 +1040,21 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
             onLog?.Report($"[WinProvisionAPI] Instalando formato {effectiveType} (silent: {installer.SilentArgs})...");
             onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Installing, Method: WingetMethod.OwnApi));
+            bool installerRequiresElevation = installer.ElevationRequirement switch
+            {
+                "elevationRequired" or "elevatesSelf" => true,
+                "elevationProhibited" => false,
+                _ => requiresElevation
+            };
+            bool installerProhibitsElevation = installer.ElevationRequirement switch
+            {
+                "elevationProhibited" => true,
+                "elevationRequired" or "elevatesSelf" => false,
+                _ => elevationProhibited
+            };
             var exitCode = await RunInstallerAsync(runnablePath, effectiveType, installer.SilentArgs ?? string.Empty, installer.Scope ?? effectiveScope ?? string.Empty, ct,
                 () => installerStarted = true, line => onLog?.Report(line),
-                requiresElevation || installer.ElevationRequirement is "elevationRequired" or "elevatesSelf",
-                elevationProhibited || installer.ElevationRequirement == "elevationProhibited");
+                installerRequiresElevation, installerProhibitsElevation);
 
             // Códigos padrão do Windows Installer/Burn mais os códigos de sucesso
             // adicionais declarados no manifesto WinGet.
@@ -1024,7 +1068,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (ViperIntegrityException ex)
         {
-            return new WinProvisionInstallResult(WinProvisionInstallOutcome.HashMismatch, Message: ex.Message,
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.HashMismatch,
+                Message: $"O catálogo do instalador está temporariamente desatualizado: o fornecedor já entrega bytes diferentes para a URL publicada. O arquivo foi descartado sem instalação; tente novamente após a próxima sincronização do catálogo. Detalhes: {ex.Message}",
                 InstallerStarted: installerStarted);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)

@@ -2,7 +2,7 @@
 
 **Atualizações é a página de referência visual do projeto.** Novas páginas e refinamentos devem seguir sua composição, medidas, hierarquia e comportamento dos controles, adaptando o conteúdo à função de cada tela.
 
-O padrão utiliza ícones nativos do WinUI 3, fundo Mica na janela, superfícies de tema do sistema, pesquisa arredondada e botões de visualização arredondados.
+O padrão utiliza Fluent UI System Icons através de FluentIcons.WinUI, fundo Mica na janela, superfícies de tema do sistema, pesquisa arredondada e botões de visualização arredondados.
 
 ## Referência e arquivos
 
@@ -123,32 +123,31 @@ Preserve o tamanho e o formato internos dos checkboxes nativos. O raio `8` usado
 
 ## 5. Ícones
 
-Use `SymbolIcon` ou `FontIcon` nativos. Em `FontIcon`, use sempre `FontFamily="{ThemeResource SymbolThemeFontFamily}"`.
+Use `FluentIcon` do pacote `FluentIcons.WinUI` nos ícones funcionais da interface. Use a variante `Color` somente quando o nome e o tamanho do ícone estiverem publicados na lista oficial [Fluent UI System Icons — Color](https://github.com/microsoft/fluentui-system-icons/blob/main/icons_color.md); nos demais casos, use `Regular`. Vincule ícones dinâmicos pelo enum `FluentIcons.Common.Icon`, sem códigos PUA ou `SymbolIcon`. A família `Seagull Fluent Icons` do pacote é aplicada a controles nativos que ainda criem `FontIcon` internamente. Não use outras fontes de ícones.
 
 | Uso | Tamanho habitual |
 | --- | --- |
 | Navegação e ações da janela | `20`, usando os estilos de Shell |
-| Cabeçalho da página | `20`, dentro do tile `40 × 40` |
+| Cabeçalho da página | `24`, dentro do tile `40 × 40` |
 | Ações e filtros | `16` |
 | Mais ações | `18` |
 | Metadados | `14–16`, com espaço próprio na coluna |
 | Ordenação | `11–12` |
 
-| Significado | Glyph nativo |
+| Significado | Nome em `FluentIcons.Common.Icon` |
 | --- | --- |
-| Aplicativo sem imagem — Package | `E7B8` |
-| Lista — List | `EA37` |
-| Cartões — ViewAll | `E8A9` |
-| Ícones — Tiles | `ECA5` |
-| Pesquisa — Search | `E721` |
-| Filtros — Filter | `E71C` |
-| Recarregar — Refresh | `E72C` |
-| Atualizar — Sync | `E895` |
-| Detalhes — Info | `E946` |
+| Aplicativo sem imagem | `Apps` |
+| Lista | `TextBulletList` |
+| Cartões | `Grid` |
+| Pesquisa | `Search` |
+| Filtros | `Filter` |
+| Recarregar | `ArrowClockwise` |
+| Atualizar | `ArrowSync` |
+| Detalhes | `Info` |
 
-Utilize os ícones e as fontes nativas do Windows nas páginas padronizadas. O glyph deve pertencer à fonte nativa utilizada.
+Utilize apenas ícones Fluent UI nas páginas padronizadas. Aplique `Color` aos ícones funcionais com variante oficial colorida, especialmente navegação, categorias e cabeçalhos; use `Regular` nos controles compactos sem versão colorida. Use imagens separadas somente para as marcas e ícones reais dos aplicativos do catálogo.
 
-Para um ícone de ação de `16`, prefira `FontIcon FontSize="16"`. Um `SymbolIcon` com desenho nativo de `20` pode ficar recortado se receber uma caixa de `16 × 16`.
+Para um ícone de ação de `16`, prefira `FluentIcon IconSize="Size16"`. Um desenho de `20` pode ficar recortado se receber uma caixa de `16 × 16`.
 
 As imagens reais dos aplicativos permanecem imagens. O fallback deve ser Package; a URI do bitmap genérico herdado deve passar por `UpdatePackageIconUrlConverter` para que o ícone nativo seja exibido. Preserve `Stretch="Uniform"`, centralização e uma área fixa para o ícone.
 
@@ -175,13 +174,16 @@ Atualizações, Instalados e Coleções compartilham o estilo `PageFilterSearchB
 
 ```xml
 <AutoSuggestBox Height="36"
-                QueryIcon="Find"
                 CornerRadius="{StaticResource UpdatesSearchCornerRadius}"
                 TextBoxStyle="{StaticResource UpdatesSearchTextBoxStyle}"
                 HorizontalContentAlignment="Stretch"
                 VerticalContentAlignment="Center"
                 PlaceholderText="Pesquisar nome ou ID e pressionar Enter..."
-                AutomationProperties.Name="Pesquisar aplicativos" />
+                AutomationProperties.Name="Pesquisar aplicativos">
+    <AutoSuggestBox.QueryIcon>
+        <ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size16" />
+    </AutoSuggestBox.QueryIcon>
+</AutoSuggestBox>
 ```
 
 O filtro aplicado, o contador e a lista devem representar o mesmo conjunto. Uma mudança de seleção não deve apagar o texto de pesquisa. Preserve a forma de aplicação escolhida pela página — ao digitar ou ao pressionar Enter — e use um placeholder que explique esse comportamento.
@@ -216,8 +218,7 @@ Os botões usam `34 × 32`, raio `14`, ícone de `16` e `UpdatesViewModeToggleSt
               CornerRadius="{StaticResource UpdatesViewModeCornerRadius}"
               ToolTipService.ToolTip="Visualização em lista"
               AutomationProperties.Name="Visualização em lista">
-    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
-              Glyph="&#xEA37;" FontSize="16" />
+    <ic:FluentIcon Icon="TextBulletList" IconVariant="Regular" IconSize="Size16" />
 </ToggleButton>
 ```
 

@@ -2,7 +2,12 @@
 
 Este documento registra as regras de compatibilidade do WinProvision Store.
 
+`installation-preferences.json` continua armazenando o enum textual `PreferredMethod`; o novo valor opcional `WinGetPkgsViper` seleciona a consulta direta ao WinGet-Pkgs. Arquivos anteriores mantêm o comportamento atual, com `Automatic` como padrão.
+O histórico pode registrar o novo método `WinGetPkgsViper`; os valores existentes do enum preservam suas posições.
+
 ## Sessões do WinProvision Viper
+
+A preferência `UseViperOfficeDownload` em `app-preferences.json` e nas configurações portáteis é opcional e assume `false` (ODT) em arquivos anteriores. Ela determina o downloader usado em novas configurações criadas na página Office; o campo `useViperDownload` já salvo em cada configuração Office continua sendo respeitado.
 
 O módulo independente usa arquivos adjacentes ao destino: `.viper.part`, `.viper.json` e `.viper.lock`. O checkpoint JSON (source generation para Native AOT) contém `Format=1`, `SourceFingerprint`, `ETag`, `Length`, `PieceSize` e `Completed` (lista de `Index` e `Sha256`). `SourceFingerprint` é SHA-256 da URL e dos cabeçalhos normalizados; não armazena esses valores em texto. O checkpoint nunca é um formato de coleção, configuração do app ou sessão `.aria2`.
 
@@ -10,7 +15,7 @@ Partes concluídas são sincronizadas no disco antes de substituir atomicamente 
 
 ## Preferências e coleções
 
-`%LOCALAPPDATA%/WinProvisionStoreWinUI3/operation-preferences.json` contém `NotifyUpdates`, `NotifyErrors`, `NotifySuccess` e `NotifyBatchSummary` (booleanos, padrão `true`), `ParallelOperations` (1 a 4, padrão 1), `ParallelDownloads` (1 a 8, padrão 3), `DownloadDirectory` (caminho absoluto ou nulo para o padrão) e `InstallerNames` (`Original=0`, `PackageVersion=1`, `PackageVersionArchitecture=2`, padrão 1). Campos ausentes preservam os padrões; arquivos inválidos são ignorados. A gravação valida antes da substituição atômica. Não inclui credenciais nem altera os perfis de aplicativos.
+`%LOCALAPPDATA%/WinProvisionStoreWinUI3/operation-preferences.json` contém `NotifyUpdates`, `NotifyErrors`, `NotifySuccess` e `NotifyBatchSummary` (booleanos, padrão `true`), `ParallelOperations` (1 a 4, padrão 1), `ParallelDownloads` (1 a 8, padrão 3), `DownloadDirectory` (caminho absoluto ou nulo para o padrão), `InstallerNames` (`Original=0`, `PackageVersion=1`, `PackageVersionArchitecture=2`, padrão 1) e `WarnInstallerHostChange` (booleano, padrão `true`). Campos ausentes preservam os padrões; arquivos inválidos são ignorados. A gravação valida antes da substituição atômica. Não inclui credenciais nem altera os perfis de aplicativos. Avisos de sucesso em lote requerem ambas as preferências `NotifySuccess` e `NotifyBatchSummary`; notificações de falha são controladas por `NotifyErrors`.
 
 Downloads avulsos passam a considerar a pasta configurada quando não há destino explícito. Na interface, sem pasta configurada, a seleção por lote é preservada; na CLI, usa-se Downloads. Instaladores concluídos são publicados sem sobrescrever arquivos anteriores; colisões recebem ` (1)`, ` (2)` etc. Sem versão resolvida, o nome nativo do WinGet acompanha o ID para preservar as informações disponíveis. Manifestos auxiliares mantêm seus nomes. Mídia offline, cache interno e atualização do próprio app preservam seus layouts e destinos. Os contratos JSON e códigos de saída da CLI não mudam.
 
@@ -22,9 +27,13 @@ O arquivo por usuário `elevation-preferences.json` registra `allowElevation` (b
 
 Preferências de agendamento preservam os valores existentes de `UpdateSchedule` (`AtLogon=0`, `Daily=1`, `Weekly=2`) e acrescentam `Interval=3`. `UpdateIntervalMinutes` aceita de 15 a 1440, com padrão de 60; `UpdateNotificationsEnabled` usa `true` quando ausente; `UpdateScheduleAnchorUtc` é opcional e registra a configuração da agenda para estimar a próxima execução. Dados antigos mantêm sua agenda. Esses campos são compartilhados pela interface e pela CLI e usam serialização preparada para Native AOT.
 
+`app-preferences.json` também contém `AutomaticCloudBackupEnabled` (booleano, padrão `true` quando ausente). Ele controla apenas o envio automático ao Gist após mudanças nas coleções; o backup local automático e o botão de backup manual continuam disponíveis. O formato do perfil e os contratos da CLI permanecem iguais.
+
 O arquivo local `background-update-state.json` armazena `StartedUtc`, `CompletedUtc`, `ExitCode`, `Available` e `Fingerprint`. Ele não altera as coleções nem o contrato JSON público da CLI; ausência ou arquivo inválido não impedem abrir as configurações. A impressão digital identifica o conjunto de IDs, origens e versões disponíveis, sem armazenar saídas brutas de serviços.
 
 Atualizações devem preservar as coleções, os identificadores dos aplicativos e as preferências existentes. Campos opcionais ausentes recebem o comportamento padrão documentado.
+
+`%LOCALAPPDATA%/WinProvisionStore/operation-history.json` mantém os campos existentes e acrescenta `StartedAt` (data opcional) e `Details` (saída da operação, limitada aos 16.384 caracteres finais). Entradas antigas sem esses campos continuam legíveis, com início e duração indicados como não registrados. O texto estruturado em `operation-tasks.log` é separado desse JSON, rotaciona a partir de 10 MiB e é apagado junto com o histórico. Os detalhes seguem a redação de dados sensíveis já aplicada ao log da operação.
 
 Ao importar um arquivo, valide seu formato antes de modificar dados ou iniciar operações. Não interprete arquivos arbitrários como listas de instalação.
 
@@ -61,6 +70,35 @@ O helper de elevação acompanha cada host em `Tool/gsudo`, com licença e inven
 Na 1.0.5, o executável do helper passa a `WinProvision Elevator.exe`. A pasta `cli` da distribuição deve ser preservada para a CLI autônoma. O campo opcional `installers[].elevationRequirement` aceita os requisitos WinGet `elevationRequired`, `elevatesSelf` e `elevationProhibited`; sua ausência mantém a leitura dos catálogos anteriores e a consulta de metadados COM quando disponível. Na 1.0.6, a COM delega a execução administrativa ao WinGet CLI elevado pelo helper; o worker privado da 1.0.5 é removido, sem alterar os comandos públicos ou dados salvos.
 
 ## Catálogo remoto
+
+### Contrato ativo da CDN WinGet
+
+A CDN pública é servida por `https://cdn.winprovisionstore.com.br/winget/v1/`, a partir do bucket `wps-cdn`. A raiz `v1` identifica a versão do contrato, não a versão dos pacotes. A API WinProvision e o cliente WinGet compartilham os mesmos objetos publicados. O layout canônico por pacote segue a convenção de identificador/versão do WinGet-Pkgs:
+
+```text
+winget/v1/
+  catalog.json
+  search/<sha256>.json           # índice compacto e imutável para busca
+  manifests/<partição>/<publisher>/<pacote>/
+    app.json                     # identidade do app e versões disponíveis
+    versions/<versão>/app.json   # metadados, mídia e instaladores da versão
+    media/                       # mídia compartilhada pelo pacote
+  media/sha256/<prefixo>/<hash>.<ext>
+```
+
+`<partição>` é o primeiro caractere alfanumérico do `PackageIdentifier`, minúsculo; `_` representa identificadores que começam com outro caractere. Publisher, pacote e versão preservam a grafia oficial nos dados, mas segmentos de caminho devem ser escapados e validados para impedir traversal, separadores e colisões sem distinção de maiúsculas/minúsculas. Por exemplo, `7zip.7zip` usa `manifests/7/7zip/7zip/`.
+
+`catalog.json` é o ponteiro pequeno da publicação. Deve registrar versão do esquema, geração, commit de origem, instante UTC, contagens, caminho/tamanho/SHA-256 do índice e, opcionalmente, assinatura do catálogo. O caminho do índice inclui seu SHA-256 (`search/<sha256>.json`), permitindo cache longo sem alterar o objeto ativo. O `app.json` geral mantém identidade estável, metadados de busca/apresentação, `latestVersion`, arquiteturas disponíveis e a lista de versões com `detailPath` e SHA-256 do detalhe. Cada detalhe tem hash publicado e fica no caminho por versão, por exemplo `manifests/7/7zip/7zip/versions/26.04/app.json`. Metadados que descrevem uma release específica, incluindo `publisherUrl`, `licenseUrl`, `releaseDate` e `releaseNotesUrl`, ficam no detalhe da versão, não na identidade geral do app. `security` não é duplicado no índice: a decisão de elevação é tomada a partir de `elevationRequirement` de cada instalador no detalhe cuja integridade foi validada. Cada detalhe preserva `id`, `version`, `source` e `installers` compatíveis com o modelo atual; cada instalador mantém URL, arquitetura, tipo e SHA-256 verificado.
+
+Todos os JSONs cujo SHA-256 é publicado usam **WPS Canonical JSON v1**: UTF-8 sem BOM; objetos serializados com nomes de propriedade em ordem lexicográfica crescente; arrays preservam a ordem definida pelo contrato/origem; sem espaços de formatação; sem quebra de linha final; números de ponto flutuante, `NaN` e infinitos são proibidos. Strings são emitidas em UTF-8, sem escape ASCII desnecessário. O SHA-256 é calculado sobre os bytes exatos enviados à CDN. O produtor deve gerar os mesmos bytes para o mesmo conteúdo semântico; qualquer alteração nessa regra exige uma nova versão de canonicalização e validação de compatibilidade.
+
+Ícones e screenshots ficam uma vez no diretório `media` do pacote e são compartilhados por todas as versões. Os metadados usam caminhos relativos, SHA-256 e tipo MIME; o publicador verifica a mídia existente no R2 antes de enviar e não substitui bytes divergentes. Uma futura deduplicação entre pacotes pode migrar os arquivos para um espaço content-addressed sem alterar o conteúdo dos detalhes de versão.
+
+O índice de busca contém apenas campos de busca e apresentação, como ID, nome, publisher, descrição curta, tags, versão mais recente e caminho do `app.json` geral. O `app.json` geral lista os detalhes e seus hashes. O cliente baixa e mantém o índice em cache local, pesquisa em memória e busca o app, detalhes e mídia sob demanda. O índice só será particionado se medições mostrarem que o arquivo único prejudica o tempo de atualização ou a memória.
+
+Publicação segue uma ordem segura: workflows processam mudanças do repositório desde o último commit, reutilizam mídia por hash, geram e validam somente os detalhes e índices afetados, enviam detalhes e `app.json` antes do índice imutável e atualizam `catalog.json` por último. Uma reconciliação completa periódica confere a origem contra o bucket. Como os caminhos dos detalhes e do app geral são estáveis por contrato, usam cache curto de cinco minutos; índices content-addressed recebem cache longo e `catalog.json` revalidação de um minuto. Escrita no bucket usa credencial restrita do workflow, nunca distribuída no app. HTTPS/TLS 1.2+ é obrigatório. Hashes detectam corrupção; para provar autenticidade contra substituição maliciosa do catálogo, o cliente deve validar uma assinatura com chave pública embutida no app.
+
+O cliente e a API própria consomem `winget/v1`; a busca da vitrine consulta ainda a origem WinGet `msstore` e enriquece seus resultados pela Display Catalog da Microsoft. Ícones, banners e capturas da Store usam URLs retornadas pela API e não são publicados como mídia no R2. O índice WinGet contém também `icon` (caminho relativo e SHA-256), `score` e `locale` para apresentar os resultados sem baixar todos os `app.json` gerais. Cada entrada do índice fixa `appSha256`; o `app.json` geral fixa o SHA-256 de cada detalhe por versão. A API só usa instaladores depois dessas verificações. O cache local usa nomes separados dos arquivos do catálogo anterior.
 
 Na 1.0.7, o host COM privado v2 substitui a delegação administrativa para CLI: usa o SDK oficial InProcCom no processo elevado pelo Elevator. Os comandos públicos e formatos salvos não mudam. A distribuição completa inclui `Tool/winget-com` na interface e na CLI. As atualizações próprias preservam o escopo/diretório da instalação e aguardam autorização antes de fechar a interface.
 

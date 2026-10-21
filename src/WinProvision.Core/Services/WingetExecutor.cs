@@ -71,13 +71,6 @@ public class WingetExecutor
         string? customArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (ignoreSecurityHash)
-            return new WingetExecutionResult
-            {
-                Success = false, ExitCode = -1,
-                Output = "A verificação de integridade é obrigatória; ignorar hashes não é suportado.",
-                FailureReason = WingetFailureReason.InstallerHashMismatch
-            };
         // Garante a resolução do WinGet para o
         // caminho da UI (usuário clicando "Instalar" no executável, sem CLI): a primeira
         // instalação da sessão confirma que o winget está funcional (e baixa/instala o que
@@ -120,6 +113,7 @@ public class WingetExecutor
 
         string args = $"install --id {QuoteArgument(appId)} --exact --source {QuoteArgument(source)}";
         if (!string.IsNullOrWhiteSpace(version)) args += $" --version {QuoteArgument(version)}";
+        if (ignoreSecurityHash) args += " --ignore-security-hash";
         if (!string.IsNullOrWhiteSpace(customArguments)) args += $" --custom {QuoteArgument(customArguments)}";
         // Store packages are licensed and installed through the Store service. Forcing
         // silent mode can suppress the Store hand-off/consent UI and leave the request
@@ -459,8 +453,8 @@ public class WingetExecutor
     /// Atualiza um pacote específico via "winget update" (alias de "winget upgrade"),
     /// silenciosamente e sem interação — mesmos argumentos usados no InstallAppAsync,
     /// mais --include-unknown (necessário pro winget atualizar apps cuja versão instalada
-    /// ele não consegue detectar com certeza) e --force para questões não relacionadas à
-    /// segurança, sem desativar a verificação de integridade do WinGet atual.
+    /// ele não consegue detectar com certeza) e --force. O hash só é ignorado quando
+    /// solicitado explicitamente para esta operação.
     /// </summary>
     public async Task<WingetExecutionResult> UpdateAppAsync(
         string appId,
@@ -472,16 +466,10 @@ public class WingetExecutor
         bool requiresElevation = false,
         bool elevationProhibited = false,
         bool interactive = false,
-        bool ignoreSecurityHash = false)
+        bool ignoreSecurityHash = false,
+        string? version = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (ignoreSecurityHash)
-            return new WingetExecutionResult
-            {
-                Success = false, ExitCode = -1,
-                Output = "A verificação de integridade é obrigatória; ignorar hashes não é suportado.",
-                FailureReason = WingetFailureReason.InstallerHashMismatch
-            };
         // Mesma garantia do InstallAppAsync (ver comentário lá) — cobre quem chega direto
         // na tela Atualizações antes de qualquer instalação ter disparado o bootstrap.
         var bootstrapResult = await EnsureWingetBootstrappedOnceAsync(onLogReceived);
@@ -505,6 +493,8 @@ public class WingetExecutor
             };
 
         string args = $"update --id {QuoteArgument(appId)} --exact --source {QuoteArgument(source)} --accept-source-agreements";
+        if (!string.IsNullOrWhiteSpace(version)) args += $" --version {QuoteArgument(version)}";
+        if (ignoreSecurityHash) args += " --ignore-security-hash";
         bool useInteractive = interactive || source.Equals("msstore", StringComparison.OrdinalIgnoreCase);
         args += useInteractive ? " --interactive" : " --disable-interactivity --silent";
         args += " --include-unknown --accept-package-agreements --force";

@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Shapes;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Composition;
 using System.Numerics;
@@ -97,7 +98,7 @@ public sealed partial class AppDetailsOverlay : UserControl
         var session = _session = new Session();
         _model.SetApp(app, currentVersion, availableVersion);
         _model.IsOptionsBodyPanelVisible = false;
-        OptionsChevronIcon.Glyph = "\uE70D";
+        OptionsChevronIcon.Icon = FluentIcons.Common.Icon.ChevronDown;
         ScreenshotLightbox.Visibility = Visibility.Collapsed;
         ScreenshotLightboxImage.Source = null;
         UpdateScreenshots(session, false);
@@ -117,6 +118,8 @@ public sealed partial class AppDetailsOverlay : UserControl
             if (_session != session || session.Source.IsCancellationRequested) return;
             _model.SetApp(details, current, available, preserveOptions: true);
             UpdateScreenshots(session, true);
+            if (_model.IsWinGetVersionOptionsVisible)
+                Track(session, _model.LoadInstallVersionsAsync(session.Source.Token));
             if (!_model.IsOfficeStoreOffer)
                 await _model.LoadExtendedDetailsAsync(details, session.Source.Token);
         }
@@ -223,6 +226,20 @@ public sealed partial class AppDetailsOverlay : UserControl
         PreviousScreenshotButton.Visibility = NextScreenshotButton.Visibility = _screenshots.Length > 1 ? Visibility.Visible : Visibility.Collapsed;
         ScreenshotLoadingBar.Visibility = Visibility.Collapsed;
         ScreenshotCounterText.Text = _screenshots.Length == 0 ? "" : $"{_index + 1} / {_screenshots.Length}";
+        ScreenshotCounterSurface.Visibility = _screenshots.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ScreenshotIndicators.Children.Clear();
+        for (int position = 0; position < _screenshots.Length; position++)
+        {
+            ScreenshotIndicators.Children.Add(new Rectangle
+            {
+                Width = _screenshots.Length > 20 ? 6 : 14,
+                Height = 4,
+                RadiusX = 2,
+                RadiusY = 2,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))
+            });
+        }
+        UpdateScreenshotIndicators();
         ScreenshotImage.Source = null;
         if (_screenshots.Length > 0) Track(session, LoadScreenshotAsync(session));
     }
@@ -235,6 +252,7 @@ public sealed partial class AppDetailsOverlay : UserControl
         ScreenshotsEmptyText.Visibility = Visibility.Collapsed;
         ScreenshotLoadingBar.Visibility = Visibility.Visible;
         ScreenshotCounterText.Text = $"{index + 1} / {_screenshots.Length}";
+        UpdateScreenshotIndicators();
         try
         {
             var image = await _images.LoadAsync(url, 720, session.Source.Token);
@@ -251,6 +269,11 @@ public sealed partial class AppDetailsOverlay : UserControl
         }
         catch (OperationCanceledException) when (session.Source.IsCancellationRequested) { }
         catch (Exception exception) { WinProvisionLog.Warning(exception, "DetailsScreenshot"); }
+    }
+    private void UpdateScreenshotIndicators()
+    {
+        for (int position = 0; position < ScreenshotIndicators.Children.Count; position++)
+            ScreenshotIndicators.Children[position].Opacity = position == _index ? 1 : 0.35;
     }
     internal void MoveScreenshot(int offset)
     {
@@ -291,12 +314,12 @@ public sealed partial class AppDetailsOverlay : UserControl
     private void OptionsStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
         if (args.PropertyName == nameof(AppDetailsViewModel.IsOptionsBodyPanelVisible))
-            OptionsChevronIcon.Glyph = _model.IsOptionsBodyPanelVisible ? "\uE70E" : "\uE70D";
+            OptionsChevronIcon.Icon = _model.IsOptionsBodyPanelVisible ? FluentIcons.Common.Icon.ChevronUp : FluentIcons.Common.Icon.ChevronDown;
     }
     internal void ToggleOptions()
     {
         _model.IsOptionsBodyPanelVisible = !_model.IsOptionsBodyPanelVisible;
-        OptionsChevronIcon.Glyph = _model.IsOptionsBodyPanelVisible ? "\uE70E" : "\uE70D";
+        OptionsChevronIcon.Icon = _model.IsOptionsBodyPanelVisible ? FluentIcons.Common.Icon.ChevronUp : FluentIcons.Common.Icon.ChevronDown;
     }
     private void OptionsHeader_Click(object sender, TappedRoutedEventArgs args)
     {
@@ -304,9 +327,26 @@ public sealed partial class AppDetailsOverlay : UserControl
         ToggleOptions(); args.Handled = true;
     }
     private void OptionsToggle_Click(object sender, RoutedEventArgs args) => ToggleOptions();
-    private void SaveOptionsButton_Click(object sender, RoutedEventArgs args) { _model.SaveOptions(); _model.IsOptionsBodyPanelVisible = false; OptionsChevronIcon.Glyph = "\uE70D"; }
-    private void InstallOptions_Changed(object sender, RoutedEventArgs args) { if (_model.App is null) return; if (ReferenceEquals(sender, InstallAllUsersCheckBox) && InstallAllUsersCheckBox.IsChecked == true) _model.SetUserScope(true); _model.UpdateInstallCommandPreview(); }
-    private void InstallArchitectureComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args) => _model.UpdateInstallCommandPreview();
+    private void SaveOptionsButton_Click(object sender, RoutedEventArgs args) { _model.SaveOptions(); _model.IsOptionsBodyPanelVisible = false; OptionsChevronIcon.Icon = FluentIcons.Common.Icon.ChevronDown; }
+    private void InstallOptions_Changed(object sender, RoutedEventArgs args)
+    {
+        if (_model.App is null) return;
+        if (ReferenceEquals(sender, InstallAllUsersCheckBox) && _model.CanInstallForUser && _model.CanInstallForMachine)
+            _model.SetUserScope(InstallAllUsersCheckBox.IsChecked == true);
+        _model.UpdateInstallCommandPreview();
+    }
+    private void InstallArchitectureComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        _model.UpdateInstallCommandPreview();
+        if (_session is { } session && !_model.IsLoadingVersions && _model.InstallVersions.Skip(1).Any())
+            Track(session, _model.LoadSelectedVersionScopeAsync(session.Source.Token));
+    }
+    private void InstallVersionComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        _model.UpdateInstallCommandPreview();
+        if (_session is { } session && !_model.IsLoadingVersions && _model.InstallVersions.Skip(1).Any())
+            Track(session, _model.LoadSelectedVersionScopeAsync(session.Source.Token));
+    }
     private void CopyInstallCommandButton_Click(object sender, RoutedEventArgs args) => _model.CopyInstallCommand();
     private async void SelectLocationButton_Click(object sender, RoutedEventArgs args) { if (await _presentation.PickFolderAsync() is { } location) _model.SetLocation(location); }
     private static MenuFlyoutItem MenuItem(string text, Action action, bool enabled = true)
@@ -318,8 +358,10 @@ public sealed partial class AppDetailsOverlay : UserControl
     private void InstallChevronButton_Click(object sender, RoutedEventArgs args)
     {
         var menu = new MenuFlyout();
-        menu.Items.Add(MenuItem("Instalar para o usuário atual", () => { _model.SetUserScope(false); _model.InstallCommand.Execute(null); }));
-        menu.Items.Add(MenuItem("Instalar para todos os usuários (Admin)", () => { _model.SetUserScope(true); _model.InstallCommand.Execute(null); }));
+        if (_model.CanInstallForUser)
+            menu.Items.Add(MenuItem("Instalar para o usuário atual", () => { _model.SetUserScope(false); _model.InstallCommand.Execute(null); }));
+        if (_model.CanInstallForMachine)
+            menu.Items.Add(MenuItem("Instalar para todos os usuários (Admin)", () => { _model.SetUserScope(true); _model.InstallCommand.Execute(null); }));
         if (!string.IsNullOrWhiteSpace(_model.InstallerUrlLinkTag)) menu.Items.Add(MenuItem("Baixar instalador apenas", () => _ = OpenUrlAsync(_model.InstallerUrlLinkTag)));
         menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(AddCollectionItem()); menu.ShowAt((FrameworkElement)sender);
     }

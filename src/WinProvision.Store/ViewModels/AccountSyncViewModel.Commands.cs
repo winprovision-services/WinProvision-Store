@@ -32,4 +32,16 @@ public sealed partial class AccountSyncViewModel
     private AsyncRelayCommand? _saveBackupCommand;
 
     public IAsyncRelayCommand SaveBackupCommand => _saveBackupCommand ??= new AsyncRelayCommand(SaveBackupAsync, () => CanSaveBackup);
+
+    private AsyncRelayCommand? _refreshCloudFilesCommand;
+    public IAsyncRelayCommand RefreshCloudFilesCommand => _refreshCloudFilesCommand ??= new AsyncRelayCommand(RefreshCloudFilesAsync, () => CanRefreshCloudFiles);
+
+    private AsyncRelayCommand? _restoreSelectedCloudFileCommand;
+    public IAsyncRelayCommand RestoreSelectedCloudFileCommand => _restoreSelectedCloudFileCommand ??= new AsyncRelayCommand(RestoreSelectedCloudFileAsync, () => CanRestoreSelectedCloudFile);
+
+    private AsyncRelayCommand? _deleteSelectedCloudFileCommand;
+    public IAsyncRelayCommand DeleteSelectedCloudFileCommand => _deleteSelectedCloudFileCommand ??= new AsyncRelayCommand(DeleteSelectedCloudFileAsync, () => CanDeleteSelectedCloudFile);
+
+    private AsyncRelayCommand? _deleteAllAppGistsCommand;
+    public IAsyncRelayCommand DeleteAllAppGistsCommand => _deleteAllAppGistsCommand ??= new AsyncRelayCommand(DeleteAllAppGistsAsync, () => CanRefreshCloudFiles);
 }

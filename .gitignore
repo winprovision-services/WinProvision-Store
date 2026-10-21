@@ -1,5 +1,6 @@
 **/bin/
 **/obj/
+**/TestResults/
 **/__pycache__/
 .vs/
 .vscode/
@@ -11,6 +12,10 @@ artifacts/
 # Local credentials and diagnostic output
 .env
 .env.*
+.dev.vars
+.dev.vars.*
+STORE_DIR/
+out/
 !.env.example
 *.pfx
 *.p12

@@ -21,12 +21,14 @@ public sealed partial class AccountSyncPage : Page
         SyncDetailsGrid.SizeChanged += (_, _) => UpdateSyncLayout();
     }
 
-    private void Page_Loaded(object sender, RoutedEventArgs e)
+    private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.VerificationUriRequested += ViewModel_VerificationUriRequested;
         ViewModel.Refresh();
         RefreshConnectionPresentation();
+        if (ViewModel.IsConnected)
+            await ViewModel.RefreshCloudFilesCommand.ExecuteAsync(null);
     }
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)

@@ -691,11 +691,11 @@ public sealed partial class InstalledPackageRow : ObservableObject
     public string Source => Package.Source;
     public string SourceCategory => InstalledPackagesService.SourceCategory(Source);
     public string SourceLabel => SourceCategory;
-    public string SourceGlyph => SourceCategory switch
+    public FluentIcons.Common.Icon SourceIcon => SourceCategory switch
     {
-        "WinGet" => "\uE896",
-        "Microsoft Store" => "\uE719",
-        _ => "\uE7F4"
+        "WinGet" => FluentIcons.Common.Icon.ArrowDownload,
+        "Microsoft Store" => FluentIcons.Common.Icon.StoreMicrosoft,
+        _ => FluentIcons.Common.Icon.Laptop
     };
     public string IconUrl => Package.IconUrl;
     public string InstallLocation => Package.InstallLocation;

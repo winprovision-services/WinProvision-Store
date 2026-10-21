@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using FluentIcons.Common;
 using Windows.System;
 using WinProvision.Core.Models;
 using WinProvision.Core.Services;
@@ -57,7 +58,7 @@ public sealed partial class UpdatesPage : Page
         UpdatesGridView.Visibility = show && ViewModeGridRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         UpdatesIconsView.Visibility = show && ViewModeIconsRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         var icons = new[] { SortNameIcon, SortIdIcon, SortVersionIcon, SortNewVersionIcon, SortSourceIcon };
-        for (int i=0;i<icons.Length;i++) { icons[i].Visibility = (int)ViewModel.CurrentSort == i ? Visibility.Visible : Visibility.Collapsed; icons[i].Glyph = ViewModel.SortAscending ? "\uE74A" : "\uE74B"; }
+        for (int i=0;i<icons.Length;i++) { icons[i].Visibility = (int)ViewModel.CurrentSort == i ? Visibility.Visible : Visibility.Collapsed; icons[i].Icon = ViewModel.SortAscending ? Icon.ArrowUp : Icon.ArrowDown; }
         _suppressSort = true; SortModeComboBox.SelectedIndex = (int)ViewModel.CurrentSort; _suppressSort = false;
     }
     private void ApplyFilters()

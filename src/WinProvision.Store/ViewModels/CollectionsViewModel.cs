@@ -315,10 +315,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
         return new ProfileBackupSet
         {
             CreatedAt = DateTime.UtcNow,
-            Tabs = Profiles
-                .Where(profile => profile.Items.Count > 0)
-                .Select(profile => profile.Snapshot())
-                .ToList(),
+            Tabs = Profiles.Select(profile => profile.Snapshot()).ToList(),
             Provisioning = _backup.Provisioning
         };
     }
