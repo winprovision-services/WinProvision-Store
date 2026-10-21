@@ -23,6 +23,8 @@ public sealed class CliConsole
         {
             Out = new AnsiConsoleOutput(error),
             Ansi = ReferenceEquals(error, Console.Error) && !Console.IsErrorRedirected && !Console.IsOutputRedirected ? AnsiSupport.Detect : AnsiSupport.No,
+            ColorSystem = ReferenceEquals(error, Console.Error) && !Console.IsErrorRedirected && !Console.IsOutputRedirected
+                ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors,
             Interactive = InteractionSupport.No
         });
         _animate = _console.Profile.Capabilities.Ansi && _console.Profile.Capabilities.Interactive;
@@ -33,6 +35,7 @@ public sealed class CliConsole
         {
             Out = new AnsiConsoleOutput(Console.Out),
             Ansi = Console.IsOutputRedirected ? AnsiSupport.No : AnsiSupport.Detect,
+            ColorSystem = Console.IsOutputRedirected ? ColorSystemSupport.NoColors : ColorSystemSupport.Detect,
             Interactive = Console.IsOutputRedirected || Console.IsInputRedirected ? InteractionSupport.No : InteractionSupport.Detect
         }));
 

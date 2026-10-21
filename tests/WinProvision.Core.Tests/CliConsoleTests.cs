@@ -15,7 +15,8 @@ public class CliConsoleTests
         using var error = new StringWriter();
         var terminal = AnsiConsole.Create(new AnsiConsoleSettings
         {
-            Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.No, Interactive = InteractionSupport.No
+            Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors, Interactive = InteractionSupport.No
         });
         terminal.Profile.Width = width;
         var console = new CliConsole(output, error, terminal);
