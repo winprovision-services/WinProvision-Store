@@ -313,6 +313,7 @@ public sealed partial class WinGetService
                     onLogReceived, cancellationToken, installLocation, onProgress, source,
                     forceComOnly: true, options: options).ConfigureAwait(false);
             case PackageInstallMethod.WingetCli:
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
                 await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
                 var cliPreferences = await ResolveInstallerElevationAsync(packageId, source, cancellationToken).ConfigureAwait(false);
                 return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
