@@ -332,6 +332,10 @@ internal static partial class SmokeTest
             && detailsOptions.InstallCommandPreviewTextBox.Contains("--version '1.2.2'")
             && detailsOptions.InstallCommandPreviewTextBox.Contains("--ignore-security-hash"),
             "Detalhes: opções selecionadas chegam à instalação e à prévia");
+        detailsOptions.SetApp(new AppEntry { Id = "9WZDNCRFJ3TJ", Name = "Aplicativo da Store", Source = "msstore" }, null, null);
+        Check(!detailsOptions.CurrentOptions().Interactive && detailsOptions.InstallButtonIsEnabled,
+            "Detalhes: Microsoft Store mantém a API COM elegível e a instalação disponível");
+        detailsOptions.SetApp(app, null, null);
         detailsOptions.IsOptionsBodyPanelVisible = true;
         await Task.Delay(150);
         await CaptureAsync(window.RootElement, "details.png");

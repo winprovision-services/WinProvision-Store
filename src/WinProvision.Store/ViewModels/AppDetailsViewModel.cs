@@ -294,7 +294,6 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         int generation = ++_scopeLoadGeneration;
         bool requestedMachine = InstallAllUsersCheckBoxIsChecked;
         bool requestedUser = _forcePerUserInstall;
-        InstallButtonIsEnabled = InstallChevronButtonIsEnabled = false;
         InstallAllUsersCheckBoxIsEnabled = false;
         CanInstallForUser = CanInstallForMachine = false;
         try
@@ -325,11 +324,6 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) { if (_app == app) StatusText = $"Não foi possível consultar escopos: {ex.Message}"; }
-        finally
-        {
-            if (_app == app && generation == _scopeLoadGeneration)
-                InstallButtonIsEnabled = InstallChevronButtonIsEnabled = true;
-        }
     }
     public void SetUserScope(bool allUsers)
     {
@@ -815,7 +809,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         }
     }
     public PackageInstallOptions CurrentOptions() => new(
-        InteractiveInstallCheckBoxIsChecked || IsMicrosoftStoreSource(_app?.Source),
+        InteractiveInstallCheckBoxIsChecked,
         InstallAllUsersCheckBoxIsChecked ? "machine" : _forcePerUserInstall ? "user" : null,
         SelectedArchitecture == "Automática" ? null : SelectedArchitecture,
         IsWinGetVersionOptionsVisible && IgnoreSecurityHashCheckBoxIsChecked,

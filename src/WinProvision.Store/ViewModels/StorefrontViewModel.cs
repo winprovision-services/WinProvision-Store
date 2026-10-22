@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -47,6 +48,9 @@ public sealed partial class StorefrontViewModel : INotifyPropertyChanged, IDispo
     private DateOnly? _storeBannerWeek;
     private DateOnly? _storeBannerSearchWeek;
     private List<AppEntry> _searchedStoreBannerApps = [];
+    private static readonly string StoreBannerCachePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "WinProvisionStore", "Cache", "featured-store-banners.json");
     private int _heroBannerIndex;
     private string _selectedCategoryTag = "all";
     private CatalogSortMode _catalogSortMode;
@@ -345,6 +349,9 @@ public sealed partial class FeaturedCategoryShelf
         _storeBannerWeek = null;
         _storeBannerSearchWeek = null;
         _searchedStoreBannerApps = [];
+        try { File.Delete(StoreBannerCachePath); }
+        catch (IOException ex) { WinProvisionLog.Warning(ex, "Storefront.ClearBannerCache"); }
+        catch (UnauthorizedAccessException ex) { WinProvisionLog.Warning(ex, "Storefront.ClearBannerCache"); }
         StoreBannerApps.Clear();
         SideStoreBannerApps.Clear();
         RightPromoApp = null;
@@ -416,8 +423,9 @@ public sealed partial class FeaturedCategoryShelf
         {
             ApplyFilter();
             _initialContentReady.TrySetResult(true);
+            Task cachedInventoryTask = _installedAppsService.EnsureLoadedAsync(cancellationToken);
             await LoadStoreBannersAsync(cancellationToken: cancellationToken);
-            await _installedAppsService.EnsureLoadedAsync(cancellationToken);
+            await cachedInventoryTask;
             cancellationToken.ThrowIfCancellationRequested();
             SyncInstalledFlags(_allApps);
             UpdatePopularApps();
@@ -447,9 +455,10 @@ public sealed partial class FeaturedCategoryShelf
             _initialContentReady.TrySetResult(true);
 
             // Editorial content must not wait for the potentially slow WinGet inventory.
+            Task inventoryTask = _installedAppsService.EnsureLoadedAsync(cancellationToken);
             await LoadStoreBannersAsync(cancellationToken: cancellationToken);
             App.MemoryLog?.RecordOnce("editorial_banners_loaded");
-            await _installedAppsService.EnsureLoadedAsync(cancellationToken);
+            await inventoryTask;
             App.MemoryLog?.RecordOnce("installed_inventory_loaded");
             cancellationToken.ThrowIfCancellationRequested();
             SyncInstalledFlags(_allApps);
@@ -520,68 +529,35 @@ public sealed partial class FeaturedCategoryShelf
             {
                 if (_storeBannerSearchWeek != week)
                 {
-                    var discovered = new System.Collections.Concurrent.ConcurrentBag<AppEntry>();
-                    var storePackageIds = new System.Collections.Concurrent.ConcurrentBag<string>();
-                    await Parallel.ForEachAsync(
-                        FeaturedStoreSearchTerms,
-                        new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = cancellationToken },
-                        async (term, cancellationToken) =>
-                        {
-                            foreach (AppEntry app in await _msStoreCatalogService.SearchAsync(term, cancellationToken))
-                            {
-                                if (IsEligibleFeaturedStoreApp(app))
-                                {
-                                    app.IconUrl = _iconService.ResolveIconUrl(app);
-                                    app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
-                                    discovered.Add(app);
-                                }
-                            }
-
-                            try
-                            {
-                                foreach (UpgradablePackage package in await _wingetExecutor.SearchPackagesAsync(
-                                             term, "msstore", exact: false, byId: false, cancellationToken))
-                                    if (!string.IsNullOrWhiteSpace(package.Id))
-                                        storePackageIds.Add(package.Id);
-                            }
-                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                            {
-                                throw;
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[HomePage] Busca WinGet msstore falhou para '{term}': {ex.Message}");
-                            }
-                        });
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (!storePackageIds.IsEmpty)
+                    _searchedStoreBannerApps = await LoadCachedStoreBannersAsync(week, cancellationToken) ?? [];
+                    if (_searchedStoreBannerApps.Count == 0)
                     {
-                        try
-                        {
-                            foreach (AppEntry app in await _msStoreCatalogService.FetchAsync(
-                                         storePackageIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), cancellationToken))
+                        var discovered = new System.Collections.Concurrent.ConcurrentBag<AppEntry>();
+                        await Parallel.ForEachAsync(
+                            FeaturedStoreSearchTerms,
+                            new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = cancellationToken },
+                            async (term, token) =>
                             {
-                                if (IsEligibleFeaturedStoreApp(app))
-                                {
-                                    app.IconUrl = _iconService.ResolveIconUrl(app);
-                                    app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
-                                    discovered.Add(app);
-                                }
-                            }
-                        }
-                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[HomePage] Falha ao enriquecer produtos msstore do WinGet: {ex.Message}");
-                        }
+                                foreach (AppEntry app in await _msStoreCatalogService.SearchAsync(term, token))
+                                    if (IsEligibleFeaturedStoreApp(app))
+                                        discovered.Add(app);
+                            });
+                        cancellationToken.ThrowIfCancellationRequested();
+                        _searchedStoreBannerApps = discovered
+                            .DistinctBy(app => app.Id, StringComparer.OrdinalIgnoreCase)
+                            .OrderByDescending(app => app.StoreRatingCount ?? 0)
+                            .ThenByDescending(app => app.StoreRating ?? 0)
+                            .Take(StoreFeaturedCandidatePoolSize)
+                            .ToList();
+                        if (_searchedStoreBannerApps.Count > 0)
+                            await SaveCachedStoreBannersAsync(week, _searchedStoreBannerApps, cancellationToken);
                     }
-
-                    _searchedStoreBannerApps = discovered.ToList();
-                    _storeBannerSearchWeek = week;
+                    foreach (AppEntry app in _searchedStoreBannerApps)
+                    {
+                        app.IconUrl = _iconService.ResolveIconUrl(app);
+                        app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
+                    }
+                    if (_searchedStoreBannerApps.Count > 0) _storeBannerSearchWeek = week;
                 }
 
                 availableStoreApps.AddRange(_searchedStoreBannerApps);
@@ -626,6 +602,48 @@ public sealed partial class FeaturedCategoryShelf
                 _ = LoadStoreBannersAsync(force: true);
             }
         }
+    }
+
+    private static async Task<List<AppEntry>?> LoadCachedStoreBannersAsync(DateOnly week, CancellationToken token)
+    {
+        try
+        {
+            if (!File.Exists(StoreBannerCachePath) || new FileInfo(StoreBannerCachePath).Length > 2 * 1024 * 1024)
+                return null;
+            string content = await File.ReadAllTextAsync(StoreBannerCachePath, token);
+            int separator = content.IndexOf('\n');
+            if (separator < 0 || content[..separator].TrimEnd('\r') != week.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                return null;
+            return WinProvision.Core.Services.AotJson.Deserialize<List<AppEntry>>(
+                content[(separator + 1)..], WinProvisionJsonOptions.Default)?
+                .Where(IsEligibleFeaturedStoreApp).ToList();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            WinProvisionLog.Warning(ex, "Storefront.LoadBannerCache");
+            return null;
+        }
+    }
+
+    private static async Task SaveCachedStoreBannersAsync(DateOnly week, List<AppEntry> apps, CancellationToken token)
+    {
+        string temporary = StoreBannerCachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(StoreBannerCachePath)!);
+            string content = week.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "\n"
+                + WinProvision.Core.Services.AotJson.Serialize(apps, WinProvisionJsonOptions.Default);
+            await File.WriteAllTextAsync(temporary, content, token);
+            token.ThrowIfCancellationRequested();
+            File.Move(temporary, StoreBannerCachePath, true);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            WinProvisionLog.Warning(ex, "Storefront.SaveBannerCache");
+        }
+        finally { try { File.Delete(temporary); } catch (IOException) { } }
     }
 
     private void ApplyFeaturedBanners(IReadOnlyList<AppEntry> featured)
@@ -1300,6 +1318,11 @@ public sealed partial class FeaturedCategoryShelf
 
         try
         {
+            _storeBannerSearchWeek = null;
+            _storeBannersLoaded = false;
+            try { File.Delete(StoreBannerCachePath); }
+            catch (IOException ex) { WinProvisionLog.Warning(ex, "Storefront.RefreshBannerCache"); }
+            catch (UnauthorizedAccessException ex) { WinProvisionLog.Warning(ex, "Storefront.RefreshBannerCache"); }
             string query = SearchText.Trim() ?? string.Empty;
         if (_preview) { _liveSearchQuery = query; _liveSearchResults = _allApps; }
             if (query.Length > 0 && _catalogLoaded)

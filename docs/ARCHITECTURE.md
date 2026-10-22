@@ -33,7 +33,9 @@ Páginas são criadas sob demanda. ViewModels preservam o estado necessário à 
 
 A vitrine resolve o editorial em cache e carrega banners antes de aguardar o inventário de programas instalados; o inventário apenas atualiza os indicadores de instalação. Atualizações do catálogo recebidas durante o carregamento dos banners são reaplicadas ao concluir esse carregamento.
 
-Na pesquisa da vitrine, o WinGet consulta também a origem `msstore`; a Display Catalog pública da Microsoft complementa os resultados com localização, descrição, ícones, banners e capturas usando URLs diretas. Para preencher o editorial e os populares, o app pesquisa termos na origem `msstore` do WinGet e resolve pela Display Catalog os IDs retornados, evitando depender apenas das sugestões aproximadas da busca textual. Essa mídia é consumida em tempo de uso e não é publicada no R2.
+A tela Descobrir mantém o catálogo e a seleção visual em memória durante a sessão. A descoberta complementar de banners da Microsoft Store é gravada por semana em `Cache/featured-store-banners.json`; reabrir o app reutiliza esses metadados, inclusive URLs de banners e ícones. O cache de imagens `Cache/RenderedIcons` conserva os bytes e a memória compartilha bitmaps decodificados. Atualizar manualmente a vitrine ou limpar o catálogo invalida a descoberta de banners; a troca de semana a revalida automaticamente. O estado instalado continua vindo do inventário, não do cache visual.
+
+Na pesquisa da vitrine, o WinGet consulta também a origem `msstore`; a Display Catalog pública da Microsoft complementa os resultados com localização, descrição, ícones, banners e capturas usando URLs diretas. Para preencher o editorial e os populares, o app pesquisa termos na Display Catalog e reaproveita a descoberta semanal dos banners. A mídia é consumida em tempo de uso e não é publicada no R2.
 
 ## Operações, downloads e notificações
 

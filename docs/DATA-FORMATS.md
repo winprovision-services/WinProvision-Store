@@ -1,5 +1,7 @@
 # Compatibilidade de dados
 
+O cache descartável `Cache/featured-store-banners.json` contém a segunda-feira da semana em `yyyy-MM-dd`, uma quebra de linha e uma lista JSON de `AppEntry` da Microsoft Store. Não é dado exportado nem contrato público; semana diferente, arquivo inválido ou limpeza do catálogo provocam nova descoberta.
+
 Este documento registra as regras de compatibilidade do WinProvision Store.
 
 `installation-preferences.json` continua armazenando o enum textual `PreferredMethod`; o novo valor opcional `WinGetPkgsViper` seleciona a consulta direta ao WinGet-Pkgs. Arquivos anteriores mantêm o comportamento atual, com `Automatic` como padrão.

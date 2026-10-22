@@ -283,11 +283,26 @@ public sealed partial class WinGetService
         Action<InstallProgressUpdate>? onProgress, string source,
         string? scope, string? architecture)
     {
-        if (_preferredMethod() == PackageInstallMethod.WinGetPkgsViper
+        var method = _preferredMethod();
+        if (method == PackageInstallMethod.WinGetPkgsViper
             && string.IsNullOrWhiteSpace(installLocation))
             return InstallWithMethodAsync(packageId, PackageInstallMethod.WinGetPkgsViper,
                 onLogReceived, cancellationToken, installLocation, onProgress, source,
                 version, scope, architecture);
+        if ((method is PackageInstallMethod.Automatic or PackageInstallMethod.WinProvisionApi)
+            && string.Equals(source, "winget", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(installLocation))
+            return InstallWithMethodAsync(packageId, PackageInstallMethod.WinProvisionApi,
+                onLogReceived, cancellationToken, installLocation, onProgress, source,
+                version, scope, architecture);
+        if (method == PackageInstallMethod.ComApi)
+            return Task.FromResult(new WingetExecutionResult
+            {
+                Success = false,
+                ExitCode = -1,
+                Output = "A API COM não oferece seleção de versão nesta rota. Escolha Mais recente ou outro método de instalação.",
+                FailureReason = WingetFailureReason.NoApplicableInstallers
+            });
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
         return _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
             installLocation, source, scope, architecture, version: version);
@@ -440,8 +455,8 @@ public sealed partial class WinGetService
                     var result = await _apiService.TryInstallAsync(packageId,
                         onLogReceived is null ? null : new Progress<string>(onLogReceived),
                         cancellationToken,
-                        preferredArchitecture: apiPreferences?.Architecture,
-                        preferredScope: apiPreferences?.Scope,
+                        preferredArchitecture: preferredArchitecture ?? apiPreferences?.Architecture,
+                        preferredScope: preferredScope ?? apiPreferences?.Scope,
                         onProgress: onProgress,
                         source: source,
                         requiresElevation: apiPreferences?.RequiresElevation ?? false,
@@ -465,7 +480,10 @@ public sealed partial class WinGetService
                             onLogReceived,
                             cancellationToken,
                             installLocation,
-                            source: fallbackSource).ConfigureAwait(false);
+                            source: fallbackSource,
+                            scope: preferredScope,
+                            architecture: preferredArchitecture,
+                            version: version).ConfigureAwait(false);
                     }
 
                     return new WingetExecutionResult
