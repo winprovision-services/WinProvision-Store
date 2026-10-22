@@ -36,14 +36,12 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         if (engine is null)
         {
             OperationRunner.ConfigureInstallHandler(winGet.InstallPreferredAsync);
-            OperationRunner.ConfigureVersionInstallHandler(winGet.InstallPreferredVersionAsync);
             OperationRunner.ConfigureUpdateHandler(winGet.UpdateAsync);
             OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => winGet.PrepareAsync(token, includeStore, log));
         }
         else
         {
             OperationRunner.ConfigureInstallHandler(engine.InstallPreferredAsync);
-            OperationRunner.ConfigureVersionInstallHandler(winGet.InstallPreferredVersionAsync);
             OperationRunner.ConfigureUpdateHandler(engine.UpdateAsync);
             OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => engine.PrepareAsync(token, includeStore, log));
         }

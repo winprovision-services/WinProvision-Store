@@ -19,8 +19,7 @@ namespace WinProvision.Core.Services;
 [SupportedOSPlatform("windows")]
 public static partial class OperationRunner
 {
-    private static Func<string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>>? _installHandler;
-    private static Func<string, string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, string?, string?, Task<WingetExecutionResult>>? _versionInstallHandler;
+    private static Func<string, Action<string>?, CancellationToken, PackageInstallOptions, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>>? _installHandler;
     private static Action<string, string>? _successfulInstallObserver;
     private static Func<bool, Action<string>?, CancellationToken, Task>? _installWarmupHandler;
     private static Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, Task<WingetExecutionResult>>? _updateHandler;
@@ -33,15 +32,9 @@ public static partial class OperationRunner
     }
 
     public static void ConfigureInstallHandler(
-        Func<string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>> installHandler)
+        Func<string, Action<string>?, CancellationToken, PackageInstallOptions, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>> installHandler)
     {
         _installHandler = installHandler ?? throw new ArgumentNullException(nameof(installHandler));
-    }
-
-    public static void ConfigureVersionInstallHandler(
-        Func<string, string, Action<string>?, CancellationToken, string?, Action<InstallProgressUpdate>?, string, string?, string?, Task<WingetExecutionResult>> handler)
-    {
-        _versionInstallHandler = handler ?? throw new ArgumentNullException(nameof(handler));
     }
 
     public static void ConfigureSuccessfulInstallObserver(Action<string, string> observer)
@@ -93,11 +86,13 @@ public static partial class OperationRunner
         CancellationToken cancellationToken,
         string? installLocation = null,
         Action<InstallProgressUpdate>? onProgress = null,
-        string source = "winget")
+        string source = "winget",
+        PackageInstallOptions? options = null)
     {
+        options ??= new PackageInstallOptions(InstallLocation: installLocation);
         Task<WingetExecutionResult> operation = _installHandler is null
             ? executor.InstallAppAsync(appId, onLogReceived, cancellationToken, installLocation, source)
-            : _installHandler(appId, onLogReceived, cancellationToken, installLocation, onProgress, source);
+            : _installHandler(appId, onLogReceived, cancellationToken, options, onProgress, source);
         WingetExecutionResult result = await operation.ConfigureAwait(false);
         if (result.Success)
             ReportSuccessfulInstall(appId, source);
@@ -145,50 +140,33 @@ public static partial class OperationRunner
             var onProgress = new Action<InstallProgressUpdate>(update => ReportInstallProgress(item, update));
             onLogReceived($"Instalando {appName} ({appId}) pela fonte {source}.");
 
-            // Se não há handler configurado, usa winget.exe diretamente
-            bool useVersionHandler = !string.IsNullOrWhiteSpace(version)
-                && _versionInstallHandler is not null
-                && !interactive && !requiresElevation && !ignoreSecurityHash
-                && string.IsNullOrWhiteSpace(customArguments);
-            bool requiresWingetCli = interactive
-                || requiresElevation
-                || !string.IsNullOrWhiteSpace(installLocation)
-                || (!useVersionHandler && !string.IsNullOrWhiteSpace(version))
-                || !string.IsNullOrWhiteSpace(customArguments)
-                || (!useVersionHandler && !string.IsNullOrWhiteSpace(scope))
-                || (!useVersionHandler && !string.IsNullOrWhiteSpace(architecture))
-                || ignoreSecurityHash;
-            if (requiresWingetCli && _installHandler is not null)
-                onLogReceived("Opções avançadas solicitadas; usando o WinGet CLI para aplicar escopo, arquitetura, interação e hash.");
-            if (_installHandler is null || requiresWingetCli)
+            var installOptions = new PackageInstallOptions(
+                Interactive: interactive,
+                Scope: scope,
+                Architecture: architecture,
+                IgnoreSecurityHash: ignoreSecurityHash,
+                InstallLocation: installLocation,
+                RequiresElevation: requiresElevation,
+                Version: version,
+                CustomArguments: customArguments);
+            if (_installHandler is null)
             {
                 item.Method = WingetMethod.WingetExe;
                 // Envia um progresso inicial para garantir que a cor seja aplicada
                 onProgress(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
             }
 
-            var result = useVersionHandler && !requiresWingetCli
-                ? await _versionInstallHandler!(appId, version!, onLogReceived,
-                    item.CancellationTokenSource.Token, installLocation, onProgress, source, scope, architecture)
-                : _installHandler is null || requiresWingetCli
+            var result = _installHandler is null
                 ? await executor.InstallAppAsync(
-                    appId,
-                    onLogReceived,
-                    item.CancellationTokenSource.Token,
-                    installLocation,
-                    source: source,
-                    requiresElevation: requiresElevation,
-                    scope: scope,
-                    architecture: architecture,
-                    interactive: interactive,
-                    ignoreSecurityHash: ignoreSecurityHash,
-                    version: version,
-                    customArguments: customArguments)
+                    appId, onLogReceived, item.CancellationTokenSource.Token, installLocation,
+                    source: source, requiresElevation: requiresElevation, scope: scope,
+                    architecture: architecture, interactive: interactive, ignoreSecurityHash: ignoreSecurityHash,
+                    version: version, customArguments: customArguments)
                 : await _installHandler(
                     appId,
                     onLogReceived,
                     item.CancellationTokenSource.Token,
-                    installLocation,
+                    installOptions,
                     onProgress,
                     source);
 

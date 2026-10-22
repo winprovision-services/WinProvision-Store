@@ -30,8 +30,8 @@ public sealed class ApplicationEngine : IAsyncDisposable
     }
 
     public Task<WingetExecutionResult> InstallPreferredAsync(string id, Action<string>? log = null, CancellationToken token = default,
-        string? installLocation = null, Action<InstallProgressUpdate>? onProgress = null, string source = "winget")
-        => _packages.InstallPreferredAsync(id, log, token, installLocation, onProgress, source);
+        PackageInstallOptions? options = null, Action<InstallProgressUpdate>? onProgress = null, string source = "winget")
+        => _packages.InstallPreferredAsync(id, log, token, options, onProgress, source);
     public Task<WingetExecutionResult> UpdateAsync(string id, Action<string>? log = null, CancellationToken token = default,
         string source = "winget", Action<InstallProgressUpdate>? onProgress = null)
         => _packages.UpdateAsync(id, log, token, source, onProgress);

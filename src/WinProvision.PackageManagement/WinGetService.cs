@@ -82,9 +82,8 @@ public sealed partial class WinGetService
     }
 
     /// <summary>
-    /// Provisiona o WinGet antes de aquecer a conexão COM sob demanda, pois o App Installer
-    /// registra o servidor COM. Se o provisionamento falhar, a instalação ainda pode seguir
-    /// pela API própria; o CLI só será útil quando estiver disponível. Cancelamento é propagado.
+    /// Provisiona o WinGet e aquece COM sob demanda. O fluxo de instalação automática não usa
+    /// esse método antes da primeira tentativa COM; chama-o somente quando precisar do CLI.
     /// </summary>
     public async Task PrepareAsync(
         CancellationToken cancellationToken = default,
@@ -115,8 +114,8 @@ public sealed partial class WinGetService
     }
 
     /// <summary>
-    /// Passo ZERO de qualquer operação: garante o winget provisionado antes de COM, API
-    /// própria ou winget.exe. Falha NÃO aborta: a API própria não depende do winget, e o que
+    /// Provisiona o WinGet apenas quando pesquisa/preparação ou o CLI são necessários. Falha
+    /// NÃO aborta a API própria, e o que
     /// exigir o winget de verdade (winget.exe, ODT via winget) falha com mensagem própria.
     /// </summary>
     private async Task<bool> EnsureWingetProvisionedAsync(Action<string>? onLog, CancellationToken cancellationToken)
@@ -271,42 +270,21 @@ public sealed partial class WinGetService
         string packageId,
         Action<string>? onLogReceived = null,
         CancellationToken cancellationToken = default,
-        string? installLocation = null,
+        PackageInstallOptions? options = null,
         Action<InstallProgressUpdate>? onProgress = null,
         string source = "winget")
         => InstallWithMethodAsync(packageId, _preferredMethod(), onLogReceived,
-            cancellationToken, installLocation, onProgress, source);
+            cancellationToken, options?.InstallLocation, onProgress, source,
+            options?.Version, options?.Scope, options?.Architecture, options);
 
     public Task<WingetExecutionResult> InstallPreferredVersionAsync(
         string packageId, string version, Action<string>? onLogReceived,
         CancellationToken cancellationToken, string? installLocation,
         Action<InstallProgressUpdate>? onProgress, string source,
         string? scope, string? architecture)
-    {
-        var method = _preferredMethod();
-        if (method == PackageInstallMethod.WinGetPkgsViper
-            && string.IsNullOrWhiteSpace(installLocation))
-            return InstallWithMethodAsync(packageId, PackageInstallMethod.WinGetPkgsViper,
-                onLogReceived, cancellationToken, installLocation, onProgress, source,
-                version, scope, architecture);
-        if ((method is PackageInstallMethod.Automatic or PackageInstallMethod.WinProvisionApi)
-            && string.Equals(source, "winget", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(installLocation))
-            return InstallWithMethodAsync(packageId, PackageInstallMethod.WinProvisionApi,
-                onLogReceived, cancellationToken, installLocation, onProgress, source,
-                version, scope, architecture);
-        if (method == PackageInstallMethod.ComApi)
-            return Task.FromResult(new WingetExecutionResult
-            {
-                Success = false,
-                ExitCode = -1,
-                Output = "A API COM não oferece seleção de versão nesta rota. Escolha Mais recente ou outro método de instalação.",
-                FailureReason = WingetFailureReason.NoApplicableInstallers
-            });
-        onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
-        return _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
-            installLocation, source, scope, architecture, version: version);
-    }
+        => InstallPreferredAsync(packageId, onLogReceived, cancellationToken,
+            new PackageInstallOptions(Scope: scope, Architecture: architecture,
+                InstallLocation: installLocation, Version: version), onProgress, source);
 
     public async Task<WingetExecutionResult> InstallWithMethodAsync(
         string packageId,
@@ -318,24 +296,30 @@ public sealed partial class WinGetService
         string source = "winget",
         string? version = null,
         string? preferredScope = null,
-        string? preferredArchitecture = null)
+        string? preferredArchitecture = null,
+        PackageInstallOptions? options = null)
     {
+        options ??= new PackageInstallOptions(InstallLocation: installLocation, Version: version,
+            Scope: preferredScope, Architecture: preferredArchitecture);
         switch (method)
         {
             case PackageInstallMethod.Automatic:
-                return await InstallAsync(packageId, onLogReceived, cancellationToken,
-                    installLocation, onProgress, source).ConfigureAwait(false);
-            case PackageInstallMethod.ComApi:
                 return await RunInstallOrUpgradeAsync(ComOperationKind.Install, packageId,
                     onLogReceived, cancellationToken, installLocation, onProgress, source,
-                    forceComOnly: true).ConfigureAwait(false);
+                    options: options).ConfigureAwait(false);
+            case PackageInstallMethod.ComApi:
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.ComApi));
+                return await RunInstallOrUpgradeAsync(ComOperationKind.Install, packageId,
+                    onLogReceived, cancellationToken, installLocation, onProgress, source,
+                    forceComOnly: true, options: options).ConfigureAwait(false);
             case PackageInstallMethod.WingetCli:
                 await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
                 var cliPreferences = await ResolveInstallerElevationAsync(packageId, source, cancellationToken).ConfigureAwait(false);
-                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
                 return await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
-                    installLocation, source, cliPreferences?.Scope, cliPreferences?.Architecture,
-                    cliPreferences?.RequiresElevation ?? false, cliPreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+                    installLocation, source, options.Scope ?? cliPreferences?.Scope, options.Architecture ?? cliPreferences?.Architecture,
+                    options.RequiresElevation || (cliPreferences?.RequiresElevation ?? false),
+                    cliPreferences?.ElevationProhibited ?? false, options.Interactive, options.IgnoreSecurityHash,
+                    options.Version, options.CustomArguments).ConfigureAwait(false);
             case PackageInstallMethod.WinGetPkgsViper:
                 if (!string.Equals(source, "winget", StringComparison.OrdinalIgnoreCase))
                 {
@@ -427,27 +411,11 @@ public sealed partial class WinGetService
                     }
                 };
             case PackageInstallMethod.WinProvisionApi:
-                // A API própria só instala pacotes publicados no catálogo WinProvision.
-                // IDs da Microsoft Store (9.../Store Product ID) podem não existir nele;
-                // para essa origem, encaminhe diretamente ao cliente oficial da Store via
-                // WinGet. Isso também mantém a escolha do método previsível sem transformar
-                // PackageNotFound em uma falha terminal.
+                // Método explícito: tenta exclusivamente o catálogo da API própria.
                 if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
-                {
-                    onLogReceived?.Invoke(
-                        "Este pacote pertence à Microsoft Store; usando o WinGet com a origem msstore.");
-                    onProgress?.Invoke(new InstallProgressUpdate(
-                        InstallProgressPhase.Preparing,
-                        Method: WingetMethod.WingetExe));
-                    await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-                    return await _wingetExecutor.InstallAppAsync(
-                        packageId,
-                        onLogReceived,
-                        cancellationToken,
-                        installLocation,
-                        source: "msstore").ConfigureAwait(false);
-                }
-
+                    return new WingetExecutionResult { Success = false, ExitCode = -1,
+                        Output = "A WinProvision API não publica pacotes da Microsoft Store.",
+                        FailureReason = WingetFailureReason.PackageNotInCatalog };
                 onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.OwnApi));
                 try
                 {
@@ -455,13 +423,13 @@ public sealed partial class WinGetService
                     var result = await _apiService.TryInstallAsync(packageId,
                         onLogReceived is null ? null : new Progress<string>(onLogReceived),
                         cancellationToken,
-                        preferredArchitecture: preferredArchitecture ?? apiPreferences?.Architecture,
-                        preferredScope: preferredScope ?? apiPreferences?.Scope,
+                        preferredArchitecture: options.Architecture ?? preferredArchitecture ?? apiPreferences?.Architecture,
+                        preferredScope: options.Scope ?? preferredScope ?? apiPreferences?.Scope,
                         onProgress: onProgress,
                         source: source,
-                        requiresElevation: apiPreferences?.RequiresElevation ?? false,
+                        requiresElevation: options.RequiresElevation || (apiPreferences?.RequiresElevation ?? false),
                         elevationProhibited: apiPreferences?.ElevationProhibited ?? false,
-                        requestedVersion: version).ConfigureAwait(false);
+                        requestedVersion: options.Version).ConfigureAwait(false);
                     if (result.Outcome is WinProvisionInstallOutcome.RequiresWinget
                         or WinProvisionInstallOutcome.PackageNotFound
                         or WinProvisionInstallOutcome.NoCompatibleInstaller)
@@ -481,9 +449,13 @@ public sealed partial class WinGetService
                             cancellationToken,
                             installLocation,
                             source: fallbackSource,
-                            scope: preferredScope,
-                            architecture: preferredArchitecture,
-                            version: version).ConfigureAwait(false);
+                            scope: options.Scope ?? preferredScope,
+                            architecture: options.Architecture ?? preferredArchitecture,
+                            version: options.Version,
+                            interactive: options.Interactive,
+                            ignoreSecurityHash: options.IgnoreSecurityHash,
+                            requiresElevation: options.RequiresElevation,
+                            customArguments: options.CustomArguments).ConfigureAwait(false);
                     }
 
                     return new WingetExecutionResult
@@ -717,9 +689,17 @@ public sealed partial class WinGetService
         string? installLocation,
         Action<InstallProgressUpdate>? onProgress,
         string source,
-        bool forceComOnly = false)
+        bool forceComOnly = false,
+        PackageInstallOptions? options = null)
     {
-        bool wingetProvisioned = await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+        options ??= new PackageInstallOptions(InstallLocation: installLocation);
+        installLocation = options.InstallLocation ?? installLocation;
+        await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+        bool cliOnly = !forceComOnly && WinGetFactoryHelper.Mode == WinGetMode.CliOnly;
+        if (forceComOnly && WinGetFactoryHelper.Mode == WinGetMode.CliOnly)
+            return new WingetExecutionResult { Success = false, ExitCode = -1,
+                Output = "A API COM está desativada pelo modo CLI explícito.",
+                FailureReason = WingetFailureReason.InternalError };
 
         string logTag = opKind == ComOperationKind.Install ? "INSTALL" : "UPDATE";
         string actionLower = opKind == ComOperationKind.Install ? "instalação" : "atualização";
@@ -729,24 +709,6 @@ public sealed partial class WinGetService
             $"{logTag} ENTER packageId=\"{packageId}\" source={source} mode={WinGetFactoryHelper.Mode} " +
             $"identity={(isSystem ? "SYSTEM" : "User")} comDisabled={WinGetFactoryHelper.IsComDisabled} " +
             $"thread={Environment.CurrentManagedThreadId}");
-
-        if (!wingetProvisioned)
-        {
-            const string reason = "WinGet indisponível após provisionamento";
-            if (forceComOnly)
-                return new WingetExecutionResult
-                {
-                    Success = false,
-                    ExitCode = -1,
-                    Output = reason,
-                    FailureReason = WingetFailureReason.InternalError
-                };
-
-            onLogReceived?.Invoke("O WinGet não foi provisionado; pulando a COM e tentando a WinProvision API.");
-            return await RunApiThenCliFallbackAsync(
-                opKind, packageId, onLogReceived, onProgress, cancellationToken,
-                installLocation, source, reason).ConfigureAwait(false);
-        }
 
         if (forceComOnly && (WinProvisionElevationState.HasFailedThisSession
             || WinGetFactoryHelper.IsComDisabled))
@@ -760,23 +722,25 @@ public sealed partial class WinGetService
 
         // SYSTEM, por si só, não desativa COM. Só pulamos uma operação COM após uma recusa
         // de elevação já registrada para evitar repetir um pedido de UAC recusado.
-        if (WinProvisionElevationState.HasFailedThisSession)
+        if (cliOnly || WinProvisionElevationState.HasFailedThisSession)
         {
-            const string bypassReason = "reelevação-falhou-antes";
+            var bypassReason = cliOnly ? "modo-cli-explicito" : "reelevação-falhou-antes";
             PackageDiagnostics.Write($"{logTag} BYPASS COM: motivo={bypassReason}");
-            onLogReceived?.Invoke("Pulando API COM do WinGet; usando a API própria da WinProvision Store.");
+            onLogReceived?.Invoke(cliOnly
+                ? "Modo WinGet CLI explícito; tentando a API própria antes do CLI."
+                : "Pulando API COM após falha de elevação; usando a API própria da WinProvision Store.");
             return await RunApiThenCliFallbackAsync(
-                opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, bypassReason)
+                opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, bypassReason, options: options)
                 .ConfigureAwait(false);
         }
 
-        if (WinGetFactoryHelper.IsComDisabled)
+        if (WinGetFactoryHelper.IsComDisabled && !cliOnly)
         {
             PackageDiagnostics.Write($"FALLBACK PARA CLI: motivo={WinGetFactoryHelper.DisabledReason}");
             onLogReceived?.Invoke("API COM indisponível; usando a API própria da WinProvision Store.");
             return await RunApiThenCliFallbackAsync(
                 opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source,
-                $"COM-desativada-sessão({WinGetFactoryHelper.DisabledReason})").ConfigureAwait(false);
+                $"COM-desativada-sessão({WinGetFactoryHelper.DisabledReason})", options: options).ConfigureAwait(false);
         }
 
         // Só serve pra sinalizar a via atual pro OperationRunner (ver ReportProgress) e colorir a
@@ -798,7 +762,7 @@ public sealed partial class WinGetService
                 // predefinidos (OpenWindowsCatalog e, para source=msstore, MicrosoftStore).
                 return await Task.Run(
                     () => RunComPackageOperationAsync(
-                        opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, state, forceComOnly),
+                        opKind, packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, state, forceComOnly, options),
                     cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -894,7 +858,7 @@ public sealed partial class WinGetService
                     installLocation,
                     source,
                     $"COM-exception({ex.GetType().Name} 0x{ex.HResult:X8})",
-                    state.Preferences).ConfigureAwait(false);
+                    state.Preferences, options).ConfigureAwait(false);
             }
         }
     }
@@ -913,9 +877,10 @@ public sealed partial class WinGetService
         string? installLocation,
         string source,
         string reason,
-        InstallerPreferences? preferences = null)
+        InstallerPreferences? preferences = null,
+        PackageInstallOptions? options = null)
         => opKind == ComOperationKind.Install
-            ? TryWinProvisionApiThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, reason, preferences)
+            ? TryWinProvisionApiThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, reason, preferences, options)
             : TryApiUpdateThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, source, reason, preferences);
 
     /// <summary>
@@ -1268,7 +1233,8 @@ public sealed partial class WinGetService
         string? installLocation,
         string source,
         InstallAttemptState attemptState,
-        bool forceComOnly)
+        bool forceComOnly,
+        PackageInstallOptions options)
     {
         var stopwatch = Stopwatch.StartNew();
         // Rótulo usado em toda esta operação COM: "INSTALL COM" numa instalação nova,
@@ -1365,11 +1331,15 @@ public sealed partial class WinGetService
         var installOptions = WinGetFactoryHelper.CreateInstallOptions();
         // Microsoft Store packages may require Store UI/consent and don't behave like
         // conventional silent installers. Preserve silent mode for WinGet manifests.
-        installOptions.PackageInstallMode = string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)
+        installOptions.PackageInstallMode = options.Interactive || string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)
             ? PackageInstallMode.Interactive
             : PackageInstallMode.Silent;
         installOptions.AcceptPackageAgreements = true;
         installOptions.PreferredInstallLocation = installLocation;
+        if (string.Equals(options.Scope, "machine", StringComparison.OrdinalIgnoreCase))
+            installOptions.PackageInstallScope = PackageInstallScope.System;
+        else if (string.Equals(options.Scope, "user", StringComparison.OrdinalIgnoreCase))
+            installOptions.PackageInstallScope = PackageInstallScope.User;
         bool isSystem = WinProvisionApiService.IsRunningAsSystem();
         if (isSystem)
             installOptions.PackageInstallScope = PackageInstallScope.System;
@@ -1394,7 +1364,8 @@ public sealed partial class WinGetService
                 bool elevationProhibited = installerInfo.ElevationRequirement is
                     ElevationRequirement.ElevationProhibited;
                 string? architecture = ReadInstallerArchitecture(installerInfo);
-                string? effectiveScope = isSystem ? "machine" : scope;
+                string? effectiveScope = options.Scope ?? (isSystem ? "machine" : scope);
+                architecture = options.Architecture ?? architecture;
                 preferences = new InstallerPreferences(effectiveScope, architecture, requiresElevation, elevationProhibited);
                 attemptState.Preferences = preferences;
 
@@ -1412,9 +1383,9 @@ public sealed partial class WinGetService
                         .ConfigureAwait(false);
                 }
 
-                if (scope == "machine")
+                if (string.Equals(effectiveScope, "machine", StringComparison.OrdinalIgnoreCase))
                     installOptions.PackageInstallScope = PackageInstallScope.System;
-                else if (scope == "user")
+                else if (string.Equals(effectiveScope, "user", StringComparison.OrdinalIgnoreCase))
                     installOptions.PackageInstallScope = PackageInstallScope.User;
 
                 PackageDiagnostics.Write(
@@ -1831,8 +1802,10 @@ public sealed partial class WinGetService
         string? installLocation,
         string source,
         string reason,
-        InstallerPreferences? preferences = null)
+        InstallerPreferences? preferences = null,
+        PackageInstallOptions? options = null)
     {
+        options ??= new PackageInstallOptions(InstallLocation: installLocation);
         InstallerPreferences? effectivePreferences = ResolveExecutionScope(preferences);
         PackageDiagnostics.Write($"INSTALL API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
 
@@ -1846,12 +1819,13 @@ public sealed partial class WinGetService
                 packageId,
                 onLogReceived is null ? null : new Progress<string>(onLogReceived),
                 cancellationToken,
-                effectivePreferences?.Architecture,
-                effectivePreferences?.Scope,
+                options.Architecture ?? effectivePreferences?.Architecture,
+                options.Scope ?? effectivePreferences?.Scope,
                 onProgress,
                 source,
-                requiresElevation: effectivePreferences?.RequiresElevation ?? false,
-                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+                requiresElevation: options.RequiresElevation || (effectivePreferences?.RequiresElevation ?? false),
+                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false,
+                requestedVersion: options.Version).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -1929,10 +1903,11 @@ public sealed partial class WinGetService
             cancellationToken,
             installLocation,
             source,
-            effectivePreferences?.Scope,
-            effectivePreferences?.Architecture,
-            effectivePreferences?.RequiresElevation ?? false,
-            effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+            options.Scope ?? effectivePreferences?.Scope,
+            options.Architecture ?? effectivePreferences?.Architecture,
+            options.RequiresElevation || (effectivePreferences?.RequiresElevation ?? false),
+            effectivePreferences?.ElevationProhibited ?? false,
+            options.Interactive, options.IgnoreSecurityHash, options.Version, options.CustomArguments).ConfigureAwait(false);
         // O WinGet CLI não expõe ao chamador o instante em que transfere o controle ao
         // instalador. Em caso de falha, tratamos o estado como incerto e não repetimos o
         // pacote automaticamente por outra tentativa do /auto.
