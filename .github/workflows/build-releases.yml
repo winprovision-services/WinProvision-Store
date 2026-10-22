@@ -6,7 +6,7 @@ on:
         description: Versão do aplicativo (exemplo 0.1.0 ou 0.2.0-beta.1)
         required: true
         type: string
-        default: 0.1.0
+        default: 1.0.12
       mode:
         description: Validar os arquivos ou publicar uma release no GitHub
         type: choice

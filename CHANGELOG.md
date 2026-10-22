@@ -1,10 +1,12 @@
 # Histórico de alterações
 
-## 1.0.11 - 21 de outubro de 2026
+## 1.0.12 - 21 de outubro de 2026
 
 - A tela Descobrir conserva a seleção semanal dos banners da Microsoft Store em cache local entre sessões; URLs de banners e ícones reutilizam o cache de imagens. Atualização manual e limpeza do catálogo invalidam a descoberta.
 
 - Corrigida a seleção do método para pacotes da Microsoft Store: a interface não força o WinGet CLI antes da tentativa pela API COM. A consulta de escopos não bloqueia o botão Instalar; o inventário de instalados carrega em paralelo aos banners, que deixam de repetir buscas pela CLI na origem msstore. Versões fixadas no modo automático usam primeiro a API própria; o modo COM exclusivo informa quando a seleção de versão não é suportada.
+
+## 1.0.11 - 21 de outubro de 2026
 
 - O mecanismo de download offline do Office agora é escolhido em **Configurações → Operações e downloads**. A preferência é salva imediatamente, acompanha a exportação de configurações e se aplica a novas configurações criadas na página Office; configurações Office já salvas preservam sua escolha.
 - Ícones de função migrados para Fluent UI System Icons com cores de tema. Modos de visualização, pesquisa e detalhes receberam ajustes visuais; controles de instalação usam cantos e caixas de seleção coerentes com o restante da interface.
