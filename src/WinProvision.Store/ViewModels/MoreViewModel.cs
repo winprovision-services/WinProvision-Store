@@ -33,6 +33,9 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     public partial bool IsHistoryVisible { get; set; }
 
     [ObservableProperty]
+    public partial string HistorySearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial bool IsLogVisible { get; set; }
 
     [ObservableProperty]
@@ -95,7 +98,20 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string StatusMessage { get; private set; } = string.Empty;
 
+    public string StatusText => StatusMessage;
+    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(StatusText));
+
     public bool HasHistory => HistoryEntries.Count > 0;
+    public string HistoryEmptyMessage => _history.Entries.Count == 0
+        ? "As operações concluídas aparecerão aqui."
+        : "Nenhuma operação corresponde à pesquisa.";
+
+    partial void OnHistorySearchTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HistoryEmptyMessage));
+        if (IsHistoryVisible)
+            RefreshHistory();
+    }
 
     public IAsyncRelayCommand CheckStatusCommand { get; }
     public IRelayCommand CancelStatusCommand { get; }
@@ -389,8 +405,9 @@ public sealed partial class MoreViewModel : ObservableObject, IDisposable
     private void RefreshHistory()
     {
         HistoryEntries.Clear();
-        foreach (var entry in _history.Entries)
+        foreach (var entry in _history.Search(HistorySearchText))
             HistoryEntries.Add(entry);
+        OnPropertyChanged(nameof(HistoryEmptyMessage));
     }
 
     private void OnHistoryChanged() => _dispatcher.Post(() =>

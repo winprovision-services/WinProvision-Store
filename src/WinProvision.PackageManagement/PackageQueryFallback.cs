@@ -8,6 +8,7 @@ public static class PackageQueryFallback
         Exception? last = null;
         T? lastResult = default;
         bool hasResult = false;
+        bool lastAttemptFailed = false;
         foreach (var method in methods)
         {
             token.ThrowIfCancellationRequested();
@@ -17,6 +18,7 @@ public static class PackageQueryFallback
                 token.ThrowIfCancellationRequested();
                 lastResult = result;
                 hasResult = true;
+                lastAttemptFailed = false;
                 if (accept(result)) return result;
             }
             catch (OperationCanceledException) { throw; }
@@ -25,11 +27,13 @@ public static class PackageQueryFallback
                 or System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception or TimeoutException))
             {
                 last = exception;
+                lastAttemptFailed = true;
                 log($"Método indisponível: {exception.Message.Replace("\r", " ").Replace("\n", " ")}");
             }
         }
+        if (lastAttemptFailed && last is not null)
+            throw new InvalidOperationException("Não foi possível concluir a consulta pelos métodos disponíveis.", last);
         if (hasResult) return lastResult!;
-        if (last is not null) throw new InvalidOperationException("Não foi possível concluir a consulta pelos métodos disponíveis.", last);
         throw new InvalidOperationException("Nenhum método disponível para a consulta.");
     }
 }

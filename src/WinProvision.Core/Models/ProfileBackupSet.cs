@@ -3,7 +3,7 @@
 namespace WinProvision.Core.Models;
 
 /// <summary>
-/// Backup de coleções com metadados legados de provisionamento, preservados apenas para compatibilidade.
+/// Backup de coleções e configurações opcionais de provisionamento do Windows.
 /// </summary>
 public class ProfileBackupSet
 {
@@ -14,8 +14,7 @@ public class ProfileBackupSet
     public List<ProfileManifest> Tabs { get; set; } = new();
 
     /// <summary>
-    /// Estado de provisionamento de sistema atual desta sessão (tema, barra de tarefas,
-    /// energia, nome, wallpaper) — null se nada foi aplicado nem configurado ainda. Fica no
+    /// Configurações de provisionamento do Windows — null quando não exportadas. Fica no
     /// nível do ProfileBackupSet (não dentro de cada guia) porque é um ajuste da MÁQUINA,
     /// não de uma seleção de pacotes específica; ver
     /// <see cref="Services.Provisioning.ProvisioningService.Current"/>, a origem deste

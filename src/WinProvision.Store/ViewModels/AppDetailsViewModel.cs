@@ -120,7 +120,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         _collectionService = collections; _installedPackagesViewModel = backend;
         _packageInstallOptionsService = options; _interaction = presentation;
         _dispatcher = dispatcher; _clipboard = clipboard; _metadata = metadata; _icons = icons;
-        InstallCommand = new AsyncRelayCommand(InstallAsync);
+        InstallCommand = new AsyncRelayCommand(
+            InstallAsync,
+            AsyncRelayCommandOptions.AllowConcurrentExecutions);
         UpdateCommand = new AsyncRelayCommand(UpdateAsync);
         UninstallCommand = new AsyncRelayCommand(UninstallAsync);
         SaveOptionsCommand = new RelayCommand(SaveOptions);
@@ -356,7 +358,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         }
         if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase))
         {
-            string url = $"https://apps.microsoft.com/detail/{id}";
+            string url = $"https://apps.microsoft.com/detail/{Uri.EscapeDataString(id)}";
             ManifestLinkText = url;
             ManifestLinkTag = url;
             IsManifestLinkVisible = true;
@@ -364,8 +366,8 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         }
 
         // WinGet manifest no GitHub
-        string firstChar = id.Length > 0 ? char.ToLowerInvariant(id[0]).ToString() : "a";
-        string parts = id.Replace('.', '/');
+        string firstChar = id.Length > 0 ? Uri.EscapeDataString(char.ToLowerInvariant(id[0]).ToString()) : "a";
+        string parts = string.Join('/', id.Split('.').Select(Uri.EscapeDataString));
         string manifestUrl = $"https://github.com/microsoft/winget-pkgs/tree/master/manifests/{firstChar}/{parts}";
         ManifestLinkText = manifestUrl;
         ManifestLinkTag = manifestUrl;
@@ -651,9 +653,10 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public async Task InstallAsync()
     {
-        if (_app is null || _app.IsSelf) return;
+        if (_app is null || _app.IsSelf || _app.IsInstalling) return;
 
         var app = _app;
+        app.IsInstalling = true;
         InstallButtonIsEnabled = false;
         InstallChevronButtonIsEnabled = false;
         StatusText = $"{app.Name} entrou na fila de instalação.";
@@ -682,6 +685,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            app.IsInstalling = false;
             if (_app == app) { InstallButtonIsEnabled = true; InstallChevronButtonIsEnabled = true; }
         }
     }

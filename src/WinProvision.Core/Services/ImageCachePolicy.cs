@@ -55,19 +55,33 @@ public static class ImageCacheTransfer
 
     public static async Task<ImageDownload> DownloadAsync(HttpClient client, string url, ImageCacheMetadata? metadata, CancellationToken token)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        if (metadata is not null)
+        HttpResponseMessage? response = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            if (EntityTagHeaderValue.TryParse(metadata.ETag, out var etag)) request.Headers.IfNoneMatch.Add(etag);
-            if (metadata.LastModified is { } modified) request.Headers.IfModifiedSince = modified;
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (metadata is not null)
+            {
+                if (EntityTagHeaderValue.TryParse(metadata.ETag, out var etag)) request.Headers.IfNoneMatch.Add(etag);
+                if (metadata.LastModified is { } modified) request.Headers.IfModifiedSince = modified;
+            }
+
+            response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+            if (attempt == 2 || !IsTransient(response.StatusCode))
+                break;
+
+            TimeSpan delay = GetRetryDelay(response, attempt);
+            response.Dispose();
+            response = null;
+            await Task.Delay(delay, token).ConfigureAwait(false);
         }
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-        var updated = new ImageCacheMetadata(response.Headers.ETag?.ToString(), response.Content.Headers.LastModified, DateTimeOffset.UtcNow);
-        if (response.StatusCode == HttpStatusCode.NotModified && metadata is not null)
+
+        using HttpResponseMessage finalResponse = response ?? throw new HttpRequestException("O servidor não retornou uma resposta.");
+        var updated = new ImageCacheMetadata(finalResponse.Headers.ETag?.ToString(), finalResponse.Content.Headers.LastModified, DateTimeOffset.UtcNow);
+        if (finalResponse.StatusCode == HttpStatusCode.NotModified && metadata is not null)
             return new(null, updated with { ETag = updated.ETag ?? metadata.ETag, LastModified = updated.LastModified ?? metadata.LastModified }, true);
-        response.EnsureSuccessStatusCode();
-        if (response.Content.Headers.ContentLength > MaxBytes) throw new InvalidDataException("A imagem excede o limite do carregador.");
-        await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        finalResponse.EnsureSuccessStatusCode();
+        if (finalResponse.Content.Headers.ContentLength > MaxBytes) throw new InvalidDataException("A imagem excede o limite do carregador.");
+        await using var stream = await finalResponse.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         using var buffer = new MemoryStream();
         byte[] chunk = new byte[32768];
         int count;
@@ -77,6 +91,21 @@ public static class ImageCacheTransfer
             buffer.Write(chunk, 0, count);
         }
         return new(buffer.ToArray(), updated);
+    }
+
+    private static bool IsTransient(HttpStatusCode statusCode) =>
+        statusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+            or HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway
+            or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
+
+    private static TimeSpan GetRetryDelay(HttpResponseMessage response, int attempt)
+    {
+        TimeSpan? retryAfter = response.Headers.RetryAfter?.Delta;
+        if (retryAfter is null && response.Headers.RetryAfter?.Date is { } date)
+            retryAfter = date - DateTimeOffset.UtcNow;
+        return retryAfter is { } specified
+            ? TimeSpan.FromMilliseconds(Math.Clamp(specified.TotalMilliseconds, 0, 30_000))
+            : TimeSpan.FromMilliseconds(500 * (1 << attempt));
     }
 }
 

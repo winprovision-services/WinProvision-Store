@@ -1,6 +1,7 @@
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:ic="using:FluentIcons.WinUI" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.HomePage" Background="Transparent" x:Name="HomeRoot" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged">
+<Page xmlns:vm="using:WinProvision.Store.ViewModels" xmlns:views="using:WinProvision.Store.Views" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:ic="using:FluentIcons.WinUI" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.HomePage" Background="Transparent" x:Name="HomeRoot" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged" x:DataType="vm:StorefrontViewModel">
     <Page.Resources>
-        <CornerRadius x:Key="DiscoverSearchCornerRadius">18</CornerRadius>
+        <DataTemplate x:Key="StoreCategoryChipTemplate" x:DataType="views:CategoryChip"><StackPanel Orientation="Horizontal"><ic:FluentIcon Icon="{x:Bind Icon, Mode=OneTime}" IconVariant="Color" IconSize="Size16" FontSize="16" Margin="0,0,6,0" Visibility="{x:Bind IsBrowserCategory, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/><Border Width="16" Height="13" Margin="0,0,6,0" VerticalAlignment="Center" CornerRadius="2" BorderThickness="1.5" BorderBrush="{ThemeResource SystemAccentColorPrimaryBrush}" Visibility="{x:Bind IsBrowserCategory, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"><Grid><Border Height="4" VerticalAlignment="Top" Background="{ThemeResource SystemAccentColorPrimaryBrush}" CornerRadius="1,1,0,0"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="3,1,0,0" Spacing="1"><Ellipse Width="1.5" Height="1.5" Fill="{ThemeResource SystemAltHighColor}"/><Ellipse Width="1.5" Height="1.5" Fill="{ThemeResource SystemAltHighColor}"/><Ellipse Width="1.5" Height="1.5" Fill="{ThemeResource SystemAltHighColor}"/></StackPanel></Grid></Border><TextBlock Text="{x:Bind Label, Mode=OneTime}" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/></StackPanel></DataTemplate>
+<CornerRadius x:Key="DiscoverSearchCornerRadius">18</CornerRadius>
         <Style x:Key="DiscoverSearchTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource AutoSuggestBoxTextBoxStyle}">
             <Setter Property="TextAlignment" Value="Left" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -227,7 +228,7 @@
                 </Grid>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <AutoSuggestBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Style="{StaticResource StoreSearchBoxStyle}" Grid.Column="2" VerticalAlignment="Center" Width="260" MinWidth="180" MaxWidth="340" PlaceholderText="Pesquisar aplicativos..." AutomationProperties.Name="Pesquisar aplicativos" AutomationProperties.AutomationId="DiscoverSearchBox" TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" Padding="0" CornerRadius="{StaticResource DiscoverSearchCornerRadius}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" TextBoxStyle="{StaticResource DiscoverSearchTextBoxStyle}" Height="36">
-                        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="GlobeSearch" IconVariant="Regular" IconSize="Size24" Foreground="{ThemeResource TextFillColorPrimaryBrush}" /></AutoSuggestBox.QueryIcon>
+                        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size24" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" /></AutoSuggestBox.QueryIcon>
                         </AutoSuggestBox>
                 </StackPanel>
             </Grid>
@@ -236,20 +237,29 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ItemsControl Grid.Column="0" x:Name="CategoryList">
+                <ItemsControl Grid.Column="0" x:Name="CategoryList" Visibility="{Binding IsSearchOnDemandIdle, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <controls:WrapPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <RadioButton GroupName="CategoryFilter" Style="{StaticResource StoreCategoryFilterStyle}" IsChecked="{Binding IsSelected, Mode=OneWay}" Checked="CategoryChip_Checked" Tag="{Binding Tag}" Margin="0,0,8,8" AutomationProperties.Name="{Binding Label}" AutomationProperties.AutomationId="{Binding Tag}" />
+                        <DataTemplate x:DataType="views:CategoryChip">
+                            <RadioButton GroupName="CategoryFilter" Style="{StaticResource StoreCategoryFilterStyle}" Content="{Binding}" ContentTemplate="{StaticResource StoreCategoryChipTemplate}" IsChecked="{x:Bind IsSelected, Mode=OneTime}" Checked="CategoryChip_Checked" Tag="{x:Bind Tag, Mode=OneTime}" Margin="0,0,6,6" AutomationProperties.Name="{x:Bind Label, Mode=OneTime}" AutomationProperties.AutomationId="{x:Bind Tag, Mode=OneTime}" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </Grid>
             <Grid Grid.Row="2">
+            <Grid x:Name="SearchOnDemandEmptyState" Visibility="{Binding IsSearchOnDemandIdle, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="760" Margin="24" Spacing="16">
+                    <TextBlock Text="Descubra aplicativos" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="Pesquise pelo nome ou pela origem para carregar os resultados." FontSize="14" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <AutoSuggestBox x:Name="CenteredSearchBox" Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Style="{StaticResource StoreSearchBoxStyle}" Width="720" MaxWidth="720" MinWidth="240" MinHeight="60" HorizontalAlignment="Stretch" PlaceholderText="Pesquisar aplicativos..." AutomationProperties.Name="Pesquisar aplicativos" AutomationProperties.AutomationId="DiscoverCenteredSearchBox" TextChanged="SearchBox_TextChanged" QuerySubmitted="SearchBox_QuerySubmitted" Padding="0" CornerRadius="{StaticResource DiscoverSearchCornerRadius}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" TextBoxStyle="{StaticResource DiscoverSearchTextBoxStyle}">
+                        <AutoSuggestBox.QueryIcon><ic:FluentIcon Icon="Search" IconVariant="Regular" IconSize="Size24" Foreground="{ThemeResource SystemAccentColorPrimaryBrush}" /></AutoSuggestBox.QueryIcon>
+                    </AutoSuggestBox>
+                </StackPanel>
+            </Grid>
             <ScrollViewer x:Name="BrowseScrollViewer" Visibility="{Binding IsBrowsing, Converter={StaticResource BoolToVisibilityConverter}}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="0,0,4,0">
                     <Grid x:Name="StorefrontHeroGrid" Visibility="{Binding ShowHero, Converter={StaticResource BoolToVisibilityConverter}}" Height="440" Margin="0,0,0,24">
@@ -261,6 +271,7 @@
                         <Border x:Name="HeroBanner" Grid.Column="0" CornerRadius="{StaticResource StoreCardCornerRadius}" Background="{ThemeResource AppSurfaceElevatedBrush}" Tapped="AppCard_Click" KeyDown="HeroBanner_KeyDown" PointerEntered="HeroBanner_PointerEntered" PointerExited="HeroBanner_PointerExited" IsTabStop="True" AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="Pressione Enter ou Espaço para abrir os detalhes do aplicativo." AutomationProperties.AutomationId="DiscoverHeroBanner">
                             <Grid CornerRadius="{StaticResource StoreCardCornerRadius}">
                                 <Image x:Name="HeroBannerImage" Stretch="UniformToFill" Opacity="0.86" conv:AsyncImage.SourceUrl="{Binding StoreBannerUrl}" conv:AsyncImage.DecodePixelWidth="1440" />
+                                <ic:FluentIcon Icon="Apps" IconVariant="Regular" IconSize="Size48" FontSize="48" Opacity="0.2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,56,0" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=HeroBannerImage, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" IsHitTestVisible="False" />
                                 <Border Background="{ThemeResource StorefrontHeroScrimBrush}" />
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Margin="36,24,36,64" MaxWidth="340">
                                     <TextBlock Text="{Binding Name, FallbackValue=Descubra seu próximo aplicativo}" FontSize="32" TextWrapping="Wrap" FontWeight="Bold" Foreground="White" />
@@ -472,7 +483,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Style="{StaticResource PageStatusTextStyle}" />
+                    <controls:StatusInfoBar x:Name="StatusText" Grid.Column="0" StatusMessage="{Binding StatusText}" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Classificar por:" Style="{StaticResource PageStatusTextStyle}" Margin="0,0,8,0" />
                         <ComboBox x:Name="CatalogSortComboBox" Width="150" Height="32" SelectedIndex="0" SelectionChanged="CatalogSortComboBox_SelectionChanged" Margin="0,0,12,0" AutomationProperties.Name="Classificar aplicativos" AutomationProperties.AutomationId="DiscoverSortComboBox">
@@ -482,15 +493,18 @@
                             <ComboBoxItem Content="Microsoft Store" />
                             <ComboBoxItem Content="WinGet" />
                         </ComboBox>
-                        <ToggleButton x:Name="ListViewToggleButton" AutomationProperties.Name="Visualização em lista" AutomationProperties.AutomationId="DiscoverListViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" Click="ListViewToggleButton_Click" ToolTipService.ToolTip="Visualização em lista">
-                            <ic:FluentIcon Icon="AppsList" IconVariant="Color" IconSize="Size24" />
-                        </ToggleButton>
-                        <ToggleButton x:Name="GridViewToggleButton" AutomationProperties.Name="Visualização em cartões" AutomationProperties.AutomationId="DiscoverGridViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" IsChecked="True" Click="GridViewToggleButton_Click" ToolTipService.ToolTip="Visualização em cartões">
-                            <ic:FluentIcon Icon="AppsListDetail" IconVariant="Color" IconSize="Size20" />
-                        </ToggleButton>
-                        <ToggleButton x:Name="IconsViewToggleButton" AutomationProperties.Name="Visualização em ícones" AutomationProperties.AutomationId="DiscoverIconsViewModeButton" Style="{StaticResource UpdatesViewModeToggleStyle}" CornerRadius="{StaticResource UpdatesViewModeCornerRadius}" Click="IconsViewToggleButton_Click" ToolTipService.ToolTip="Visualização em ícones">
-                            <ic:FluentIcon Icon="Apps" IconVariant="Color" IconSize="Size16" />
-                        </ToggleButton>
+                        <ToggleSplitButton x:Name="DiscoverViewModeButton" AutomationProperties.AutomationId="DiscoverViewModeButton" AutomationProperties.Name="Visualização em cartões" ToolTipService.ToolTip="Visualização em cartões" Click="ViewModeMain_Click" IsChecked="True">
+                        <SymbolIcon x:Name="DiscoverViewModeButtonIcon" Symbol="ViewAll" />
+                        <ToggleSplitButton.Flyout>
+                            <Flyout Placement="Bottom">
+                                <StackPanel>
+                                    <Button AutomationProperties.AutomationId="DiscoverListViewMode" Content="Lista" Tag="list" Click="DiscoverViewMode_Click" HorizontalAlignment="Stretch" />
+                                    <Button AutomationProperties.AutomationId="DiscoverGridViewMode" Content="Cartões" Tag="grid" Click="DiscoverViewMode_Click" HorizontalAlignment="Stretch" />
+                                    <Button AutomationProperties.AutomationId="DiscoverIconsViewMode" Content="Ícones" Tag="icons" Click="DiscoverViewMode_Click" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                            </Flyout>
+                        </ToggleSplitButton.Flyout>
+                    </ToggleSplitButton>
                     </StackPanel>
                 </Grid>
             </Border>

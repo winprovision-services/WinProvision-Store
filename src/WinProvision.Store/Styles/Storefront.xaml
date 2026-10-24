@@ -148,7 +148,7 @@
                     </VisualStateGroup>
                     <VisualStateGroup x:Name="CheckStates"><VisualState x:Name="Unchecked"/><VisualState x:Name="Checked"><VisualState.Setters><Setter Target="FilterSurface.Background" Value="{ThemeResource AccentFillColorDefaultBrush}"/><Setter Target="FilterSurface.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}"/><Setter Target="ChipLabel.Foreground" Value="White"/></VisualState.Setters></VisualState><VisualState x:Name="Indeterminate"/></VisualStateGroup>
                 </VisualStateManager.VisualStateGroups>
-                <StackPanel Orientation="Horizontal"><ic:FluentIcon x:Name="ChipIcon" Icon="{Binding Icon}" IconVariant="Color" IconSize="Size20" FontSize="20" Margin="0,0,8,0" Foreground="{TemplateBinding Foreground}"/><TextBlock x:Name="ChipLabel" Text="{Binding Label}" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/></StackPanel>
+                <ContentPresenter x:Name="ChipLabel" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
         </ControlTemplate></Setter.Value></Setter>
     </Style>

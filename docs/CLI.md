@@ -15,7 +15,7 @@ Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao exe
 | Comando | Função |
 | --- | --- |
 | `search <nome>` | Pesquisar aplicativos sem instalar |
-| `show --id ID` | Consultar detalhes |
+| `show --id ID` | Consultar detalhes; `--json` retorna um envelope estruturado |
 | `list [nome]` | Listar aplicativos instalados |
 | `install --id ID` | Instalar diretamente |
 | `download --id ID` | Baixar o instalador para a pasta configurada ou Downloads |
@@ -35,6 +35,7 @@ Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao exe
 ```powershell
 winprovision search Chrome
 winprovision search Chrome --json
+winprovision show --id Google.Chrome --json
 winprovision install --id Google.Chrome
 winprovision download --id Google.Chrome --output D:\Instaladores
 winprovision upgrade --all
@@ -57,7 +58,7 @@ winprovision --version
 | `-s`, `--source` | Fonte: `winget` ou `msstore` |
 | `-q`, `--query` | Consulta por nome; também aceita texto posicional |
 | `-e`, `--exact` | Correspondência exata |
-| `--json` | Resultado estruturado em pesquisa, listagem e consulta de atualizações |
+| `--json` | Resultado estruturado em pesquisa, listagem, consulta de atualizações e detalhes |
 | `--no-input` | Em `upgrade`, apenas consultar; demais comandos executam sem menus |
 | `--elevation-cache` | Aceito por compatibilidade; o cache de 5 minutos de inatividade já é automático |
 | `--all` | Selecionar todas as atualizações, sem combinar filtros |
@@ -120,7 +121,7 @@ Instaladores podem pedir autorização administrativa ou interação própria.
 
 ## Saída e códigos
 
-Resultados são escritos em stdout; status de consulta e falhas resumidas, em stderr. Diagnósticos técnicos são gravados em arquivo. A saída JSON de consultas contém `id`, `name`, `version`, `availableVersion` e `source`.
+Resultados são escritos em stdout; status de consulta e falhas resumidas, em stderr. Diagnósticos técnicos são gravados em arquivo. A saída JSON de pesquisa, listagem e atualizações contém `id`, `name`, `version`, `availableVersion` e `source`. `show --json` retorna um objeto com `id`, `source` e `details`; `details` preserva como texto a resposta detalhada da fonte consultada.
 
 Somente falhas exibem uma causa curta em português (por exemplo, falta de espaço, erro de download ou hash divergente). Causas conhecidas usam a classificação compartilhada; falhas sem causa identificada mostram o código retornado, quando disponível. Saída bruta de serviços, caminhos de exceções e detalhes técnicos permanecem nos logs, acessíveis por `winprovision logs`. Sucesso, cancelamento, JSON e códigos de saída mantêm seu comportamento.
 

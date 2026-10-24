@@ -58,10 +58,23 @@ internal static partial class SmokeTest
         services.GetRequiredService<OperationHistoryService>().Record(historyItem);
         await services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecuteAsync(null);
         await services.GetRequiredService<InstalledPackagesViewModel>().RefreshCommand.ExecuteAsync(null);
+        var applicationPreferences = services.GetRequiredService<ApplicationPreferencesService>();
+        Check(!applicationPreferences.ProvisioningMenuEnabled
+            && window.ProvisioningMenuVisibility == Visibility.Collapsed,
+            "Provisionamento: menu começa oculto por padrão");
+        applicationPreferences.SetProvisioningMenuEnabled(true);
+        await Task.Delay(100);
+        Check(window.ProvisioningMenuVisibility == Visibility.Visible,
+            "Provisionamento: ativar a opção exibe o menu");
+        applicationPreferences.SetProvisioningMenuEnabled(false);
+        await Task.Delay(100);
+        Check(window.ProvisioningMenuVisibility == Visibility.Collapsed,
+            "Provisionamento: desativar a opção oculta o menu");
+        applicationPreferences.SetProvisioningMenuEnabled(true);
         foreach (ElementTheme theme in new[] { ElementTheme.Dark, ElementTheme.Light })
         {
             window.RootElement.RequestedTheme = theme;
-            foreach (string tag in new[] { "home", "updates", "installed", "collections", "office", "account", "settings", "more" })
+            foreach (string tag in new[] { "home", "updates", "installed", "collections", "office", "provisioning", "account", "settings", "more" })
             {
                 window.Navigate(tag);
                 await WaitForPageAsync(window, tag, theme);
@@ -79,8 +92,41 @@ internal static partial class SmokeTest
                     Check(home.IsHeroRotationPaused, $"Descobrir: pausa interrompe a rotação em {theme}");
                     rotation.IsChecked = true;
                     Check(!home.IsHeroRotationPaused, $"Descobrir: retomada restaura a rotação em {theme}");
+                    if (theme == ElementTheme.Dark)
+                    {
+                        var preferences = services.GetRequiredService<ApplicationPreferencesService>();
+                        preferences.SetSearchOnDemand(true);
+                        await Task.Delay(250);
+                        Check(((FrameworkElement)home.FindName("SearchOnDemandEmptyState")).Visibility == Visibility.Visible
+                            && ((FrameworkElement)home.FindName("BrowseScrollViewer")).Visibility == Visibility.Collapsed,
+                            "Descobrir: pesquisa sob demanda oculta vitrine e apresenta a busca centralizada");
+                        Check(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName((AutoSuggestBox)home.FindName("CenteredSearchBox")) == "Pesquisar aplicativos",
+                            "Descobrir: busca centralizada tem nome acessível");
+                        await CaptureAsync(window.RootElement, "discover-search-on-demand-dark.png");
+                        preferences.SetSearchOnDemand(false);
+                        services.GetRequiredService<HomeViewModel>().LoadPreview((AppEntry[])[app]);
+                    }
                 }
                 await CaptureAsync(window.RootElement, $"{tag}-{theme}.png");
+                if (window.CurrentPage is Views.InstalledPackagesPage installed)
+                {
+                    var list = (ListView)installed.FindName("InstalledListView");
+                    var grid = (GridView)installed.FindName("InstalledGridView");
+                    var icons = (GridView)installed.FindName("InstalledIconsView");
+                    foreach (string mode in new[] { "list", "grid", "icons" })
+                    {
+                        installed.ViewModel.SetViewMode(mode);
+                        ItemsControl activeView = mode == "list" ? (ItemsControl)list : mode == "grid" ? grid : icons;
+                        Check(ReferenceEquals(activeView.ItemsSource, installed.ViewModel.VisiblePackages)
+                            && (mode == "list" || list.ItemsSource is null)
+                            && (mode == "grid" || grid.ItemsSource is null)
+                            && (mode == "icons" || icons.ItemsSource is null),
+                            $"Instalados: apenas a vista {mode} observa os pacotes em {theme}");
+                        if (mode != "list")
+                            await CaptureAsync(window.RootElement, $"installed-{mode}-{theme}.png");
+                    }
+                    installed.ViewModel.SetViewMode("list");
+                }
                 if (window.CurrentPage is Views.MorePage more && theme == ElementTheme.Dark
                     && Environment.GetEnvironmentVariable("WINPROVISION_VALIDATE_BROWSER") == "1")
                 {
@@ -94,6 +140,7 @@ internal static partial class SmokeTest
                     Check(!more.ViewModel.IsBrowserStatusVisible,
                         $"Sobre: site real carregou no WebView2 ({more.ViewModel.BrowserStatus})");
                     var projectBrowser = ((Grid)more.FindName("ProjectBrowserHost")).Children.OfType<WebView2>().Single();
+                    await projectBrowser.EnsureCoreWebView2Async();
                     Check(projectBrowser.CoreWebView2.DocumentTitle.Contains("WinProvision Store", StringComparison.Ordinal),
                         "Sobre: documento real do WinProvision Store recebido");
                     more.ViewModel.CloseAboutCommand.Execute(null);
@@ -179,6 +226,35 @@ internal static partial class SmokeTest
                 }
                 if (window.CurrentPage is Views.SettingsPage settings)
                 {
+                    settings.NavigateToCategory("Interface");
+                    var searchOnDemandSwitch = (ToggleSwitch)settings.FindName("SearchOnDemandSwitch");
+                    searchOnDemandSwitch.IsOn = true;
+                    await Task.Delay(100);
+                    Check(settings.ViewModel.SearchOnDemand
+                        && services.GetRequiredService<ApplicationPreferencesService>().SearchOnDemand,
+                        $"Configurações: pesquisa sob demanda salva pelo controle em {theme}");
+                    await CaptureAsync(window.RootElement, $"settings-search-on-demand-{theme}.png");
+                    searchOnDemandSwitch.IsOn = false;
+                    Check(!settings.ViewModel.SearchOnDemand
+                        && !services.GetRequiredService<ApplicationPreferencesService>().SearchOnDemand,
+                        $"Configurações: pesquisa sob demanda pode ser desativada em {theme}");
+                    settings.NavigateToCategory("Provisioning");
+                    await Task.Delay(100);
+                    await CaptureAsync(window.RootElement, $"settings-provisioning-{theme}.png");
+                    var provisioningMenuSwitch = (ToggleSwitch)settings.FindName("ProvisioningMenuSwitch");
+                    provisioningMenuSwitch.IsOn = false;
+                    await Task.Delay(100);
+                    Check(!settings.ViewModel.ProvisioningMenuEnabled
+                        && !services.GetRequiredService<ApplicationPreferencesService>().ProvisioningMenuEnabled
+                        && window.ProvisioningMenuVisibility == Visibility.Collapsed,
+                        $"Configurações: desativar Provisionamento pelo controle oculta o menu em {theme} (switch={provisioningMenuSwitch.IsOn}, vm={settings.ViewModel.ProvisioningMenuEnabled}, pref={services.GetRequiredService<ApplicationPreferencesService>().ProvisioningMenuEnabled}, menu={window.ProvisioningMenuVisibility})");
+                    provisioningMenuSwitch.IsOn = true;
+                    await Task.Delay(100);
+                    Check(settings.ViewModel.ProvisioningMenuEnabled
+                        && services.GetRequiredService<ApplicationPreferencesService>().ProvisioningMenuEnabled
+                        && window.ProvisioningMenuVisibility == Visibility.Visible,
+                        $"Configurações: ativar Provisionamento pelo controle exibe o menu em {theme}");
+                    services.GetRequiredService<HomeViewModel>().LoadPreview((AppEntry[])[app]);
                     settings.ViewModel.SearchText = "backup";
                     Check(settings.FindName("CardBackup") is null && settings.FindName("PanelBackup") is null && settings.ViewModel.SearchResults.Count == 0,
                         $"Configurações: backup ausente da página e da pesquisa em {theme}");
@@ -239,6 +315,111 @@ internal static partial class SmokeTest
                     Check(ReferenceEquals(cloudImport.Command, packages.Account.RestoreFromCloudCommand) && !cloudImport.IsEnabled,
                         $"Pacotes: importação da nuvem exige conta conectada em {theme}");
                 }
+                if (window.CurrentPage is Views.ProvisioningPage provisioning)
+                {
+                    if (((ProvisioningViewModel)provisioning.DataContext).HasWallpaper)
+                        ((ProvisioningViewModel)provisioning.DataContext).ClearWallpaperCommand.Execute(null);
+                    ((FrameworkElement)provisioning.FindName("DesktopPreviewFrame")!).StartBringIntoView();
+                    await Task.Delay(150);
+                    await CaptureAsync(window.RootElement, $"provisioning-preview-{theme}.png");
+                    ((FrameworkElement)provisioning.FindName("DesktopPreviewTaskbar")!).StartBringIntoView();
+                    await Task.Delay(150);
+                    await CaptureAsync(window.RootElement, $"provisioning-taskbar-{theme}.png");
+                    Check(provisioning.DataContext is ProvisioningViewModel,
+                        $"Provisionamento: página e ViewModel carregados em {theme}");
+                    var provisioningModel = (ProvisioningViewModel)provisioning.DataContext;
+                    ((Expander)provisioning.FindName("AppearanceSettingsExpander")!).IsExpanded = true;
+                    await Task.Delay(100);
+                    provisioningModel.SelectedAccentMode = provisioningModel.AccentOptions[2];
+                    var accentPicker = (ColorPicker)provisioning.FindName("ProvisioningAccentColorPicker")!;
+                    accentPicker.StartBringIntoView();
+                    await Task.Delay(150);
+                    await CaptureAsync(window.RootElement, $"provisioning-color-picker-{theme}.png");
+                    accentPicker.Color = Windows.UI.Color.FromArgb(255, 18, 52, 86);
+                    await Task.Delay(100);
+                    Check(provisioningModel.IsCustomAccentSelected && provisioningModel.AccentColor == "#123456",
+                        $"Provisionamento: ColorPicker atualiza a cor personalizada do perfil em {theme}");
+                    provisioningModel.SelectedAccentMode = provisioningModel.AccentOptions[0];
+                    provisioningModel.IsWallpaperPickerExpanded = true;
+                    await provisioningModel.LoadWallpaperOptionsCommand.ExecutionTask!;
+                    Check(provisioningModel.WallpaperOptions.Count > 0,
+                        $"Provisionamento: catálogo de wallpapers do R2 carregado em {theme}");
+                    Check(provisioningModel.WallpaperOptions[0].IsLocalChoice,
+                        $"Provisionamento: card de imagem local aparece primeiro na galeria em {theme}");
+                    var firstWallpaperOption = provisioningModel.WallpaperOptions.First(option => !option.IsLocalChoice);
+                    var wallpaperThumbnail = await AsyncImage.LoadBitmapAsync(firstWallpaperOption.Url, 380, CancellationToken.None);
+                    Check(wallpaperThumbnail is not null,
+                        $"Provisionamento: miniatura R2 decodificada em {theme}");
+                    if (theme == ElementTheme.Dark)
+                    {
+                        var wallpaperOption = firstWallpaperOption;
+                        await provisioningModel.SelectCatalogWallpaperCommand.ExecuteAsync(wallpaperOption);
+                        Check(provisioningModel.HasWallpaper && provisioningModel.WallpaperFileName == wallpaperOption.FileName
+                            && provisioningModel.StatusText.Contains("incorporada ao perfil", StringComparison.OrdinalIgnoreCase),
+                            "Provisionamento: baixar e selecionar imagem do catálogo R2 atualiza o perfil");
+                        provisioningModel.ClearWallpaperCommand.Execute(null);
+                    }
+                    ((FrameworkElement)provisioning.FindName("WallpaperGalleryItems")!).StartBringIntoView();
+                    var provisioningScroll = (ScrollViewer)provisioning.FindName("ProvisioningScrollViewer")!;
+                    provisioningScroll.ChangeView(null, provisioningScroll.ScrollableHeight, null);
+                    await Task.Delay(300);
+                    await CaptureAsync(window.RootElement, $"provisioning-wallpaper-gallery-{theme}.png");
+                    provisioningModel.IsWallpaperPickerExpanded = false;
+                    provisioningModel.SelectedTaskbarAutoHide = provisioningModel.BooleanOptions.First(option => option.Value == true);
+                    Check(((Border)provisioning.FindName("DesktopPreviewTaskbar")!).Height == 24
+                        && ((FrameworkElement)provisioning.FindName("NormalTaskbarContent")!).Visibility == Visibility.Collapsed
+                        && ((FrameworkElement)provisioning.FindName("HiddenTaskbarContent")!).Visibility == Visibility.Visible,
+                        $"Provisionamento: ocultação da barra mostra o estado compacto do Figma em {theme}");
+                    await CaptureAsync(window.RootElement, $"provisioning-taskbar-hidden-{theme}.png");
+                    provisioningModel.SelectedTaskbarAutoHide = provisioningModel.BooleanOptions[0];
+                    provisioningModel.PreviewStartCommand.Execute(null);
+                    Check(provisioningModel.IsPreviewStartOpen,
+                        $"Provisionamento: menu Iniciar abre na prévia em {theme}");
+                    await CaptureAsync(window.RootElement, $"provisioning-start-{theme}.png");
+                    provisioningModel.PreviewQuickSettingsCommand.Execute(null);
+                    Check(provisioningModel.IsPreviewQuickSettingsOpen && !provisioningModel.IsPreviewStartOpen,
+                        $"Provisionamento: painel da prévia alterna em {theme}");
+                    provisioningModel.ClosePreviewSurfaceCommand.Execute(null);
+                    Check(provisioningModel.SelectedSystemTheme?.Label == "Não alterar",
+                        $"Provisionamento: opções padrão visíveis em {theme}");
+                    Check(((Button)provisioning.FindName("SaveProvisioningButton")!).Command is not null,
+                        $"Provisionamento: salvar disponível em {theme}");
+                    if (theme == ElementTheme.Dark)
+                    {
+                        string sampleWallpaperPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Windows11Preview", "wallpaper-dark.png");
+                        await provisioningModel.LoadWallpaperFromFileAsync(sampleWallpaperPath, CancellationToken.None);
+                        Check(provisioningModel.HasWallpaper && provisioningModel.WallpaperFileName == "wallpaper-dark.png"
+                            && ReferenceEquals(((Image)provisioning.FindName("DesktopPreviewWallpaper")!).Source, provisioningModel.WallpaperPreview),
+                            "Provisionamento: carregar arquivo real atualiza o wallpaper do Canvas");
+                        byte[] samplePng = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jUioAAAAASUVORK5CYII=");
+                        var image = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                        var writer = new Windows.Storage.Streams.DataWriter(image);
+                        writer.WriteBytes(samplePng);
+                        await writer.StoreAsync();
+                        await writer.FlushAsync();
+                        image.Seek(0);
+                        var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                        await bitmap.SetSourceAsync(image);
+                        provisioningModel.SetWallpaperForValidation("fixture.png", Convert.ToBase64String(samplePng), bitmap);
+                        Check(ReferenceEquals(((Image)provisioning.FindName("DesktopPreviewWallpaper")!).Source, bitmap),
+                            "Provisionamento: imagem escolhida aparece imediatamente no Canvas");
+                        provisioningModel.SaveCommand.Execute(null);
+                        var saved = ProfileDocumentService.Parse(AotJson.Serialize(collections.CreateBackupSnapshot(), WinProvisionJsonOptions.Profile));
+                        var savedWallpaper = saved.Provisioning ?? saved.Tabs.First().Provisioning;
+                        Check(savedWallpaper?.WallpaperFileName == "fixture.png"
+                            && savedWallpaper.WallpaperImageBase64 == Convert.ToBase64String(samplePng),
+                            "Provisionamento: wallpaper incorporado preservado no perfil JSON");
+                        provisioningModel.ClearWallpaperCommand.Execute(null);
+                        Check(((Image)provisioning.FindName("DesktopPreviewWallpaper")!).Source is Microsoft.UI.Xaml.Media.Imaging.BitmapImage restored
+                            && restored.UriSource?.ToString().Contains("wallpaper-dark.png") == true,
+                            "Provisionamento: remover imagem restaura wallpaper do tema");
+                        provisioningModel.SelectedSystemTheme = provisioningModel.ThemeOptions[1];
+                        Check(((Image)provisioning.FindName("DesktopPreviewWallpaper")!).Source is Microsoft.UI.Xaml.Media.Imaging.BitmapImage lightWallpaper
+                            && lightWallpaper.UriSource?.ToString().Contains("wallpaper-light.png") == true,
+                            "Provisionamento: trocar tema atualiza wallpaper do Canvas");
+                        provisioningModel.SelectedSystemTheme = provisioningModel.ThemeOptions[0];
+                    }
+                }
                 if (window.CurrentPage is Views.AccountSyncPage accountPage)
                     Check(accountPage.FindName("ImportJsonButton") is null && accountPage.FindName("ExportJsonButton") is null,
                         $"Conta: ações JSON concentradas em Pacotes em {theme}");
@@ -249,6 +430,15 @@ internal static partial class SmokeTest
         if (window.CurrentPage is Views.MorePage logPage)
         {
             logPage.ViewModel.OpenHistoryCommand.Execute(null);
+            logPage.ViewModel.HistorySearchText = "7-Zip";
+            Check(logPage.ViewModel.HistoryEntries.Count > 0
+                && logPage.ViewModel.HistoryEntries.All(entry => entry.AppName.Contains("7-Zip", StringComparison.OrdinalIgnoreCase)),
+                "Histórico: pesquisa filtra por aplicativo");
+            logPage.ViewModel.HistorySearchText = "sem-correspondencia-smoke";
+            Check(logPage.ViewModel.HistoryEntries.Count == 0
+                && logPage.ViewModel.HistoryEmptyMessage.Contains("Nenhuma operação", StringComparison.Ordinal),
+                "Histórico: pesquisa sem resultados apresenta estado vazio");
+            logPage.ViewModel.HistorySearchText = string.Empty;
             ((FrameworkElement)logPage.FindName("HistoryPanel")).StartBringIntoView();
             await Task.Delay(200);
             var historyList = (ListView)logPage.FindName("HistoryList");
@@ -317,6 +507,20 @@ internal static partial class SmokeTest
         await Task.Delay(400);
         Check(window.CurrentPage!.ActualWidth > 0, "Coleções: janela compacta permanece utilizável");
         await CaptureAsync(window.RootElement, "collections-compact.png");
+        foreach (var (route, imageName) in new[]
+        {
+            ("updates", "updates-compact.png"),
+            ("installed", "installed-compact.png"),
+            ("provisioning", "provisioning-compact.png"),
+            ("account", "account-compact.png"),
+            ("more", "more-compact.png")
+        })
+        {
+            window.Navigate(route);
+            await Task.Delay(400);
+            Check(window.CurrentPage!.ActualWidth > 0, $"{route}: janela compacta permanece utilizável");
+            await CaptureAsync(window.RootElement, imageName);
+        }
         var details = services.GetRequiredService<AppDetailsOverlay>();
         await details.ShowAsync(app);
         await Task.Delay(300);
@@ -336,6 +540,29 @@ internal static partial class SmokeTest
         Check(!detailsOptions.CurrentOptions().Interactive && detailsOptions.InstallButtonIsEnabled,
             "Detalhes: Microsoft Store mantém a API COM elegível e a instalação disponível");
         detailsOptions.SetApp(app, null, null);
+        var smokeBackend = (SmokePackageBackend)services.GetRequiredService<IPackageBackend>();
+        var firstInstall = new TaskCompletionSource<WingetExecutionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondInstall = new TaskCompletionSource<WingetExecutionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        smokeBackend.InstallHandler = package => package.Id == "Smoke.First"
+            ? firstInstall.Task
+            : secondInstall.Task;
+        smokeBackend.InstallCount = 0;
+        var firstQueuedApp = new AppEntry { Id = "Smoke.First", Name = "Primeiro app", Source = "winget" };
+        var secondQueuedApp = new AppEntry { Id = "Smoke.Second", Name = "Segundo app", Source = "winget" };
+        detailsOptions.SetApp(firstQueuedApp, null, null);
+        Task firstInstallTask = detailsOptions.InstallCommand.ExecuteAsync(null);
+        await Task.Yield();
+        Check(firstQueuedApp.IsInstalling && detailsOptions.InstallCommand.CanExecute(null),
+            "Instalação: comando aceita enfileirar outro pacote enquanto o primeiro está ativo");
+        detailsOptions.SetApp(secondQueuedApp, null, null);
+        Task secondInstallTask = detailsOptions.InstallCommand.ExecuteAsync(null);
+        await Task.Yield();
+        Check(smokeBackend.InstallCount == 2 && secondQueuedApp.IsInstalling,
+            "Instalação: segundo pacote chega à fila durante a instalação do primeiro");
+        firstInstall.SetResult(new WingetExecutionResult { Success = true });
+        secondInstall.SetResult(new WingetExecutionResult { Success = true });
+        await Task.WhenAll(firstInstallTask, secondInstallTask);
+        smokeBackend.InstallHandler = null;
         detailsOptions.IsOptionsBodyPanelVisible = true;
         await Task.Delay(150);
         await CaptureAsync(window.RootElement, "details.png");
@@ -392,8 +619,9 @@ internal static partial class SmokeTest
             var settingsPage = (Views.SettingsPage)window.CurrentPage!;
             settingsPage.NavigateToCategory("General");
             Check(settingsPage.FindName("InstallMethodComboBox") is ComboBox methodCombo
-                && methodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WinGetPkgsViper"),
-                $"Instalação: método WinGet-Pkgs + Viper disponível em {theme}");
+                && methodCombo.Items.OfType<ComboBoxItem>().All(item => (string?)item.Tag != "WinGetPkgsViper")
+                && methodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WinProvisionApi"),
+                $"Instalação: método duplicado removido e WinProvision API disponível em {theme}");
             Check(ReferenceEquals(((Button)settingsPage.FindName("AuthorizeElevationButton")).Command,
                 settingsPage.ViewModel.AuthorizeElevationCommand), "Elevação: nova autorização por sessão disponível");
             Check(WinProvision.Core.Services.GsudoElevationService.CacheMinutes == 5, "Elevação: cache fixo de 5 minutos por padrão");
@@ -421,18 +649,17 @@ internal static partial class SmokeTest
                 $"Notificações: categorias independentes salvas por binding em {theme}");
             await CaptureAsync(window.RootElement, $"settings-notifications-{theme}.png");
             settingsPage.NavigateToCategory("Execution");
-            var officeDownloader = (ToggleSwitch)settingsPage.FindName("OfficeViperDownloadToggle");
-            officeDownloader.IsOn = true;
+            settingsModel.UseViperOfficeDownload = true;
             Check(settingsModel.UseViperOfficeDownload
                 && services.GetRequiredService<ApplicationPreferencesService>().UseViperOfficeDownload,
                 $"Office: mecanismo Viper configurado e salvo em Configurações em {theme}");
             Check(services.GetRequiredService<OfficeViewModel>().CreateInstallRequest()?.UseViperDownload == true,
                 $"Office: novas configurações usam o mecanismo salvo em {theme}");
-            officeDownloader.IsOn = false;
+            settingsModel.UseViperOfficeDownload = false;
             settingsModel.ParallelOperations = "2"; settingsModel.ParallelDownloads = "4";
             settingsModel.InstallerNames = "PackageVersionArchitecture";
             settingsModel.DownloadDirectory = Path.Combine(OutputDirectory, "downloads-test");
-            ((Button)settingsPage.FindName("SaveExecutionOptionsButton")).Command.Execute(null);
+            settingsModel.SaveExecutionOptionsCommand.Execute(null);
             Check(operationPreferences.Load().ParallelOperations == 2 && operationPreferences.Load().ParallelDownloads == 4
                 && operationPreferences.Load().InstallerNames == InstallerNameStyle.PackageVersionArchitecture,
                 $"Operações: limites e nomes persistidos por binding em {theme}");

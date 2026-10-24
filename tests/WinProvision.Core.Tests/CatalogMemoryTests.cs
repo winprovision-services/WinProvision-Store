@@ -45,6 +45,35 @@ public sealed class CatalogMemoryTests
         finally { Directory.Delete(directory, recursive: true); }
     }
 
+    [Fact]
+    public async Task ReleasingCatalogMemoryPreservesTheDiskCache()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "WinProvision-catalog-release-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string index = """[{"id":"Test.App","appPath":"manifests/t/test/app/app.json","appSha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"Teste","publisher":"Teste","latestVersion":"1.0","architectures":["x64"],"tags":[]}]""";
+            string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(index))).ToLowerInvariant();
+            string catalog = $$"""{"schemaVersion":1,"generation":"test","generatedAtUtc":"2026-10-21T00:00:00Z","packageCount":1,"searchIndexPath":"winget/v1/search/{{hash}}.json","searchIndexSha256":"{{hash}}"}""";
+            string catalogPath = Path.Combine(directory, "winget-v1-catalog.json");
+            string searchPath = Path.Combine(directory, "winget-v1-search.json");
+            await File.WriteAllTextAsync(catalogPath, catalog);
+            await File.WriteAllTextAsync(searchPath, index);
+            using var handler = new CatalogHandler(catalog, index);
+            using var client = new HttpClient(handler);
+            await using var service = new StoreService(client, null, directory);
+
+            Assert.Single(await service.LoadCatalogAsync());
+            await service.ReleaseCatalogMemoryAsync();
+
+            Assert.Empty(service.GetAll());
+            Assert.Empty(service.Search("Teste"));
+            Assert.True(File.Exists(catalogPath));
+            Assert.True(File.Exists(searchPath));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     private sealed class CatalogHandler(string catalog, string index) : HttpMessageHandler
     {
         public TaskCompletionSource AllowResponse { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

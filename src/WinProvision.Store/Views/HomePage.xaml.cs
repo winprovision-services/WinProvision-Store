@@ -11,6 +11,8 @@ using WinProvision.Store.ViewModels;
 namespace WinProvision.Store.Views;
 public sealed partial class HomePage : Page
 {
+    private void ViewModeMain_Click(SplitButton sender, SplitButtonClickEventArgs e) { SetAppsViewMode(AppsGridScrollViewer.Visibility == Visibility.Visible, AppsListScrollViewer.Visibility == Visibility.Visible); }
+
     public HomeViewModel ViewModel { get; }
     private StorefrontViewModel Storefront => ViewModel.Storefront;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _heroTimer;
@@ -24,8 +26,6 @@ public sealed partial class HomePage : Page
     public int AppsColumns { get => (int)GetValue(AppsColumnsProperty); set => SetValue(AppsColumnsProperty, value); }
     public int ShelfColumns { get => (int)GetValue(ShelfColumnsProperty); set => SetValue(ShelfColumnsProperty, value); }
     internal bool IsHeroRotationPaused => _heroRotationPaused;
-    [WinRT.GeneratedBindableCustomProperty]
-    public sealed partial record CategoryChip(string Tag, string Label, Icon Icon, bool IsSelected);
     public HomePage(HomeViewModel viewModel)
     {
         ViewModel = viewModel;
@@ -37,7 +37,7 @@ public sealed partial class HomePage : Page
             new("all", "Todos", Icon.Apps, true), new("productivity", "Produtividade", Icon.Document, false),
             new("development", "Desenvolvimento", Icon.Code, false), new("utilities", "Utilitários", Icon.Toolbox, false),
             new("multimedia", "Multimídia", Icon.Video, false), new("security", "Segurança", Icon.Shield, false),
-            new("gaming", "Jogos", Icon.Trophy, false), new("browsers", "Navegadores", Icon.Globe, false)
+            new("gaming", "Jogos", Icon.Trophy, false), new("browsers", "Navegadores", Icon.GlobeSearch, false)
         };
         _heroTimer = DispatcherQueue.CreateTimer(); _heroTimer.Interval = TimeSpan.FromSeconds(8);
         _heroTimer.Tick += (_, _) => Storefront.SetHeroBanner(Storefront.HeroBannerIndex + 1);
@@ -61,6 +61,16 @@ public sealed partial class HomePage : Page
         if (args.PropertyName is nameof(StorefrontViewModel.SelectedBanner) or nameof(StorefrontViewModel.RightPromoApp) or nameof(StorefrontViewModel.CurrentShelf)) UpdatePresentation();
     }
     public void SetWindowActive(bool active) { _active = active; RefreshHeroTimer(); }
+    public async Task SuspendForBackgroundAsync()
+    {
+        await Storefront.OnNavigatedFromAsync();
+        Storefront.ReleaseCatalogMemory();
+        await ViewModel.ReleaseCatalogMemoryAsync();
+    }
+    public async Task ResumeFromBackgroundAsync()
+    {
+        await Storefront.OnNavigatedToAsync();
+    }
     private void RefreshHeroTimer()
     {
         if (_active && IsLoaded && !_heroRotationPaused && !_heroPointerOver
@@ -94,27 +104,47 @@ public sealed partial class HomePage : Page
     private void Page_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateStorefrontLayout(args.NewSize.Width);
     private void UpdateStorefrontLayout(double width)
     {
+        CenteredSearchBox.Width = Math.Clamp(width - 80, 240, 720);
         bool compact = width < 1050;
         bool promotions = !compact && Storefront.RightPromoApp is not null;
         HeroPromotionsColumn.Width = promotions ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         HeroGapColumn.Width = new GridLength(promotions ? 12 : 0);
         HeroPromotions.Visibility = promotions ? Visibility.Visible : Visibility.Collapsed;
-        StorefrontHeroGrid.Height = width < 700 ? 300 : compact ? 360 : 440;
+        StorefrontHeroGrid.Height = width < 700 ? 280 : compact ? 320 : 400;
         StorefrontShelves.Columns = compact || Storefront.CurrentShelf != StorefrontViewModel.ShelfView.Overview ? 1 : 2;
         ShelfColumns = width < 760 ? 1 : width < 1200 ? 2 : 3;
         AppsColumns = width < 700 ? 1 : width < 1100 ? 2 : 3;
         SearchCardsLayout.MaximumRowsOrColumns = AppsColumns;
     }
     private void CategoryChip_Checked(object sender, RoutedEventArgs args) { if (sender is RadioButton { Tag: string tag }) Storefront.SelectCategory(tag); }
-    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { }
-    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) { Storefront.SearchText = args.QueryText; Storefront.ApplyFilter(); }
+    private async void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput
+            && string.IsNullOrWhiteSpace(sender.Text))
+        {
+            Storefront.SearchText = string.Empty;
+            if (Storefront.IsSearchOnDemandIdle)
+                await Storefront.SubmitSearchAsync(string.Empty);
+            else
+                Storefront.ApplyFilter();
+        }
+    }
+    private async void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        try { await Storefront.SubmitSearchAsync(args.QueryText); }
+        catch (OperationCanceledException) { }
+    }
     private void CatalogSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args) { if (ViewModel is not null) Storefront.SelectSort(CatalogSortComboBox.SelectedIndex); }
-    private void GridViewToggleButton_Click(object sender, RoutedEventArgs args) => SetAppsViewMode(false);
-    private void ListViewToggleButton_Click(object sender, RoutedEventArgs args) => SetAppsViewMode(true);
-    private void IconsViewToggleButton_Click(object sender, RoutedEventArgs args) => SetAppsViewMode(false, true);
+    private void DiscoverViewMode_Click(object sender, RoutedEventArgs args)
+    {
+        var mode = (sender as FrameworkElement)?.Tag as string ?? "list";
+        SetAppsViewMode(mode == "list", mode == "icons");
+    }
     public void SetAppsViewMode(bool list, bool icons = false)
     {
-        GridViewToggleButton.IsChecked = !list && !icons; ListViewToggleButton.IsChecked = list; IconsViewToggleButton.IsChecked = icons;
+        DiscoverViewModeButtonIcon.Symbol = list ? Microsoft.UI.Xaml.Controls.Symbol.List : icons ? Microsoft.UI.Xaml.Controls.Symbol.AllApps : Microsoft.UI.Xaml.Controls.Symbol.ViewAll;
+        DiscoverViewModeButton.IsChecked = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(DiscoverViewModeButton, list ? "Visualização em lista" : icons ? "Visualização em ícones" : "Visualização em cartões");
         AppsGridScrollViewer.Visibility = !list && !icons ? Visibility.Visible : Visibility.Collapsed;
         AppsListScrollViewer.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
         AppsIconsScrollViewer.Visibility = icons ? Visibility.Visible : Visibility.Collapsed;

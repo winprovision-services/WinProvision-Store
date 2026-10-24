@@ -58,7 +58,4 @@
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="Margin" Value="0,0,0,2" />
     </Style>
-    <Style x:Key="InstalledViewModeStyle" TargetType="ToggleButton" BasedOn="{StaticResource UpdatesViewModeToggleStyle}">
-        <Setter Property="CornerRadius" Value="{StaticResource UpdatesViewModeCornerRadius}" />
-    </Style>
 </ResourceDictionary>

@@ -217,12 +217,32 @@ public static class WingetCdnCatalog
         return bytes;
     }
 
-    private static bool SafePath(string path, string prefix, string suffix) =>
-        path.StartsWith(prefix, StringComparison.Ordinal) && path.EndsWith(suffix, StringComparison.Ordinal)
-        && path.Length <= 512 && !path.Contains('\\')
-        && path.Split('/').All(part => part.Length > 0 && part is not ("." or "..")
-            && !part.Any(character => char.IsControl(character) || character is '?' or '#'));
-    private static bool IsSha256(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);
+    private static bool SafePath(string path, string prefix, string suffix)
+    {
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)
+            || !path.EndsWith(suffix, StringComparison.Ordinal) || path.Length > 512)
+            return false;
+
+        ReadOnlySpan<char> remaining = path;
+        while (!remaining.IsEmpty)
+        {
+            int separator = remaining.IndexOf('/');
+            ReadOnlySpan<char> segment = separator < 0 ? remaining : remaining[..separator];
+            if (segment.IsEmpty || segment is "." or "..") return false;
+            foreach (char character in segment)
+                if (char.IsControl(character) || character is '\\' or '?' or '#') return false;
+            if (separator < 0) return true;
+            remaining = remaining[(separator + 1)..];
+        }
+        return false;
+    }
+    private static bool IsSha256(string value)
+    {
+        if (value.Length != 64) return false;
+        foreach (char character in value)
+            if (!Uri.IsHexDigit(character)) return false;
+        return true;
+    }
     private static string Required(JsonElement obj, string name) => Optional(obj, name)
         ?? throw new InvalidDataException($"Campo obrigatório ausente: {name}.");
     private static string? Optional(JsonElement obj, string name) =>
@@ -234,14 +254,22 @@ public static class WingetCdnCatalog
     private static bool Bool(JsonElement obj, string name) =>
         obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty(name, out JsonElement value)
         && value.ValueKind == JsonValueKind.True;
-    private static List<string> Strings(JsonElement obj, string name) =>
-        obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty(name, out JsonElement value)
-        && value.ValueKind == JsonValueKind.Array
-            ? value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
-                .Select(item => item.GetString()!).ToList() : [];
-    private static List<int> Integers(JsonElement obj, string name) =>
-        obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty(name, out JsonElement value)
-        && value.ValueKind == JsonValueKind.Array
-            ? value.EnumerateArray().Where(item => item.TryGetInt32(out _))
-                .Select(item => item.GetInt32()).ToList() : [];
+    private static List<string> Strings(JsonElement obj, string name)
+    {
+        var result = new List<string>();
+        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty(name, out JsonElement value)
+            || value.ValueKind != JsonValueKind.Array) return result;
+        foreach (JsonElement item in value.EnumerateArray())
+            if (item.ValueKind == JsonValueKind.String) result.Add(item.GetString()!);
+        return result;
+    }
+    private static List<int> Integers(JsonElement obj, string name)
+    {
+        var result = new List<int>();
+        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty(name, out JsonElement value)
+            || value.ValueKind != JsonValueKind.Array) return result;
+        foreach (JsonElement item in value.EnumerateArray())
+            if (item.TryGetInt32(out int number)) result.Add(number);
+        return result;
+    }
 }

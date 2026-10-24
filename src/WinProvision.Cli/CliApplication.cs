@@ -46,7 +46,7 @@ public sealed partial class CliApplication
 
     public async Task<int> RunAsync(string[] args, CancellationToken token)
     {
-        var request = InteractiveCliInput.ParseRequest(args);
+        var request = InteractiveCliInput.ParseRequest(args, allowShowJson: true);
         token.ThrowIfCancellationRequested();
         if (request.Command == "logs") { _console.Section("Diagnósticos", CliDiagnostics.DirectoryPath); return 0; }
         if (request.Command == "help") { _console.Help(Help(request.Query)); return 0; }
@@ -72,8 +72,14 @@ public sealed partial class CliApplication
         }
         if (request.Command == "show")
         {
-            _console.Details(await _console.QueryAsync("Consultando detalhes...",
-                () => backend.DetailsAsync(request.Id!, request.Source ?? "winget", token), token));
+            string details = await _console.QueryAsync("Consultando detalhes...",
+                () => backend.DetailsAsync(request.Id!, request.Source ?? "winget", token), token);
+            if (request.Json)
+            {
+                var result = new CliPackageDetailsResult(request.Id!, request.Source ?? "winget", details);
+                _output.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliPackageDetailsResult));
+            }
+            else _console.Details(details);
             return 0;
         }
         // Status stays outside structured stdout; technical diagnostics go to the file sink.
@@ -170,6 +176,7 @@ public sealed partial class CliApplication
             .DistinctBy(package => (package.Source.ToLowerInvariant(), package.Id.ToLowerInvariant())).ToList();
 
     private void Log(string text) => CliDiagnostics.Write(text);
+
     public static string Clean(string text) => new(text.Where(character => !char.IsControl(character) || character is '\n' or '\t').ToArray());
 
     public static string Help(string command) => command switch
@@ -179,7 +186,7 @@ public sealed partial class CliApplication
         "list" => "Uso: winprovision list [nome] [--id ID] [--source winget|msstore] [--exact] [--json]\nLista aplicativos instalados. --upgrade-available consulta atualizações.",
         "update" => "Uso: winprovision upgrade [nome] [--id ID] [--source winget|msstore] [--json|--no-input]\n     winprovision upgrade --all\nAtualiza todos os resultados diretamente. --id limita a um aplicativo; --json ou --no-input apenas consulta. Alias: update.",
         "install" => "Uso: winprovision install --id <ID> [--source winget|msstore]\n     winprovision install --office\nExecuta diretamente, sem menus. --office instala Microsoft 365 Família com o XML padrão. Use search para encontrar IDs de pacotes.",
-        "show" => "Uso: winprovision show --id <ID> [--source winget|msstore]\nExibe detalhes sem instalar.",
+        "show" => "Uso: winprovision show --id <ID> [--source winget|msstore] [--json]\nExibe detalhes sem instalar. --json retorna id, source e details (texto fornecido pela fonte).",
         "download" => "Uso: winprovision download --id <ID> [--source winget|msstore] [--output pasta]\nBaixa o instalador com verificação de hash. Destino padrão: pasta configurada no app ou Downloads do usuário.",
         "uninstall" => "Uso: winprovision uninstall --id <ID> [--source winget|msstore]\nRemove o pacote exato diretamente, sem confirmação da CLI. Use list para encontrar o ID.",
         "import" => "Uso: winprovision import <arquivo.json|URL HTTPS> [--download] [--output pasta]\n     winprovision import --input <arquivo.json|URL HTTPS>\nInstala a lista diretamente, sem menus. --download apenas baixa. -i significa --input. Aceita perfis e backups do app, links de nuvem, export WinGet ou array com id e source. Preserva Office e versões fixadas. Máximo: 16 MiB e 10000 aplicativos.",
@@ -211,7 +218,7 @@ public sealed partial class CliApplication
               -s, --source      winget ou msstore
               -q, --query       Consulta por nome
               -e, --exact       Correspondência exata
-              --json            JSON em search/list/upgrade; apenas consulta
+              --json            JSON em search/list/upgrade/show; apenas consulta
               --elevation-cache  Compatibilidade; cache automático de 5 minutos
               --no-input        Em upgrade, apenas consulta; demais comandos sem menus
               -i, --input       Arquivo JSON ou URL HTTPS para import
@@ -239,6 +246,8 @@ public sealed partial class CliApplication
     };
 }
 public sealed record CliPackageResult(string Id, string Name, string Version, string AvailableVersion, string Source);
+public sealed record CliPackageDetailsResult(string Id, string Source, string Details);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
 [JsonSerializable(typeof(CliPackageResult[]))]
+[JsonSerializable(typeof(CliPackageDetailsResult))]
 internal partial class CliJsonContext : JsonSerializerContext;

@@ -4,8 +4,10 @@ O cache descartável `Cache/featured-store-banners.json` contém a segunda-feira
 
 Este documento registra as regras de compatibilidade do WinProvision Store.
 
-`installation-preferences.json` continua armazenando o enum textual `PreferredMethod`; o novo valor opcional `WinGetPkgsViper` seleciona a consulta direta ao WinGet-Pkgs. Arquivos anteriores mantêm o comportamento atual, com `Automatic` como padrão.
-O histórico pode registrar o novo método `WinGetPkgsViper`; os valores existentes do enum preservam suas posições.
+`%LOCALAPPDATA%/WinProvisionStore/stuck-upgrades.json` é um estado local descartável de tentativas de atualização WinGet. Guarda origem, ID, versão instalada, versão alvo, contador limitado a três e data. Não faz parte de perfis, backups ou contratos da CLI; arquivo ausente ou inválido reinicia apenas a detecção de ciclos de atualização.
+
+`installation-preferences.json` continua armazenando o enum textual `PreferredMethod`. Preferências existentes com o valor legado `WinGetPkgsViper` são migradas para `Automatic`; o valor permanece no enum para que arquivos antigos continuem legíveis. `Automatic` segue como padrão.
+O histórico preserva o rótulo `WinGet-Pkgs + Viper` para operações gravadas por versões anteriores; novas operações não usam esse método. Os valores existentes dos enums preservam suas posições.
 
 ## Sessões do WinProvision Viper
 
@@ -16,6 +18,8 @@ O módulo independente usa arquivos adjacentes ao destino: `.viper.part`, `.vipe
 Partes concluídas são sincronizadas no disco antes de substituir atomicamente o checkpoint. Na retomada, o motor valida versão do formato, impressão digital, tamanho, tamanho das partes, ETag e hash de cada parte. Partes locais divergentes são baixadas novamente. O destino final só é publicado após conclusão e eventual validação do SHA-256 esperado; por padrão, um destino existente gera falha e permanece intacto. A API pode selecionar `ReuseIfVerified`, que exige SHA-256 esperado e retorna sucesso sem rede apenas quando o arquivo final já confere; a CLI dedicada expõe esse modo como `--reuse-verified` e no campo opcional `reuseIfVerified` do lote. Cancelamentos preservam trabalho retomável, e falha do SHA-256 final descarta os bytes inválidos. A adição não altera contratos da Store ou da CLI `winprovision`.
 
 ## Preferências e coleções
+
+Perfis de coleção mantêm `schemaVersion`, `createdAt`, `name` e `apps`; o campo opcional `provisioning` contém configurações do Windows exportadas para uma máquina de destino. `ProfileBackupSet.provisioning` continua aceito por compatibilidade com backups anteriores, e quando há uma configuração por perfil ela é promovida ao nível do backup ao importar coleções. Perfil só de provisionamento pode omitir `apps`; os campos opcionais ausentes significam manter a configuração de destino. O módulo WinUI atual edita e transporta esses dados, preservando perfis antigos sem o campo.
 
 `%LOCALAPPDATA%/WinProvisionStoreWinUI3/operation-preferences.json` contém `NotifyUpdates`, `NotifyErrors`, `NotifySuccess` e `NotifyBatchSummary` (booleanos, padrão `true`), `ParallelOperations` (1 a 4, padrão 1), `ParallelDownloads` (1 a 8, padrão 3), `DownloadDirectory` (caminho absoluto ou nulo para o padrão), `InstallerNames` (`Original=0`, `PackageVersion=1`, `PackageVersionArchitecture=2`, padrão 1) e `WarnInstallerHostChange` (booleano, padrão `true`). Campos ausentes preservam os padrões; arquivos inválidos são ignorados. A gravação valida antes da substituição atômica. Não inclui credenciais nem altera os perfis de aplicativos. Avisos de sucesso em lote requerem ambas as preferências `NotifySuccess` e `NotifyBatchSummary`; notificações de falha são controladas por `NotifyErrors`.
 
@@ -31,11 +35,15 @@ Preferências de agendamento preservam os valores existentes de `UpdateSchedule`
 
 `app-preferences.json` também contém `AutomaticCloudBackupEnabled` (booleano, padrão `true` quando ausente). Ele controla apenas o envio automático ao Gist após mudanças nas coleções; o backup local automático e o botão de backup manual continuam disponíveis. O formato do perfil e os contratos da CLI permanecem iguais.
 
+`app-preferences.json` e as configurações portáteis versão 1 aceitam `SearchOnDemand` (booleano, padrão `false` quando ausente). Quando ativado, Descobrir aguarda uma pesquisa para carregar o catálogo e libera os dados da vitrine ao limpar a consulta. Arquivos anteriores continuam compatíveis e mantêm a vitrine completa como padrão.
+
+`app-preferences.json` e as configurações portáteis versão 1 aceitam `ProvisioningMenuEnabled` (booleano, padrão `false` quando ausente). Quando ativado, exibe o menu Provisionamento na navegação; desativá-lo oculta o menu sem remover os perfis existentes. Arquivos anteriores continuam compatíveis e mantêm o menu oculto.
+
 O arquivo local `background-update-state.json` armazena `StartedUtc`, `CompletedUtc`, `ExitCode`, `Available` e `Fingerprint`. Ele não altera as coleções nem o contrato JSON público da CLI; ausência ou arquivo inválido não impedem abrir as configurações. A impressão digital identifica o conjunto de IDs, origens e versões disponíveis, sem armazenar saídas brutas de serviços.
 
 Atualizações devem preservar as coleções, os identificadores dos aplicativos e as preferências existentes. Campos opcionais ausentes recebem o comportamento padrão documentado.
 
-`%LOCALAPPDATA%/WinProvisionStore/operation-history.json` mantém os campos existentes e acrescenta `StartedAt` (data opcional) e `Details` (saída da operação, limitada aos 16.384 caracteres finais). Entradas antigas sem esses campos continuam legíveis, com início e duração indicados como não registrados. O texto estruturado em `operation-tasks.log` é separado desse JSON, rotaciona a partir de 10 MiB e é apagado junto com o histórico. Os detalhes seguem a redação de dados sensíveis já aplicada ao log da operação.
+`%LOCALAPPDATA%/WinProvisionStore/operation-history.json` mantém os campos existentes e acrescenta `StartedAt` (data opcional) e `Details` (saída da operação, limitada aos 16.384 caracteres finais). Entradas antigas sem esses campos continuam legíveis, com início e duração indicados como não registrados. O texto estruturado em `operation-tasks.log` é separado desse JSON, rotaciona a partir de 10 MiB e é apagado junto com o histórico. Os detalhes seguem a redação de dados sensíveis já aplicada ao log da operação. A pesquisa na tela Mais filtra localmente os registros por termos encontrados no nome, tipo, resultado, método ou saída; ela não altera nem exporta o formato persistido.
 
 Ao importar um arquivo, valide seu formato antes de modificar dados ou iniciar operações. Não interprete arquivos arbitrários como listas de instalação.
 

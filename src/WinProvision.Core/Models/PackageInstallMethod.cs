@@ -6,5 +6,6 @@ public enum PackageInstallMethod
     ComApi,
     WinProvisionApi,
     WingetCli,
+    // Compatibilidade com preferências antigas; normalizado para Automatic.
     WinGetPkgsViper
 }

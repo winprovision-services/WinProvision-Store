@@ -30,6 +30,7 @@ namespace WinProvision.Core.Services;
 [JsonSerializable(typeof(WinProvision.Core.Models.ProfileAppRef))]
 [JsonSerializable(typeof(WinProvision.Core.Models.ProfileBackupSet))]
 [JsonSerializable(typeof(WinProvision.Core.Models.ProfileManifest))]
+[JsonSerializable(typeof(WinProvision.Core.Models.Provisioning.ProvisioningManifest))]
 [JsonSerializable(typeof(WinProvision.Core.Services.Backup.BackupAccountInfo))]
 [JsonSerializable(typeof(WinProvision.Core.Services.Backup.GitHubBackupService.GitHubGistResponse))]
 [JsonSerializable(typeof(WinProvision.Core.Services.Backup.GitHubBackupService.GitHubUserResponse))]

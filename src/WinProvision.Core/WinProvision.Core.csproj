@@ -9,7 +9,7 @@
     <Deterministic>true</Deterministic>
     <DebugSymbols>true</DebugSymbols>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <TieredCompilation>true</TieredCompilation>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>

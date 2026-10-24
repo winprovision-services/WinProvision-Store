@@ -23,6 +23,16 @@ public sealed partial class MorePage : Page
         DataContext = viewModel;
     }
 
+    private void MoreContentScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        double width = e.NewSize.Width;
+        double cardWidth = width >= 704
+            ? Math.Min(420, (width - 80) / 2)
+            : Math.Max(0, width - 24);
+
+        StatusCard.Width = AboutCard.Width = HistoryCard.Width = LogCard.Width = cardWidth;
+    }
+
     private void MorePage_Loaded(object sender, RoutedEventArgs e)
     {
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;

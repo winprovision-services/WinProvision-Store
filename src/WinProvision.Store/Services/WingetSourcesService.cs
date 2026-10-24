@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using WinProvision.PackageManagement;
 using WinProvision.Core.Services;
 
 namespace WinProvision.Store.Services;
@@ -24,8 +25,34 @@ public sealed class WingetSourcesService
         if (string.IsNullOrWhiteSpace(name) || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
             || parsed.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(parsed.UserInfo))
             throw new ArgumentException("Informe um nome e uma URL HTTPS válida para a fonte.");
-        var result = await RunAsync(["source", "add", "--name", name.Trim(), "--arg", parsed.AbsoluteUri, "--accept-source-agreements", "--disable-interactivity"], token);
-        if (result.ExitCode != 0) throw new InvalidOperationException(result.Error.Trim());
+        string normalizedName = name.Trim();
+        Exception? lastFailure = null;
+        for (int index = 0; index < WingetSourceTypeRetry.Types.Count; index++)
+        {
+            var result = await RunAsync(["source", "add", "--name", normalizedName, "--arg", parsed.AbsoluteUri,
+                "--accept-source-agreements", "--disable-interactivity", "--type", WingetSourceTypeRetry.Types[index]], token);
+            if (result.ExitCode == 0) return;
+
+            lastFailure = new InvalidOperationException(FormatError(result));
+            IReadOnlyList<string> sources;
+            try
+            {
+                sources = await ListAsync(token);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception verificationFailure)
+            {
+                throw new InvalidOperationException(
+                    $"A tentativa de adicionar a fonte falhou e não foi possível confirmar se ela foi criada; nenhuma nova tentativa foi feita. {lastFailure.Message}",
+                    new AggregateException(lastFailure, verificationFailure));
+            }
+
+            // A falha do processo pode ocorrer depois de o WinGet registrar a fonte.
+            // Só tentamos o formato alternativo após confirmar que a fonte não existe.
+            if (WingetSourceTypeRetry.IsListed(sources, normalizedName)) return;
+        }
+
+        throw lastFailure ?? new InvalidOperationException("Não foi possível adicionar a fonte WinGet.");
     }
 
     public async Task RemoveAsync(string name, CancellationToken token = default)
@@ -48,5 +75,14 @@ public sealed class WingetSourcesService
         Task<string> output = process.StandardOutput.ReadToEndAsync(token), error = process.StandardError.ReadToEndAsync(token);
         await process.WaitForExitAsync(token);
         return (process.ExitCode, await output, await error);
+    }
+
+    private static string FormatError((int ExitCode, string Output, string Error) result)
+    {
+        string detail = string.Join(Environment.NewLine,
+            new[] { result.Error.Trim(), result.Output.Trim() }.Where(value => value.Length > 0));
+        return detail.Length == 0
+            ? $"O WinGet falhou ao adicionar a fonte (código {result.ExitCode})."
+            : detail;
     }
 }

@@ -30,6 +30,8 @@ namespace WinProvision.Core.Services.Backup;
 [SupportedOSPlatform("windows")]
 public partial class GitHubBackupService : IDisposable
 {
+    private enum TokenRefreshResult { Refreshed, TemporarilyUnavailable, Rejected }
+
     public void Dispose() { _http.Dispose(); _rawHttp.Dispose(); }
 
     private const string ApiBase = "https://api.github.com";
@@ -52,6 +54,7 @@ public partial class GitHubBackupService : IDisposable
     private readonly string _accountInfoPath;
     private readonly string _tokenPath;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
+    private readonly SemaphoreSlim _tokenRefreshLock = new(1, 1);
 
     private BackupAccountInfo _account = new();
     private bool _connecting;
@@ -164,10 +167,15 @@ public partial class GitHubBackupService : IDisposable
             _account.GistId = LoadGistIdFromRegistry();
         }
 
-        string? token = SecureTokenStore.TryLoad(_tokenPath);
-        if (!string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(_account.Login))
+        string? savedCredentials = SecureTokenStore.TryLoad(_tokenPath);
+        if (!string.IsNullOrEmpty(savedCredentials) && !string.IsNullOrEmpty(_account.Login))
         {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            (string? token, string? refreshToken) = ReadCredentials(savedCredentials);
+            _refreshToken = refreshToken;
+            if (!string.IsNullOrEmpty(token))
+                _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            else
+                _account.Login = null;
         }
         else
         {
@@ -183,7 +191,9 @@ public partial class GitHubBackupService : IDisposable
     /// cria o Gist se ainda não existir um.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public async Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken ct = default)
+    private string? _refreshToken;
+
+    public async Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken ct = default, string? refreshToken = null)
     {
         await _syncLock.WaitAsync(ct);
         try
@@ -251,7 +261,7 @@ public partial class GitHubBackupService : IDisposable
 
         try
         {
-            SecureTokenStore.Save(_tokenPath, token);
+            SecureTokenStore.Save(_tokenPath, WriteCredentials(token, refreshToken));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
@@ -259,6 +269,7 @@ public partial class GitHubBackupService : IDisposable
         }
 
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        _refreshToken = refreshToken;
         _account.Login = user.Login;
         _account.AvatarUrl = user.AvatarUrl;
         if (accountChanged)
@@ -291,6 +302,7 @@ public partial class GitHubBackupService : IDisposable
 
         SaveGistIdToRegistry(null);
         _account = new BackupAccountInfo();
+        _refreshToken = null;
         _http.DefaultRequestHeaders.Authorization = null;
     }
 
@@ -947,6 +959,7 @@ public partial class GitHubBackupService : IDisposable
     internal async Task<HttpResponseMessage> SendWithTransientRetryAsync(
         Func<HttpRequestMessage> createRequest, CancellationToken ct)
     {
+        bool refreshAttempted = false;
         for (int attempt = 0; ; attempt++)
         {
             using var request = createRequest();
@@ -955,11 +968,24 @@ public partial class GitHubBackupService : IDisposable
             if (!api && (!IsAllowedGitHubDestination(uri, "gist.githubusercontent.com") || request.Method != HttpMethod.Get))
                 throw new HttpRequestException("Destino do backup GitHub bloqueado por segurança.");
             if (!api) request.Headers.Authorization = null;
+            AuthenticationHeaderValue? failedAuthorization = api ? _http.DefaultRequestHeaders.Authorization : null;
             try
             {
                 var response = await (api ? _http : _rawHttp).SendAsync(request, ct);
                 if (api && response.StatusCode == HttpStatusCode.Unauthorized && !_connecting)
                 {
+                    if (!refreshAttempted && !string.IsNullOrWhiteSpace(_refreshToken))
+                    {
+                        refreshAttempted = true;
+                        TokenRefreshResult refreshResult = await TryRefreshAccessTokenAsync(failedAuthorization, ct);
+                        if (refreshResult == TokenRefreshResult.Refreshed)
+                        {
+                            response.Dispose();
+                            continue;
+                        }
+                        if (refreshResult == TokenRefreshResult.TemporarilyUnavailable)
+                            return response;
+                    }
                     _http.DefaultRequestHeaders.Authorization = null;
                     try { SecureTokenStore.Delete(_tokenPath); }
                     catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -982,6 +1008,82 @@ public partial class GitHubBackupService : IDisposable
                 await Task.Delay(RetryDelay * (attempt + 1), ct);
             }
         }
+    }
+
+    private async Task<TokenRefreshResult> TryRefreshAccessTokenAsync(AuthenticationHeaderValue? failedAuthorization, CancellationToken ct)
+    {
+        await _tokenRefreshLock.WaitAsync(ct);
+        try
+        {
+            // Outra solicitação pode ter renovado enquanto esta aguardava o semáforo.
+            // A tentativa da chamada atual será repetida com o token já atualizado.
+            if (_http.DefaultRequestHeaders.Authorization is null)
+                return TokenRefreshResult.Rejected;
+            if (_http.DefaultRequestHeaders.Authorization != failedAuthorization)
+                return TokenRefreshResult.Refreshed;
+            if (string.IsNullOrWhiteSpace(_refreshToken))
+                return TokenRefreshResult.Rejected;
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = "Ov23lii0QqRFfDSt5UA8",
+                    ["grant_type"] = "refresh_token",
+                    ["refresh_token"] = _refreshToken
+                })
+            };
+            request.Headers.UserAgent.ParseAdd("WinProvision-Store/1.0");
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using HttpResponseMessage response = await _rawHttp.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+                return (int)response.StatusCode >= 500 || response.StatusCode == (HttpStatusCode)429
+                    ? TokenRefreshResult.TemporarilyUnavailable
+                    : TokenRefreshResult.Rejected;
+
+            using JsonDocument document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            JsonElement root = document.RootElement;
+            string? accessToken = root.TryGetProperty("access_token", out JsonElement access) ? access.GetString() : null;
+            string? rotatedRefreshToken = root.TryGetProperty("refresh_token", out JsonElement refresh) ? refresh.GetString() : null;
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return TokenRefreshResult.Rejected;
+
+            string nextRefreshToken = string.IsNullOrWhiteSpace(rotatedRefreshToken) ? _refreshToken : rotatedRefreshToken;
+            // Persiste o par rotacionado antes de usar o novo access token; tokens de
+            // renovação do GitHub são de uso único.
+            SecureTokenStore.Save(_tokenPath, WriteCredentials(accessToken, nextRefreshToken));
+            _refreshToken = nextRefreshToken;
+            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            return TokenRefreshResult.Refreshed;
+        }
+        catch (HttpRequestException exception)
+        {
+            CoreLog.Warning(exception, "GitHubBackupService.RefreshToken");
+            return TokenRefreshResult.TemporarilyUnavailable;
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException or CryptographicException)
+        {
+            CoreLog.Warning(exception, "GitHubBackupService.RefreshToken");
+            return TokenRefreshResult.Rejected;
+        }
+        finally
+        {
+            _tokenRefreshLock.Release();
+        }
+    }
+
+    private static string WriteCredentials(string accessToken, string? refreshToken) =>
+        $"WPS-OAUTH-2\n{accessToken}\n{refreshToken ?? string.Empty}";
+
+    private static (string? AccessToken, string? RefreshToken) ReadCredentials(string value)
+    {
+        if (!value.StartsWith("WPS-OAUTH-2\n", StringComparison.Ordinal))
+            return (value, null); // Token legado: renova somente depois de um novo login.
+
+        string[] parts = value.Split('\n', 3);
+        return parts.Length == 3
+            ? (parts[1], string.IsNullOrWhiteSpace(parts[2]) ? null : parts[2])
+            : (null, null);
     }
 
     [SupportedOSPlatform("windows")]

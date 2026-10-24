@@ -111,9 +111,13 @@ public sealed class ApplicationEngine : IAsyncDisposable
     {
         await EnsureAsync(token);
         if (options.Interactive || options.RequiresElevation || options.Scope is not null || options.Architecture is not null)
-            return await _executor.UpdateAppAsync(package.Id, log, token, source: package.Source,
+        {
+            var result = await _executor.UpdateAppAsync(package.Id, log, token, source: package.Source,
                 scope: options.Scope, architecture: options.Architecture, interactive: options.Interactive,
                 requiresElevation: options.RequiresElevation);
+            _packages.RecordSuccessfulUpgrade(package, result);
+            return result;
+        }
         return await _packages.UpdateAsync(package.Id, log, token, source: package.Source);
     }
 

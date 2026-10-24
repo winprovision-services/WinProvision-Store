@@ -184,7 +184,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
                     ["client_id"] = GitHubClientId,
-                    ["scope"] = "gist"
+                    ["scope"] = "gist offline_access"
                 })
             };
             using HttpResponseMessage deviceResponse = await http.SendAsync(deviceRequest, cancellationToken);
@@ -235,7 +235,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
                 if (!string.IsNullOrWhiteSpace(tokenData?.AccessToken))
                 {
                     OAuthStatus = "Autorizado. Conectando...";
-                    GitHubConnectResult result = await _backup.ConnectAsync(tokenData.AccessToken, cancellationToken);
+                    GitHubConnectResult result = await _backup.ConnectAsync(tokenData.AccessToken, cancellationToken, tokenData.RefreshToken);
                     if (!result.Success)
                     {
                         StatusText = result.ErrorMessage ?? "Não foi possível conectar a conta GitHub.";
@@ -595,6 +595,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
     internal sealed partial class TokenResponse
     {
         [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
+        [JsonPropertyName("refresh_token")] public string? RefreshToken { get; set; }
         [JsonPropertyName("error")] public string? Error { get; set; }
     }
 

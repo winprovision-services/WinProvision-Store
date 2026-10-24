@@ -1,7 +1,9 @@
 # Histórico de alterações
 
-## 1.0.12 - 21 de outubro de 2026
+## 1.0.14 - 23 de outubro de 2026
 
+- O menu Provisionamento agora é opcional e começa oculto. Ative-o em **Configurações → Provisionamento**; a escolha acompanha as configurações portáteis.
+- A detecção de instalados reconhece o UniGetUI da Microsoft Store (`XPFFTQ032PTPHF`) como o mesmo aplicativo do catálogo WinGet (`Devolutions.UniGetUI`).
 - A tela Descobrir conserva a seleção semanal dos banners da Microsoft Store em cache local entre sessões; URLs de banners e ícones reutilizam o cache de imagens. Atualização manual e limpeza do catálogo invalidam a descoberta.
 
 - Corrigida a seleção do método para pacotes da Microsoft Store: a interface não força o WinGet CLI antes da tentativa pela API COM. A consulta de escopos não bloqueia o botão Instalar; o inventário de instalados carrega em paralelo aos banners, que deixam de repetir buscas pela CLI na origem msstore. Versões fixadas no modo automático usam primeiro a API própria; o modo COM exclusivo informa quando a seleção de versão não é suportada.

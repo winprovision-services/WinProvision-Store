@@ -19,7 +19,7 @@ internal sealed partial class SmokeAccountBackupService : IAccountBackupService
     public string? AvatarUrl => null;
     public DateTime? LastSyncUtc => null;
     public DateTime? LastBackupUtc => null;
-    public Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null) => throw new NotSupportedException();
     public void Disconnect() { }
     public Task SaveLocalAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<ProfileBackupSet?> LoadLatestLocalAsync(CancellationToken cancellationToken) => Task.FromResult<ProfileBackupSet?>(null);
@@ -38,9 +38,15 @@ internal sealed partial class SmokeAccountBackupService : IAccountBackupService
 }
 internal sealed partial class SmokePackageBackend : IPackageBackend
 {
+    public Func<AppEntry, Task<WingetExecutionResult>>? InstallHandler { get; set; }
+    public int InstallCount { get; set; }
     public Task ShutdownAsync() => Task.CompletedTask;
     public void CancelAll() { }
-    public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => throw new NotSupportedException();
+    public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null)
+    {
+        InstallCount++;
+        return InstallHandler?.Invoke(app) ?? throw new NotSupportedException();
+    }
     public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => throw new NotSupportedException();
     public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => throw new NotSupportedException();
     public Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token)

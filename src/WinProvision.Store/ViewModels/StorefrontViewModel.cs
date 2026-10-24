@@ -28,6 +28,7 @@ public sealed partial class StorefrontViewModel : INotifyPropertyChanged, IDispo
     private readonly OperationsQueueService _queueService;
     private readonly InstalledAppsService _installedAppsService;
     private readonly FeaturedCatalogService _featuredCatalogService;
+    private readonly ApplicationPreferencesService _preferences;
     private readonly TaskCompletionSource<bool> _initialContentReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private CancellationTokenSource? _searchCancellation;
     private CancellationTokenSource? _navigationCancellation;
@@ -189,7 +190,8 @@ public sealed partial class FeaturedCategoryShelf
         OperationsQueueService queueService, InstalledAppsService installedAppsService,
         FeaturedCatalogService featuredCatalogService,
         WinProvision.Core.Services.Indexing.MsStoreCatalogService msStoreCatalogService,
-        IconService iconService, StoreService storeService, WinGetService winGetService, IUiDispatcher dispatcher, IPackageBackend backend)
+        IconService iconService, StoreService storeService, WinGetService winGetService, IUiDispatcher dispatcher, IPackageBackend backend,
+        ApplicationPreferencesService preferences)
     {
         _msStoreCatalogService = msStoreCatalogService;
         _storeService = storeService;
@@ -199,6 +201,7 @@ public sealed partial class FeaturedCategoryShelf
         _queueService = queueService;
         _installedAppsService = installedAppsService;
         _featuredCatalogService = featuredCatalogService;
+        _preferences = preferences;
 
         _dispatcher = dispatcher;
         _backend = backend;
@@ -206,6 +209,7 @@ public sealed partial class FeaturedCategoryShelf
         _featuredCatalogService.Updated += OnFeaturedCatalogUpdated;
         _storeService.CacheCleared += OnCacheCleared;
         _installedAppsService.Changed += OnInstalledAppsChanged;
+        _preferences.SearchOnDemandChanged += OnSearchOnDemandChanged;
     }
     public int HeroBannerIndex => _heroBannerIndex;
     public ShelfView CurrentShelf => _shelfView;
@@ -217,7 +221,61 @@ public sealed partial class FeaturedCategoryShelf
     public string SearchText
     {
         get => _searchText;
-        set { if (EqualityComparer<string>.Default.Equals(_searchText, value)) return; _searchText = value; OnPropertyChanged(); }
+        set { if (EqualityComparer<string>.Default.Equals(_searchText, value)) return; _searchText = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsSearchOnDemandIdle)); }
+    }
+    public bool IsSearchOnDemandIdle => _preferences.SearchOnDemand && string.IsNullOrWhiteSpace(SearchText);
+    public bool IsSearchOnDemandEnabled => _preferences.SearchOnDemand;
+
+    private void OnSearchOnDemandChanged(bool enabled)
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.InvokeAsync(() => OnSearchOnDemandChanged(enabled));
+            return;
+        }
+
+        OnPropertyChanged(nameof(IsSearchOnDemandIdle));
+        OnPropertyChanged(nameof(IsSearchOnDemandEnabled));
+        if (enabled && string.IsNullOrWhiteSpace(SearchText))
+            _ = ReturnToSearchIdleAsync();
+        else if (!enabled)
+            ApplyFilter();
+    }
+
+    private async Task ReturnToSearchIdleAsync()
+    {
+        _searchCancellation?.Cancel();
+        await _navigationLoad;
+        if (_isDisposed || !_preferences.SearchOnDemand || !string.IsNullOrWhiteSpace(SearchText)) return;
+        ReleaseCatalogMemory();
+        await _storeService.ReleaseCatalogMemoryAsync();
+        IsBrowsing = false;
+        ShowHero = false;
+        ShowResults = false;
+        CatalogSyncText = "Catálogo sob demanda.";
+        StatusText = "Pesquise para carregar aplicativos.";
+        OnPropertyChanged(nameof(IsSearchOnDemandIdle));
+        _initialContentReady.TrySetResult(true);
+    }
+
+    public async Task SubmitSearchAsync(string query)
+    {
+        SearchText = query;
+        if (_preferences.SearchOnDemand && string.IsNullOrWhiteSpace(query))
+        {
+            await ReturnToSearchIdleAsync();
+            return;
+        }
+
+        if (_preferences.SearchOnDemand && !_catalogLoaded)
+        {
+            IsBrowsing = false;
+            ShowHero = false;
+            ShowResults = true;
+            StatusText = $"Carregando catálogo para \"{query.Trim()}\"...";
+            await LoadAsync(_navigationCancellation?.Token ?? CancellationToken.None);
+        }
+        ApplyFilter();
     }
     private string _statusText = string.Empty;
     public string StatusText
@@ -296,6 +354,7 @@ public sealed partial class FeaturedCategoryShelf
         _featuredCatalog = document;
         _storeBannersLoaded = false;
         if (!_isNavigationActive || _isDisposed) return;
+        if (_preferences.SearchOnDemand) return;
         if (_storeBannersLoading)
             _featuredRefreshPending = true;
         else
@@ -327,7 +386,23 @@ public sealed partial class FeaturedCategoryShelf
         _allApps = catalog;
         UpdateCatalogSyncText();
         if (!_isNavigationActive || _isDisposed) return;
+        if (_preferences.SearchOnDemand && string.IsNullOrWhiteSpace(SearchText))
+        {
+            _allApps = [];
+            _catalogLoaded = false;
+            Apps.Clear();
+            _ = _storeService.ReleaseCatalogMemoryAsync();
+            CatalogSyncText = "Catálogo sob demanda.";
+            StatusText = "Pesquise para carregar aplicativos.";
+            return;
+        }
         SyncInstalledFlags(_allApps);
+        if (_preferences.SearchOnDemand)
+        {
+            _catalogLoaded = true;
+            ApplyFilter();
+            return;
+        }
         if (_storeBannersLoading) _featuredRefreshPending = true;
         else _ = LoadStoreBannersAsync(force: true);
         UpdatePopularApps();
@@ -391,7 +466,10 @@ public sealed partial class FeaturedCategoryShelf
             operation.Token.ThrowIfCancellationRequested();
             await LoadAsync(operation.Token);
         }
-        catch (OperationCanceledException) when (operation.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
+        {
+            return;
+        }
         catch (Exception ex) { WinProvisionLog.Warning(ex, "HomeNavigation"); }
         finally
         {
@@ -417,12 +495,50 @@ public sealed partial class FeaturedCategoryShelf
         }
     }
 
+    public void ReleaseCatalogMemory()
+    {
+        _catalogLoaded = false;
+        _allApps = [];
+        _liveSearchResults = [];
+        _liveSearchQuery = null;
+        _searchQueryInFlight = null;
+        _searchedStoreBannerApps = [];
+        _storeBannersLoaded = false;
+        _storeBannerWeek = null;
+        _storeBannerSearchWeek = null;
+        StoreBannerApps.Clear();
+        SideStoreBannerApps.Clear();
+        RightPromoApp = null;
+        SelectedBanner = null;
+        Apps.Clear();
+        PopularApps.Clear();
+        StoreHighlights.Clear();
+        FeaturedCategories.Clear();
+        CatalogSyncText = "Catálogo em pausa para liberar memória.";
+        StatusText = "A vitrine será recarregada ao retornar ao aplicativo.";
+    }
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        if (_preferences.SearchOnDemand && string.IsNullOrWhiteSpace(SearchText))
+        {
+            await _storeService.ReleaseCatalogMemoryAsync(cancellationToken);
+            IsBrowsing = false;
+            ShowHero = false;
+            ShowResults = false;
+            Apps.Clear();
+            CatalogSyncText = "Catálogo sob demanda.";
+            StatusText = "Pesquise para carregar aplicativos.";
+            _initialContentReady.TrySetResult(true);
+            return;
+        }
+
         if (_catalogLoaded)
         {
             ApplyFilter();
             _initialContentReady.TrySetResult(true);
+            if (_preferences.SearchOnDemand)
+                return;
             Task cachedInventoryTask = _installedAppsService.EnsureLoadedAsync(cancellationToken);
             await LoadStoreBannersAsync(cancellationToken: cancellationToken);
             await cachedInventoryTask;
@@ -443,9 +559,26 @@ public sealed partial class FeaturedCategoryShelf
 
         try
         {
-            _allApps = await _storeService.LoadCatalogAsync(cancellationToken: cancellationToken);
+            // The local catalog and editorial document are independent startup I/O.
+            // Start both before awaiting either so a slow catalog read does not delay
+            // the metadata needed to render the first storefront sections.
+            Task<List<AppEntry>> catalogTask = _storeService.LoadCatalogAsync(cancellationToken: cancellationToken);
+            Task<FeaturedCatalogDocument?> featuredTask = !_preferences.SearchOnDemand && _featuredCatalog is null
+                ? _featuredCatalogService.LoadAsync(cancellationToken)
+                : Task.FromResult<FeaturedCatalogDocument?>(_featuredCatalog);
+            await Task.WhenAll(catalogTask, featuredTask);
             cancellationToken.ThrowIfCancellationRequested();
-            _featuredCatalog ??= await _featuredCatalogService.LoadAsync(cancellationToken);
+            if (_preferences.SearchOnDemand && string.IsNullOrWhiteSpace(SearchText))
+            {
+                ReleaseCatalogMemory();
+                await _storeService.ReleaseCatalogMemoryAsync(cancellationToken);
+                CatalogSyncText = "Catálogo sob demanda.";
+                StatusText = "Pesquise para carregar aplicativos.";
+                _initialContentReady.TrySetResult(true);
+                return;
+            }
+            _allApps = await catalogTask;
+            _featuredCatalog ??= await featuredTask;
             UpdateCatalogSyncText();
             SyncInstalledFlags(_allApps);
             UpdatePopularApps();
@@ -453,6 +586,9 @@ public sealed partial class FeaturedCategoryShelf
             App.MemoryLog?.RecordOnce("catalog_loaded");
             ApplyFilter();
             _initialContentReady.TrySetResult(true);
+
+            if (_preferences.SearchOnDemand)
+                return;
 
             // Editorial content must not wait for the potentially slow WinGet inventory.
             Task inventoryTask = _installedAppsService.EnsureLoadedAsync(cancellationToken);
@@ -523,6 +659,27 @@ public sealed partial class FeaturedCategoryShelf
                 .Where(IsEligibleFeaturedStoreApp)
                 .ToList();
 
+            // Render the best candidates already available before issuing the slower
+            // supplemental Display Catalog searches. The final list is refreshed below.
+            List<AppEntry> initialCandidates = availableStoreApps
+                .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(app => app.StoreRatingCount ?? 0)
+                .ThenByDescending(app => app.StoreRating ?? 0)
+                .ThenByDescending(app => app.Score)
+                .Take(StoreFeaturedCandidatePoolSize)
+                .ToList();
+            List<AppEntry> initialFeatured = curated.Concat(initialCandidates
+                    .OrderBy(app => GetWeeklyBannerOrderKey(app, week), StringComparer.Ordinal)
+                    .Take(6))
+                .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+            if (initialFeatured.Count > 0)
+            {
+                ApplyFeaturedBanners(initialFeatured);
+                App.MemoryLog?.RecordOnce("editorial_banners_provisional");
+            }
+
             // A busca ampla do catálogo pode não conter todos os produtos editoriais.
             // Se ainda faltarem banners, consulta diretamente os títulos conhecidos.
             if (availableStoreApps.Select(GetProductIdentityKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() < 6)
@@ -533,6 +690,7 @@ public sealed partial class FeaturedCategoryShelf
                     if (_searchedStoreBannerApps.Count == 0)
                     {
                         var discovered = new System.Collections.Concurrent.ConcurrentBag<AppEntry>();
+                        int provisionalBannersPublished = 0;
                         await Parallel.ForEachAsync(
                             FeaturedStoreSearchTerms,
                             new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = cancellationToken },
@@ -541,6 +699,38 @@ public sealed partial class FeaturedCategoryShelf
                                 foreach (AppEntry app in await _msStoreCatalogService.SearchAsync(term, token))
                                     if (IsEligibleFeaturedStoreApp(app))
                                         discovered.Add(app);
+
+                                if (Volatile.Read(ref provisionalBannersPublished) != 0)
+                                    return;
+
+                                List<AppEntry> earlyCandidates = discovered
+                                    .DistinctBy(app => app.Id, StringComparer.OrdinalIgnoreCase)
+                                    .OrderByDescending(app => app.StoreRatingCount ?? 0)
+                                    .ThenByDescending(app => app.StoreRating ?? 0)
+                                    .Take(StoreFeaturedCandidatePoolSize)
+                                    .ToList();
+                                if (earlyCandidates.Count < 3 ||
+                                    Interlocked.CompareExchange(ref provisionalBannersPublished, 1, 0) != 0)
+                                    return;
+
+                                await _dispatcher.InvokeAsync(() =>
+                                {
+                                    if (!_isNavigationActive || _isDisposed || token.IsCancellationRequested)
+                                        return;
+
+                                    List<AppEntry> earlyFeatured = curated.Concat(earlyCandidates
+                                            .OrderBy(app => GetWeeklyBannerOrderKey(app, week), StringComparer.Ordinal)
+                                            .Take(6))
+                                        .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
+                                        .Take(6)
+                                        .ToList();
+                                    if (earlyFeatured.Count == 0)
+                                        return;
+
+                                    ApplyFeaturedBanners(earlyFeatured);
+                                    UpdatePopularApps();
+                                    App.MemoryLog?.RecordOnce("editorial_banners_provisional");
+                                }, token);
                             });
                         cancellationToken.ThrowIfCancellationRequested();
                         _searchedStoreBannerApps = discovered
@@ -588,7 +778,10 @@ public sealed partial class FeaturedCategoryShelf
             _storeBannersLoaded = true;
             UpdatePopularApps();
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
         catch (Exception ex)
         {
             WinProvisionLog.Warning(ex, "Storefront.LoadBanners");
@@ -643,7 +836,11 @@ public sealed partial class FeaturedCategoryShelf
         {
             WinProvisionLog.Warning(ex, "Storefront.SaveBannerCache");
         }
-        finally { try { File.Delete(temporary); } catch (IOException) { } }
+        finally
+        {
+            try { File.Delete(temporary); }
+            catch (IOException ex) { WinProvisionLog.Warning(ex, "Storefront.DeleteTemporaryBannerCache"); }
+        }
     }
 
     private void ApplyFeaturedBanners(IReadOnlyList<AppEntry> featured)
@@ -1034,6 +1231,19 @@ public sealed partial class FeaturedCategoryShelf
     }
     public void ApplyFilter()
     {
+        if (_preferences.SearchOnDemand && string.IsNullOrWhiteSpace(SearchText))
+        {
+            IsBrowsing = false;
+            ShowHero = false;
+            ShowResults = false;
+            Apps.Clear();
+            HasEmptyResults = false;
+            CatalogSyncText = "Catálogo sob demanda.";
+            StatusText = "Pesquise para carregar aplicativos.";
+            OnPropertyChanged(nameof(IsSearchOnDemandIdle));
+            return;
+        }
+
         if (!_catalogLoaded)
             return;
 
@@ -1280,6 +1490,7 @@ public sealed partial class FeaturedCategoryShelf
         }
         catch (OperationCanceledException)
         {
+            return;
         }
         catch (Exception ex)
         {
@@ -1426,6 +1637,7 @@ public sealed partial class FeaturedCategoryShelf
         _featuredCatalogService.Updated -= OnFeaturedCatalogUpdated;
         _storeService.CacheCleared -= OnCacheCleared;
         _installedAppsService.Changed -= OnInstalledAppsChanged;
+        _preferences.SearchOnDemandChanged -= OnSearchOnDemandChanged;
     }
 
 }

@@ -24,7 +24,7 @@ public sealed class OfficeOfflineTests : IDisposable
     [InlineData(true)]
     public void ConfigurationUsesSelectedSourceMode(bool offline)
     {
-        var add = OfflineOfficeModuleBuilder.BuildConfiguration([Request(offline)]).Root!.Element("Add")!;
+        var add = OfflineOfficeModuleBuilder.BuildConfiguration((OfflineCollectionRequest[])[Request(offline)]).Root!.Element("Add")!;
         Assert.Equal(offline ? "." : null, (string?)add.Attribute("SourcePath"));
         Assert.Equal(offline ? "FALSE" : null, (string?)add.Attribute("AllowCdnFallback"));
     }
@@ -57,29 +57,29 @@ public sealed class OfficeOfflineTests : IDisposable
         Directory.CreateDirectory(newer);
         await File.WriteAllTextAsync(Path.Combine(_root, "Office", "Data", "v64_16.0.9.9.cab"), "Version CAB without language");
         await File.WriteAllTextAsync(Path.Combine(newer, "stream.x64.x-none.dat"), "main stream without language");
-        Assert.Equal("16.0.1.2", OfficeOfflinePayload.GetVersion(_root, 64, ["pt-br"]));
-        Assert.Throws<InvalidDataException>(() => OfficeOfflinePayload.GetVersion(_root, 64, ["en-us"]));
+        Assert.Equal("16.0.1.2", OfficeOfflinePayload.GetVersion(_root, 64, (string[])["pt-br"]));
+        Assert.Throws<InvalidDataException>(() => OfficeOfflinePayload.GetVersion(_root, 64, (string[])["en-us"]));
     }
 
     [Fact]
     public void AutomaticMediaReuseDoesNotDowngradeInstalledOffice()
     {
         Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", []));
-        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.2.0"]));
-        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.1.0"]));
-        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", ["16.0.3.0"]));
-        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", [null]));
+        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", (string[])["16.0.2.0"]));
+        Assert.True(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", (string[])["16.0.1.0"]));
+        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", (string[])["16.0.3.0"]));
+        Assert.False(OfficeDeploymentToolService.CanReuseLocalVersion("16.0.2.0", (string?[])[null]));
     }
 
     [Fact]
     public void MixedOfficeModesCannotCreateAmbiguousZip() =>
-        Assert.Throws<InvalidDataException>(() => OfflineOfficeModuleBuilder.BuildConfiguration([Request(false), Request(true)]));
+        Assert.Throws<InvalidDataException>(() => OfflineOfficeModuleBuilder.BuildConfiguration((OfflineCollectionRequest[])[Request(false), Request(true)]));
 
     [Fact]
     public void OfflineSourcesShareStreamsAcrossAppExclusions()
     {
         var request = new OfficeInstallRequest(OfficePlanCatalog.ByProductId("O365HomePremRetail")!, 64, "pt-br", [], DownloadBeforeInstall: true);
-        Assert.Equal(OfficeDeploymentToolService.GetPayloadCacheKey(request), OfficeDeploymentToolService.GetPayloadCacheKey(request with { ExcludedApps = ["Word"] }));
+        Assert.Equal(OfficeDeploymentToolService.GetPayloadCacheKey(request), OfficeDeploymentToolService.GetPayloadCacheKey(request with { ExcludedApps = (string[])["Word"] }));
         Assert.NotEqual(OfficeDeploymentToolService.GetPayloadCacheKey(request), OfficeDeploymentToolService.GetPayloadCacheKey(request with { LanguageId = "en-us" }));
     }
 
@@ -304,7 +304,7 @@ public sealed class OfficeOfflineTests : IDisposable
     }
 
     private Task<OfflineCollectionResult> ExportAsync(bool offline, FixtureOfficeSource source, CancellationToken token = default) =>
-        new OfflineCollectionExportService(new NoPackagesSource(), source).ExportAsync("Office", [Request(offline)], Path.Combine(_root, "collection.zip"), null, token);
+        new OfflineCollectionExportService(new NoPackagesSource(), source).ExportAsync("Office", (OfflineCollectionRequest[])[Request(offline)], Path.Combine(_root, "collection.zip"), null, token);
 
     private static async Task<int> VerifyScriptAsync(string script)
     {

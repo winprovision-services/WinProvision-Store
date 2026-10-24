@@ -28,14 +28,16 @@ winprovision --version
 
 ## Recursos
 
-- Pesquise aplicativos por nome e consulte seus detalhes.
+- Pesquise aplicativos por nome, consulte seus detalhes e copie o link público do pacote quando disponível.
 - Pesquise também a origem Microsoft Store pelo WinGet; a Display Catalog fornece os metadados e URLs de ícones e banners em tempo real, sem publicar arquivos de mídia da Store no R2.
 - Instale, atualize e remova aplicativos, acompanhando o resultado das operações.
 - Nas opções de instalação de pacotes WinGet, as versões publicadas pela CDN aparecem automaticamente. O escopo por usuário ou máquina depende dos instaladores da versão selecionada. A verificação de hash pode ser ignorada explicitamente no fluxo WinGet para uma operação, com menor segurança; permanece ativa por padrão.
-- Escolha **WinGet-Pkgs + Viper** como método preferencial para usar o detalhe da versão publicado na CDN, conferir seu SHA-256, baixar com Viper, conferir o instalador e instalar silenciosamente quando o formato for compatível. Se a URL estável do fornecedor já entregar outro binário, a operação informa que o catálogo está temporariamente desatualizado e pode ser tentada novamente após a sincronização seguinte.
+- Escolha **WinProvision API** como método explícito de instalação pelo catálogo próprio. Ela usa o detalhe da versão publicado na CDN, valida SHA-256 e baixa instaladores com o Viper quando compatível; a rota automática continua sendo a recomendada.
 - Organize listas de aplicativos em coleções e prepare arquivos para uso offline.
+- Prepare perfis opcionais de provisionamento do Windows com personalização, barra de tarefas, energia e opções do Explorador; importe e exporte esses ajustes junto dos perfis JSON.
 - Configure os aplicativos do Office e escolha instalação online ou mídia offline com download pelo ODT ou pelo WinProvision Viper.
-- Exporte e importe listas JSON pela CLI.
+- Exporte e importe listas JSON pela CLI; consulte detalhes em JSON com `winprovision show --id ID --json`.
+- Pesquise no histórico de operações por aplicativo, resultado, método ou texto do log.
 - Conecte sua conta GitHub, opcionalmente, para sincronizar coleções, escolher qual JSON do Gist importar e gerenciar esses arquivos.
 - Use os temas claro e escuro e a navegação por teclado.
 - Agende verificações e atualizações pela CLI, em intervalos fixos ou agendas diária/semanal, com execução imediata e notificações do Windows em **Configurações → Manutenção agendada**.

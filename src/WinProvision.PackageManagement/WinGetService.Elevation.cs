@@ -127,6 +127,14 @@ public sealed partial class WinGetService
         && result.FailureReason == WingetFailureReason.InternalError
         && !forceComOnly && !token.IsCancellationRequested;
 
+    internal static bool CanRetryComWithElevation(bool requiresElevation, bool installerStarted,
+        bool blockedByPolicy, string source, PackageInstallOptions options,
+        bool currentProcessElevated, bool inProcessEnabled, CancellationToken token) =>
+        requiresElevation && !installerStarted && !blockedByPolicy && !token.IsCancellationRequested
+        && !currentProcessElevated && !inProcessEnabled
+        && source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+        && !options.RequiresWingetCli;
+
     private async Task<InstallerPreferences?> ResolveInstallerElevationAsync(string id, string source, CancellationToken token)
     {
         if (!source.Equals("winget", StringComparison.OrdinalIgnoreCase)) return null;

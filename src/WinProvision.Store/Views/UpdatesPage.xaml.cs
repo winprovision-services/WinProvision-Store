@@ -12,6 +12,8 @@ using WinProvision.Store.ViewModels;
 namespace WinProvision.Store.Views;
 public sealed partial class UpdatesPage : Page
 {
+    private void ViewModeMain_Click(SplitButton sender, SplitButtonClickEventArgs e) { SetViewMode(_viewMode == "list" ? "grid" : _viewMode == "grid" ? "icons" : "list"); }
+
     public UpdatesViewModel ViewModel { get; }
     private readonly IPresentationService _presentation;
     private readonly IClipboardService _clipboard;
@@ -54,9 +56,9 @@ public sealed partial class UpdatesPage : Page
         RefreshUpdateAction();
         bool show = !ViewModel.IsEmpty && !ViewModel.IsInitialLoading;
         EmptyStatePanel.Visibility = ViewModel.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
-        TableHeaderBar.Visibility = UpdatesTableView.Visibility = show && ViewModeListRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        UpdatesGridView.Visibility = show && ViewModeGridRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        UpdatesIconsView.Visibility = show && ViewModeIconsRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TableHeaderBar.Visibility = UpdatesTableView.Visibility = show && _viewMode == "list" ? Visibility.Visible : Visibility.Collapsed;
+        UpdatesGridView.Visibility = show && _viewMode == "grid" ? Visibility.Visible : Visibility.Collapsed;
+        UpdatesIconsView.Visibility = show && _viewMode == "icons" ? Visibility.Visible : Visibility.Collapsed;
         var icons = new[] { SortNameIcon, SortIdIcon, SortVersionIcon, SortNewVersionIcon, SortSourceIcon };
         for (int i=0;i<icons.Length;i++) { icons[i].Visibility = (int)ViewModel.CurrentSort == i ? Visibility.Visible : Visibility.Collapsed; icons[i].Icon = ViewModel.SortAscending ? Icon.ArrowUp : Icon.ArrowDown; }
         _suppressSort = true; SortModeComboBox.SelectedIndex = (int)ViewModel.CurrentSort; _suppressSort = false;
@@ -89,10 +91,9 @@ public sealed partial class UpdatesPage : Page
         else if(e.Key==VirtualKey.Enter) { e.Handled=true; await OpenDetailsAsync(p); }
         else if(e.Key==VirtualKey.Application) { ViewModel.SelectedPackage=p; FlyoutBase.ShowAttachedFlyout(element); e.Handled=true; }
     }
-    internal void SetViewMode(string mode) { ViewModeListRadio.IsChecked=mode=="list"; ViewModeGridRadio.IsChecked=mode=="grid"; ViewModeIconsRadio.IsChecked=mode=="icons"; RefreshPresentation(); }
-    private void ViewModeList_Click(object sender,RoutedEventArgs e)=>SetViewMode("list");
-    private void ViewModeGrid_Click(object sender,RoutedEventArgs e)=>SetViewMode("grid");
-    private void ViewModeIcons_Click(object sender,RoutedEventArgs e)=>SetViewMode("icons");
+    private string _viewMode = "list";
+    internal void SetViewMode(string mode) { _viewMode = mode; UpdatesViewModeButtonIcon.Symbol = mode == "list" ? Microsoft.UI.Xaml.Controls.Symbol.List : mode == "grid" ? Microsoft.UI.Xaml.Controls.Symbol.ViewAll : Microsoft.UI.Xaml.Controls.Symbol.AllApps; UpdatesViewModeButton.IsChecked = true; RefreshPresentation(); }
+    private void UpdatesViewMode_Click(object sender,RoutedEventArgs e) => SetViewMode((sender as FrameworkElement)?.Tag as string ?? "list");
     internal void SetFiltersVisible(bool visible) { ToggleFiltersButton.IsChecked=visible; FilterSidebarColumn.Width=new(visible?260:0); FilterSplitterColumn.Width=new(visible?8:0); FilterSidebarPanel.Visibility=FilterSplitter.Visibility=visible?Visibility.Visible:Visibility.Collapsed; }
     private void ToggleFiltersButton_Click(object sender,RoutedEventArgs e)=>SetFiltersVisible(ToggleFiltersButton.IsChecked==true);
     private void MoreActionsButton_Click(object sender,RoutedEventArgs e)=>FlyoutBase.ShowAttachedFlyout(MoreActionsButton);

@@ -139,6 +139,43 @@ public class StoreService : IAsyncDisposable
     /// <summary>Catálogo completo já carregado em memória (o que LoadCatalogAsync populou).</summary>
     public IReadOnlyList<AppEntry> GetAll() => _cachedCatalog;
 
+    /// <summary>Descarta o catálogo e o índice de busca em memória sem remover os arquivos locais.</summary>
+    public async Task ReleaseCatalogMemoryAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _cacheGeneration);
+        Task? refresh;
+        lock (_refreshSync)
+        {
+            _refreshCts?.Cancel();
+            refresh = _refreshTask;
+        }
+
+        if (refresh is not null)
+        {
+            try { await refresh.WaitAsync(cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException exception) when (_refreshCts?.IsCancellationRequested == true || cancellationToken.IsCancellationRequested)
+            {
+                CoreLog.Warning(exception, "ReleaseCatalogMemory.CancelledRefresh");
+            }
+            catch (Exception exception) { CoreLog.Warning(exception, "ReleaseCatalogMemory"); }
+        }
+
+        await _loadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            SetCachedCatalog([]);
+            _catalogSha256 = null;
+            _loadedIndexSha256 = null;
+            _loadedSearchIndexCacheFilePath = null;
+            _wingetApps.Clear();
+            _startupRevalidationScheduled = false;
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
+    }
+
     internal Task WaitForRefreshAsync()
     {
         lock (_refreshSync) return _refreshTask ?? Task.CompletedTask;
@@ -188,7 +225,10 @@ public class StoreService : IAsyncDisposable
                 {
                     cachedJson = await File.ReadAllTextAsync(detailFile, cancellationToken);
                 }
-                catch (IOException) { }
+                catch (IOException exception)
+                {
+                    CoreLog.Warning(exception, "StoreService.ReadCachedDetails");
+                }
                 if (cachedJson is not null && HasExpectedHash(cachedJson, expectedDetailHash))
                     json = cachedJson;
             }
@@ -1123,7 +1163,10 @@ public class StoreService : IAsyncDisposable
         {
             if (pending is not null) await pending.ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException exception)
+        {
+            CoreLog.Warning(exception, "StoreService.DisposeCancelledRefresh");
+        }
         catch (Exception exception) { CoreLog.Error(exception, "StoreService"); }
         finally
         {

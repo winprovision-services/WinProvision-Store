@@ -64,6 +64,18 @@ public class InteractiveCliTests
         Assert.Equal("--help", InteractiveCliInput.ParseRequest(["search", "--", "--help"]).Query);
     }
 
+    [Fact]
+    public void ShowJsonRequiresExplicitOptInAndDoesNotRelaxOtherValidation()
+    {
+        Assert.Throws<ArgumentException>(() => InteractiveCliInput.ParseRequest(["show", "--id", "Google.Chrome", "--json"]));
+        var request = InteractiveCliInput.ParseRequest(["show", "--id", "Google.Chrome", "--json"], allowShowJson: true);
+        Assert.Equal("show", request.Command);
+        Assert.True(request.Json);
+        Assert.Throws<ArgumentException>(() => InteractiveCliInput.ParseRequest(["install", "--id", "Google.Chrome", "--json"], allowShowJson: true));
+        Assert.Throws<ArgumentException>(() => InteractiveCliInput.ParseRequest(["show", "--id", "Google.Chrome", "--all", "--json"], allowShowJson: true));
+        Assert.Throws<ArgumentException>(() => InteractiveCliInput.ParseRequest(["show", "--id", "Google.Chrome", "--json", "--json"], allowShowJson: true));
+    }
+
     [Theory]
     [InlineData("install --id Google.Chrome --elevation-cache")]
     [InlineData("upgrade --all --elevation-cache")]

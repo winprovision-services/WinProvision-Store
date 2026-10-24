@@ -15,6 +15,9 @@ public static class InteractiveCliInput
     }
 
     public static InteractiveCliRequest ParseRequest(string[] arguments)
+        => ParseRequest(arguments, allowShowJson: false);
+
+    public static InteractiveCliRequest ParseRequest(string[] arguments, bool allowShowJson)
     {
         var args = arguments.AsSpan();
         if (args.Length > 0 && args[0] == "--") args = args[1..];
@@ -111,7 +114,7 @@ public static class InteractiveCliInput
         if (command is "install" or "show" or "download" or "uninstall")
         {
             if (id is null) throw Invalid($"Use {command} --id <ID do pacote> para identificar o pacote com precisão.");
-            if (all || json)
+            if (all || json && !(allowShowJson && command == "show"))
                 throw Invalid($"{command} não aceita --all ou --json.");
         }
         if (command == "search" && id is null && query.Length == 0) throw Invalid("Informe o nome ou --id para pesquisar.");

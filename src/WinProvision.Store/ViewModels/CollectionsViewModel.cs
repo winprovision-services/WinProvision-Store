@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using WinProvision.Core.Models;
 using WinProvision.Core.Models.Office;
 using WinProvision.Core.Services;
@@ -59,6 +60,8 @@ public sealed partial class CollectionsViewModel : PageViewModel
     private readonly IOfficeCollectionInstaller? _officeInstaller;
     private readonly WindowsAppNotificationService? _notifications;
     private readonly string _path;
+    private readonly IServiceProvider? _serviceProvider;
+    private bool _backupSyncActivated;
     private ProfileBackupSet _backup = new();
     private CancellationTokenSource? _metricsCancellation;
     private bool _suppressSave;
@@ -180,7 +183,8 @@ public sealed partial class CollectionsViewModel : PageViewModel
         OfflineCollectionExportService? offlineExport = null,
         PowerShellScriptAnalyzerService? scriptAnalyzer = null,
         IOfficeCollectionInstaller? officeInstaller = null, WindowsAppNotificationService? notifications = null,
-        StoreService? store = null, IUiDispatcher? dispatcher = null, WinProvision.PackageManagement.ApplicationEngine? engine = null)
+        StoreService? store = null, IUiDispatcher? dispatcher = null, WinProvision.PackageManagement.ApplicationEngine? engine = null,
+        IServiceProvider? serviceProvider = null)
     {
         _backend = backend;
         _engine = engine;
@@ -191,6 +195,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
         _metrics = metrics;
         _store = store;
         _dispatcher = dispatcher;
+        _serviceProvider = serviceProvider;
         _offlineExport = offlineExport;
         _scriptAnalyzer = scriptAnalyzer;
         _officeInstaller = officeInstaller;
@@ -320,6 +325,23 @@ public sealed partial class CollectionsViewModel : PageViewModel
         };
     }
 
+    public ProfileManifest CreateProvisioningProfile()
+    {
+        return new ProfileManifest
+        {
+            Name = "Perfil de provisionamento",
+            Apps = [],
+            Provisioning = _backup.Provisioning
+        };
+    }
+
+    public void SaveProvisioning(WinProvision.Core.Models.Provisioning.ProvisioningManifest manifest)
+    {
+        _backup.Provisioning = manifest;
+        Save();
+        StatusText = "Configurações de provisionamento salvas no backup de coleções.";
+    }
+
     public int ImportJsonBackup(string json, string fallbackName)
     {
         ProfileBackupSet importedBackup = ProfileDocumentService.Parse(json, fallbackName);
@@ -328,8 +350,11 @@ public sealed partial class CollectionsViewModel : PageViewModel
         foreach (ProfileManifest manifest in manifests)
             SelectedProfile = AddProfile(manifest);
 
-        if (importedBackup?.Provisioning is not null)
+        if (importedBackup.Provisioning is not null || importedBackup.Tabs.Any(tab => tab.Provisioning is not null))
+        {
             _backup.Provisioning = importedBackup.Provisioning;
+            _backup.Provisioning ??= importedBackup.Tabs.FirstOrDefault(tab => tab.Provisioning is not null)?.Provisioning;
+        }
 
         Save();
         return manifests.Count;
@@ -564,7 +589,10 @@ public sealed partial class CollectionsViewModel : PageViewModel
         {
             await Task.WhenAll(pending.Select(LoadMetricAsync));
         }
-        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+        catch (OperationCanceledException exception) when (linked.IsCancellationRequested)
+        {
+            WinProvisionLog.Write($"Collections.RefreshMetrics cancelled: {exception.Message}");
+        }
         catch (Exception exception) { WinProvisionLog.Warning(exception, "Collections.RefreshMetrics"); }
         finally
         {
@@ -1104,9 +1132,9 @@ public sealed partial class CollectionsViewModel : PageViewModel
             if (File.Exists(_path))
             {
                 string json = File.ReadAllText(_path);
-                _backup = WinProvision.Core.Services.AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile) ?? new();
-                    foreach (ProfileManifest manifest in ParseProfiles(json, "Coleção"))
-                        AddProfile(manifest, isDefault: Profiles.Count == 0 && manifest.Name?.Equals("Coleção padrão", StringComparison.OrdinalIgnoreCase) == true);
+                _backup = ProfileDocumentService.Parse(json, "Coleção");
+                foreach (ProfileManifest manifest in _backup.Tabs)
+                    AddProfile(manifest, isDefault: Profiles.Count == 0 && manifest.Name?.Equals("Coleção padrão", StringComparison.OrdinalIgnoreCase) == true);
             }
         }
         catch (Exception exception)
@@ -1132,6 +1160,11 @@ public sealed partial class CollectionsViewModel : PageViewModel
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             _backup.Tabs = Profiles.Select(profile => profile.Snapshot()).ToList();
             AtomicFile.WriteAllText(_path, WinProvision.Core.Services.AotJson.Serialize(_backup, WinProvisionJsonOptions.Profile));
+            if (!_backupSyncActivated && _serviceProvider is not null)
+            {
+                _serviceProvider.GetRequiredService<WinUiBackupSyncService>();
+                _backupSyncActivated = true;
+            }
             BackupSnapshotChanged?.Invoke(CreateBackupSnapshot());
         }
         catch (Exception exception)

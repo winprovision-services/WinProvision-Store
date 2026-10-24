@@ -98,6 +98,21 @@ public class CliApplicationTests
     }
 
     [Fact]
+    public async Task JsonDetailsWrapsSourceTextInStableEnvelope()
+    {
+        var fixture = new Fixture("1\n");
+        Assert.Equal(0, await fixture.App.RunAsync(["show", "--id", "Google.Chrome", "--source", "winget", "--json"], default));
+
+        using var json = JsonDocument.Parse(fixture.Output.ToString());
+        Assert.Equal("Google.Chrome", json.RootElement.GetProperty("id").GetString());
+        Assert.Equal("winget", json.RootElement.GetProperty("source").GetString());
+        Assert.Equal("Detalhes do pacote", json.RootElement.GetProperty("details").GetString());
+        Assert.Equal("Google.Chrome", fixture.Backend.DetailsId);
+        Assert.Empty(fixture.Backend.Executed);
+        Assert.StartsWith("{", fixture.Output.ToString().TrimStart());
+    }
+
+    [Fact]
     public async Task InvalidIdentifierInBatchPreventsEveryOperation()
     {
         var fixture = new Fixture("1\n");

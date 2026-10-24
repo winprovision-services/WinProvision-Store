@@ -22,7 +22,13 @@ public sealed partial class InstallationPreferencesService
             {
                 var value = WinProvision.Core.Services.AotJson.Deserialize<Preferences>(File.ReadAllText(_filePath));
                 if (value is not null && Enum.IsDefined(value.PreferredMethod))
-                    PreferredMethod = value.PreferredMethod;
+                {
+                    PreferredMethod = value.PreferredMethod == PackageInstallMethod.WinGetPkgsViper
+                        ? PackageInstallMethod.Automatic
+                        : value.PreferredMethod;
+                    if (PreferredMethod != value.PreferredMethod)
+                        SetPreferredMethod(PreferredMethod);
+                }
             }
         }
         catch (Exception recoveryException)
@@ -35,7 +41,8 @@ public sealed partial class InstallationPreferencesService
 
     public void SetPreferredMethod(PackageInstallMethod method)
     {
-        if (!Enum.IsDefined(method)) method = PackageInstallMethod.Automatic;
+        if (!Enum.IsDefined(method) || method == PackageInstallMethod.WinGetPkgsViper)
+            method = PackageInstallMethod.Automatic;
         PreferredMethod = method;
         Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
         AtomicFile.WriteAllText(_filePath, WinProvision.Core.Services.AotJson.Serialize(new Preferences(method)));

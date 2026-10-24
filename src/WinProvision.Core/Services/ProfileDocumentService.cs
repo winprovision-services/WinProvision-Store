@@ -21,7 +21,7 @@ public static class ProfileDocumentService
         ProfileBackupSet backup;
         if (root.ValueKind == JsonValueKind.Object && TryProperty(root, "tabs", out _))
             backup = AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile) ?? throw new InvalidDataException("Backup vazio.");
-        else if (root.ValueKind == JsonValueKind.Object && TryProperty(root, "apps", out _))
+        else if (root.ValueKind == JsonValueKind.Object && (TryProperty(root, "apps", out _) || TryProperty(root, "provisioning", out _)))
             backup = new() { Tabs = [AotJson.Deserialize<ProfileManifest>(json, WinProvisionJsonOptions.Profile) ?? throw new InvalidDataException("Perfil vazio.")] };
         else if (root.ValueKind == JsonValueKind.Array)
             backup = new() { Tabs = [new() { Name = fallbackName, Apps = ReadCompatibilityList(root, null, false) }] };
@@ -86,6 +86,8 @@ public static class ProfileDocumentService
     {
         if (backup.SchemaVersion is < 0 or > 1 || backup.Tabs is null || backup.Tabs.Count > 1000)
             throw new InvalidDataException("Versão ou estrutura de backup incompatível.");
+        if (backup.Provisioning is { SchemaVersion: < 0 or > 1 })
+            throw new InvalidDataException("Versão do perfil de provisionamento incompatível.");
         int count = 0;
         foreach (var profile in backup.Tabs)
         {

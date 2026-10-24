@@ -12,6 +12,8 @@ namespace WinProvision.Store.Views;
 
 public sealed partial class InstalledPackagesPage : Page
 {
+    private void ViewModeMain_Click(SplitButton sender, SplitButtonClickEventArgs e) { SetViewMode(ViewModel.ViewMode == "list" ? "grid" : ViewModel.ViewMode == "grid" ? "icons" : "list"); }
+
     private bool _loaded;
     private bool _suppressSort;
     private FrameworkElement? _previousFocus;
@@ -33,6 +35,7 @@ public sealed partial class InstalledPackagesPage : Page
     {
         _loaded = true;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        SyncActiveItemsSource();
         RefreshPresentation();
         if (ViewModel.Packages.Count == 0)
         {
@@ -45,6 +48,9 @@ public sealed partial class InstalledPackagesPage : Page
     {
         _loaded = false;
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        InstalledListView.ItemsSource = null;
+        InstalledGridView.ItemsSource = null;
+        InstalledIconsView.ItemsSource = null;
         CloseIgnoredOverlay();
     }
 
@@ -56,6 +62,7 @@ public sealed partial class InstalledPackagesPage : Page
 
     private void RefreshPresentation()
     {
+        SyncActiveItemsSource();
         bool showPackages = ViewModel.HasPackages && !ViewModel.IsInitialLoading;
         TableHeaderBar.Visibility = ViewModel.ViewMode == "list" && showPackages ? Visibility.Visible : Visibility.Collapsed;
         InstalledListView.Visibility = ViewModel.ViewMode == "list" && showPackages ? Visibility.Visible : Visibility.Collapsed;
@@ -63,7 +70,6 @@ public sealed partial class InstalledPackagesPage : Page
         InstalledIconsView.Visibility = ViewModel.ViewMode == "icons" && showPackages ? Visibility.Visible : Visibility.Collapsed;
         LoadingState.Visibility = ViewModel.IsInitialLoading ? Visibility.Visible : Visibility.Collapsed;
         EmptyState.Visibility = ViewModel.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
-        InstalledErrorInfoBar.IsOpen = ViewModel.HasError;
         FilterSidebarColumn.Width = new GridLength(ViewModel.IsFiltersVisible ? _filterWidth : 0);
         FilterSplitterColumn.Width = new GridLength(ViewModel.IsFiltersVisible ? 8 : 0);
         FilterSidebarPanel.Visibility = ViewModel.IsFiltersVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -81,9 +87,9 @@ public sealed partial class InstalledPackagesPage : Page
         UninstallSelectedButton.ApplyTemplate();
         VisualStateManager.GoToState(UninstallSelectedButton, ViewModel.CanRemove ? "Normal" : "Disabled", false);
 
-        ListViewToggleButton.IsChecked = ViewModel.ViewMode == "list";
-        GridViewToggleButton.IsChecked = ViewModel.ViewMode == "grid";
-        IconsViewToggleButton.IsChecked = ViewModel.ViewMode == "icons";
+        InstalledViewModeButtonIcon.Symbol = ViewModel.ViewMode == "list" ? Microsoft.UI.Xaml.Controls.Symbol.List : ViewModel.ViewMode == "grid" ? Microsoft.UI.Xaml.Controls.Symbol.ViewAll : Microsoft.UI.Xaml.Controls.Symbol.AllApps;
+        InstalledViewModeButton.IsChecked = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(InstalledViewModeButton, ViewModel.ViewMode == "list" ? "Visualização em lista" : ViewModel.ViewMode == "grid" ? "Visualização em cartões" : "Visualização em ícones");
         MasterSelectAllCheckBox.IsChecked = ViewModel.MasterSelection;
         _suppressSort = true;
         SortModeComboBox.SelectedIndex = ViewModel.SortColumn switch
@@ -96,6 +102,19 @@ public sealed partial class InstalledPackagesPage : Page
         _suppressSort = false;
         ToggleFiltersButton.IsChecked = ViewModel.IsFiltersVisible;
         IgnoredUpdatesEmptyText.Visibility = ViewModel.IgnoredUpdates.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SyncActiveItemsSource()
+    {
+        var packages = ViewModel.VisiblePackages;
+        // Only the displayed control needs collection notifications and realized rows.
+        if (ViewModel.ViewMode != "list" && InstalledListView.ItemsSource is not null) InstalledListView.ItemsSource = null;
+        if (ViewModel.ViewMode != "grid" && InstalledGridView.ItemsSource is not null) InstalledGridView.ItemsSource = null;
+        if (ViewModel.ViewMode != "icons" && InstalledIconsView.ItemsSource is not null) InstalledIconsView.ItemsSource = null;
+        if (!_loaded) return;
+        if (ViewModel.ViewMode == "list" && !ReferenceEquals(InstalledListView.ItemsSource, packages)) InstalledListView.ItemsSource = packages;
+        if (ViewModel.ViewMode == "grid" && !ReferenceEquals(InstalledGridView.ItemsSource, packages)) InstalledGridView.ItemsSource = packages;
+        if (ViewModel.ViewMode == "icons" && !ReferenceEquals(InstalledIconsView.ItemsSource, packages)) InstalledIconsView.ItemsSource = packages;
     }
 
     private void Page_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -187,9 +206,7 @@ public sealed partial class InstalledPackagesPage : Page
         RefreshPresentation();
     }
 
-    private void ListViewToggleButton_Click(object sender, RoutedEventArgs e) => SetViewMode("list");
-    private void GridViewToggleButton_Click(object sender, RoutedEventArgs e) => SetViewMode("grid");
-    private void IconsViewToggleButton_Click(object sender, RoutedEventArgs e) => SetViewMode("icons");
+    private void InstalledViewMode_Click(object sender, RoutedEventArgs e) => SetViewMode((sender as FrameworkElement)?.Tag as string ?? "list");
 
     private void PackageRow_Tapped(object sender, TappedRoutedEventArgs e)
     {

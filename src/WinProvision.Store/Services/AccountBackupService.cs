@@ -10,7 +10,7 @@ public interface IAccountBackupService
     string? AvatarUrl { get; }
     DateTime? LastSyncUtc { get; }
     DateTime? LastBackupUtc { get; }
-    Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken);
+    Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null);
     void Disconnect();
     Task SaveLocalAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken);
     Task<ProfileBackupSet?> LoadLatestLocalAsync(CancellationToken cancellationToken);
@@ -32,8 +32,8 @@ public sealed partial class AccountBackupService(
     public DateTime? LastSyncUtc => githubBackup.LastSyncUtc;
     public DateTime? LastBackupUtc => localBackup.LastBackupUtc;
 
-    public Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken) =>
-        githubBackup.ConnectAsync(token, cancellationToken);
+    public Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null) =>
+        githubBackup.ConnectAsync(token, cancellationToken, refreshToken);
 
     public void Disconnect() => githubBackup.Disconnect();
 

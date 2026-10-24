@@ -50,6 +50,10 @@ public sealed partial class ApplicationPreferencesService
     public bool AutoMaintenanceDrivers { get; private set; }
     public bool AutomaticCloudBackupEnabled { get; private set; } = true;
     public bool UseViperOfficeDownload { get; private set; }
+    public bool SearchOnDemand { get; private set; }
+    public event Action<bool>? SearchOnDemandChanged;
+    public bool ProvisioningMenuEnabled { get; private set; }
+    public event Action<bool>? ProvisioningMenuEnabledChanged;
     public bool BackgroundUpdatesEnabled => AutoUpdateAtStartup || AutoMaintenanceUpdates;
     public BackgroundUpdateMode UpdateMode { get; private set; } = BackgroundUpdateMode.InstallAutomatically;
     public BackgroundUpdateScope UpdateScope { get; private set; } = BackgroundUpdateScope.AllSupportedPackages;
@@ -89,6 +93,8 @@ public sealed partial class ApplicationPreferencesService
                     AutoMaintenanceDrivers = saved.AutoMaintenanceDrivers;
                     AutomaticCloudBackupEnabled = saved.AutomaticCloudBackupEnabled;
                     UseViperOfficeDownload = saved.UseViperOfficeDownload;
+                    SearchOnDemand = saved.SearchOnDemand;
+                    ProvisioningMenuEnabled = saved.ProvisioningMenuEnabled;
                 }
             }
         }
@@ -172,6 +178,37 @@ public sealed partial class ApplicationPreferencesService
         }
     }
 
+    public void SetSearchOnDemand(bool enabled)
+    {
+        if (SearchOnDemand == enabled) return;
+        bool previous = SearchOnDemand;
+        SearchOnDemand = enabled;
+        try
+        {
+            Save();
+        }
+        catch
+        {
+            SearchOnDemand = previous;
+            throw;
+        }
+        SearchOnDemandChanged?.Invoke(enabled);
+    }
+
+    public void SetProvisioningMenuEnabled(bool enabled)
+    {
+        if (ProvisioningMenuEnabled == enabled) return;
+        bool previous = ProvisioningMenuEnabled;
+        ProvisioningMenuEnabled = enabled;
+        try { Save(); }
+        catch
+        {
+            ProvisioningMenuEnabled = previous;
+            throw;
+        }
+        ProvisioningMenuEnabledChanged?.Invoke(enabled);
+    }
+
     public void SetMaintenanceAutomation(bool enabled, bool includeDrivers)
     {
         AutoMaintenanceUpdates = enabled;
@@ -247,7 +284,7 @@ public sealed partial class ApplicationPreferencesService
         Theme, LaunchAtStartup, AutoUpdateAtStartup, AutoMaintenanceUpdates, AutoMaintenanceDrivers,
         AutomaticCloudBackupEnabled, UpdateMode, UpdateScope, UpdateSchedule, UpdateScheduleTime,
         UpdateScheduleDay, UpdateIntervalMinutes, UpdateNotificationsEnabled,
-        _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(), UseViperOfficeDownload);
+        _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(), UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled);
 
     public void ImportPortablePreferences(PortableApplicationPreferences value)
     {
@@ -270,10 +307,14 @@ public sealed partial class ApplicationPreferencesService
         UpdateIntervalMinutes = value.UpdateIntervalMinutes;
         UpdateNotificationsEnabled = value.UpdateNotificationsEnabled;
         UseViperOfficeDownload = value.UseViperOfficeDownload;
+        SearchOnDemand = value.SearchOnDemand;
+        ProvisioningMenuEnabled = value.ProvisioningMenuEnabled;
         _autoUpdatePackageKeys.Clear();
         foreach (string key in value.AutoUpdatePackageKeys ?? [])
             if (!string.IsNullOrWhiteSpace(key) && key.Length <= 512) _autoUpdatePackageKeys.Add(key);
         Save();
+        SearchOnDemandChanged?.Invoke(SearchOnDemand);
+        ProvisioningMenuEnabledChanged?.Invoke(ProvisioningMenuEnabled);
         UpdateStartupRegistration();
     }
 
@@ -321,7 +362,7 @@ public sealed partial class ApplicationPreferencesService
             UpdateScheduleDay,
             _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
             AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc,
-            AutomaticCloudBackupEnabled, UseViperOfficeDownload)));
+            AutomaticCloudBackupEnabled, UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled)));
     }
 
     private bool? _savedAutoUpdateEnabled;
@@ -341,7 +382,9 @@ public sealed partial class ApplicationPreferencesService
         bool UpdateNotificationsEnabled = true,
         DateTimeOffset? UpdateScheduleAnchorUtc = null,
         bool AutomaticCloudBackupEnabled = true,
-        bool UseViperOfficeDownload = false);
+        bool UseViperOfficeDownload = false,
+        bool SearchOnDemand = false,
+        bool ProvisioningMenuEnabled = false);
 }
 
 public sealed record PortableApplicationPreferences(
@@ -350,4 +393,6 @@ public sealed record PortableApplicationPreferences(
     BackgroundUpdateMode UpdateMode, BackgroundUpdateScope UpdateScope, BackgroundUpdateSchedule UpdateSchedule,
     string UpdateScheduleTime, DayOfWeek UpdateScheduleDay, int UpdateIntervalMinutes,
     bool UpdateNotificationsEnabled, string[] AutoUpdatePackageKeys,
-    bool UseViperOfficeDownload = false);
+    bool UseViperOfficeDownload = false,
+    bool SearchOnDemand = false,
+    bool ProvisioningMenuEnabled = false);

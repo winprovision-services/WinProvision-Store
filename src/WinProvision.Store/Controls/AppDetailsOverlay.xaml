@@ -1,4 +1,4 @@
-<UserControl xmlns:ic="using:FluentIcons.WinUI" x:Class="WinProvision.Store.Controls.AppDetailsOverlay"
+<UserControl xmlns:vm="using:WinProvision.Store.ViewModels" xmlns:ic="using:FluentIcons.WinUI" x:Class="WinProvision.Store.Controls.AppDetailsOverlay" x:DataType="vm:AppDetailsViewModel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:controls="using:WinProvision.Store.Controls"
@@ -26,8 +26,6 @@
                 BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                 BorderThickness="{StaticResource AppDetailsStroke1}"
                 CornerRadius="{StaticResource AppOverlayCornerRadius}"
-                MaxWidth="{StaticResource AppDetailsPanelMaxWidth}"
-                MaxHeight="{StaticResource AppDetailsPanelMaxHeight}"
                 Margin="{StaticResource AppDetailsSpacing24}"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
@@ -341,10 +339,9 @@
                                     </Grid>
                                 </Grid>
 
-                                <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" x:Name="StatusText" Text="{Binding StatusText}"
-                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                           Margin="{StaticResource AppDetailsSpacing0_8_0_0}"
-                                           TextWrapping="Wrap" />
+                                <controls:StatusInfoBar x:Name="StatusText" StatusMessage="{Binding StatusText}"
+                                                         Margin="{StaticResource AppDetailsSpacing0_8_0_0}" />
+
                             </StackPanel>
 
                             <Border Visibility="{Binding ShowManagementOptions, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -517,43 +514,26 @@
                                                  HorizontalAlignment="Center"
                                                  VerticalAlignment="Center"
                                                  Visibility="Collapsed" />
-                                    <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch" x:Name="ScreenshotPreviewButton" AutomationProperties.AutomationId="ScreenshotPreviewButton" Padding="0" BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Abrir captura de tela ampliada" Click="ScreenshotPreviewButton_Click"><Image x:Name="ScreenshotImage" Stretch="Uniform"/></Button>
-                                    <Button x:Name="PreviousScreenshotButton" AutomationProperties.AutomationId="PreviousScreenshotButton"
-                                               Width="{StaticResource AppDetailsSize36}"
-                                               Height="{StaticResource AppDetailsSize36}"
-                                               Padding="{StaticResource AppDetailsSpacing0}"
-                                               HorizontalAlignment="Left"
-                                               VerticalAlignment="Center"
-                                               Margin="{StaticResource AppDetailsSpacing12_0}"
-                                               AutomationProperties.Name="Captura anterior"
-                               ToolTipService.ToolTip="Captura anterior"
-                                               Click="PreviousScreenshotButton_Click">
-                                        <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" IconSize="Size16" Style="{StaticResource AppDetailsIconStyle}" />
-                                    </Button>
-                                    <Button x:Name="NextScreenshotButton" AutomationProperties.AutomationId="NextScreenshotButton"
-                                               Width="{StaticResource AppDetailsSize36}"
-                                               Height="{StaticResource AppDetailsSize36}"
-                                               Padding="{StaticResource AppDetailsSpacing0}"
-                                               HorizontalAlignment="Right"
-                                               VerticalAlignment="Center"
-                                               Margin="{StaticResource AppDetailsSpacing12_0}"
-                                               AutomationProperties.Name="Próxima captura"
-                               ToolTipService.ToolTip="Próxima captura"
-                                               Click="NextScreenshotButton_Click">
-                                        <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Style="{StaticResource AppDetailsIconStyle}" />
-                                    </Button>
-                                    <Border x:Name="ScreenshotCounterSurface" HorizontalAlignment="Center"
-                                            VerticalAlignment="Bottom"
-                                            Margin="{StaticResource AppDetailsSpacing0_0_0_8}"
-                                            Padding="12,6"
-                                            CornerRadius="{StaticResource AppOverlayCornerRadius}"
-                                            Background="{ThemeResource AppDetailsScreenshotCounterBrush}">
-                                        <StackPanel Spacing="5" HorizontalAlignment="Center">
-                                            <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" x:Name="ScreenshotCounterText"
-                                                       TextAlignment="Center" FontWeight="SemiBold" Foreground="White" />
-                                            <StackPanel x:Name="ScreenshotIndicators" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" />
-                                        </StackPanel>
-                                    </Border>
+                                    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                        <FlipView x:Name="Gallery" MaxWidth="400" Height="190" ItemsSource="{Binding Screenshots}"
+                                                  SelectionChanged="Gallery_SelectionChanged"
+                                                  IsEnabled="True">
+                                            <FlipView.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <Button Padding="0" BorderThickness="0" Background="Transparent"
+                                                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                                            AutomationProperties.Name="Abrir captura de tela ampliada"
+                                                            Click="ScreenshotPreviewButton_Click">
+                                                        <Image Stretch="Uniform" conv:AsyncImage.SourceUrl="{Binding}"
+                                                               conv:AsyncImage.DecodePixelWidth="720" />
+                                                    </Button>
+                                                </DataTemplate>
+                                            </FlipView.ItemTemplate>
+                                        </FlipView>
+                                        <PipsPager x:Name="FlipViewPipsPager" HorizontalAlignment="Center"
+                                                   Margin="0,12,0,0"
+                                                   SelectedPageIndex="{Binding SelectedIndex, ElementName=Gallery, Mode=TwoWay}" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                             

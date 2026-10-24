@@ -25,7 +25,9 @@ public sealed partial class SettingsViewModel
         new("open-logs", "Abrir pasta de logs", "Acesse os arquivos de log do aplicativo.", "Preferências gerais", "General", "log logs pasta diagnóstico arquivos"),
         new("reset-preferences", "Restaurar padrões", "Volte às preferências originais do aplicativo.", "Preferências gerais", "General", "restaurar padrões redefinir reset configurações"),
         new("theme", "Tema do aplicativo", "Alterne entre os temas claro, escuro e do sistema.", "Interface e inicialização", "Interface", "tema aparência claro escuro sistema cor"),
+        new("search-on-demand", "Pesquisa sob demanda", "Carregue banners e aplicativos somente depois de pesquisar para reduzir a memória usada pela vitrine.", "Interface e inicialização", "Interface", "pesquisa sob demanda carregar aplicativos catálogo memória cards banners UniGetUI"),
         new("startup", "Iniciar com o Windows", "Execute atualizações automáticas pela CLI ao entrar nesta conta, sem abrir a interface.", "Interface e inicialização", "Interface", "inicialização iniciar login windows automático"),
+        new("provisioning-menu", "Menu Provisionamento", "Exiba ou oculte o menu para preparar perfis de configuração do Windows.", "Provisionamento", "Provisioning", "provisionar provisionamento menu perfil windows ocultar mostrar exibir"),
         new("clear-cache", "Armazenamento e cache", "Meça o espaço, ajuste limites e limpe imagens, catálogo ou instaladores reutilizáveis separadamente.", "Armazenamento e cache", "Operations", "cache armazenamento espaço disco temporários instaladores limpar imagens ícones limite tamanho megabytes revalidar memória"),
         new("refresh-catalog", "Atualizar catálogo", "Busque aplicativos e versões recentes sem apagar o cache de instaladores e imagens.", "Armazenamento e cache", "Operations", "catálogo atualizar sincronizar busca versões índices"),
     ];

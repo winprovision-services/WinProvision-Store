@@ -67,6 +67,7 @@ public sealed partial class SettingsViewModel
             _operationPreferences.Save(payload.Operations);
             _themeService.SetTheme(payload.Application.Theme);
             SelectedThemeOption = ThemeOptions.First(option => option.Preference == payload.Application.Theme);
+            SearchOnDemand = _preferences.SearchOnDemand;
             LoadExecutionOptions(); LoadPortabilitySettings(); OnPropertyChanged(nameof(UseViperOfficeDownload));
             ReloadScheduledMaintenance();
             StatusText = "Configurações importadas. As opções de inicialização foram atualizadas para esta conta do Windows.";

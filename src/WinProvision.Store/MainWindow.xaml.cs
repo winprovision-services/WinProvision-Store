@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.Windows.BadgeNotifications;
 using Microsoft.UI.Windowing;
 using Windows.Graphics;
 using WinProvision.Store.Services;
@@ -13,21 +14,29 @@ namespace WinProvision.Store;
 public sealed partial class MainWindow : Window
 {
     private readonly IServiceProvider _services;
+    private readonly ApplicationPreferencesService _applicationPreferences;
     private readonly Windows.UI.ViewManagement.UISettings _motionSettings = new();
     private readonly OperationsViewModel _operations;
     private readonly Controls.AppDetailsOverlay _details;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _queueAutoClose;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _cacheBudgetTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _backgroundMemoryTimer;
+    private bool _windowIsActive = true;
+    private bool _catalogReleasedForBackground;
     private bool? _compactNavigation;
     private bool _isNavigating;
     private bool _isClosing;
     private string? _currentNavigationTag;
     public FrameworkElement RootElement => Root;
+    internal Visibility ProvisioningMenuVisibility => ProvisioningNavigationItem.Visibility;
     internal Page? CurrentPage => PageHost.Content as Page;
     public MainWindow(IServiceProvider services)
     {
         _services = services;
         InitializeComponent();
+        _applicationPreferences = services.GetRequiredService<ApplicationPreferencesService>();
+        ProvisioningNavigationItem.Visibility = _applicationPreferences.ProvisioningMenuEnabled ? Visibility.Visible : Visibility.Collapsed;
+        _applicationPreferences.ProvisioningMenuEnabledChanged += ProvisioningMenuEnabledChanged;
         _services.GetRequiredService<ApplicationThemeService>().Attach(Root);
         _operations = services.GetRequiredService<OperationsViewModel>();
         Root.DataContext = _operations;
@@ -49,7 +58,20 @@ public sealed partial class MainWindow : Window
         _cacheBudgetTimer.Interval = TimeSpan.FromSeconds(15);
         _cacheBudgetTimer.Tick += (_, _) => AsyncImage.RefreshMemoryBudget();
         _cacheBudgetTimer.Start();
+        _backgroundMemoryTimer = DispatcherQueue.CreateTimer();
+        _backgroundMemoryTimer.Interval = TimeSpan.FromSeconds(30);
+        _backgroundMemoryTimer.Tick += async (_, _) =>
+        {
+            _backgroundMemoryTimer.Stop();
+            if (_windowIsActive || _operations.HasPending || _details.IsOpen || PageHost.Content is not HomePage home)
+                return;
+            await home.SuspendForBackgroundAsync();
+            _catalogReleasedForBackground = !_windowIsActive;
+            if (_windowIsActive)
+                await home.ResumeFromBackgroundAsync();
+        };
         _operations.PropertyChanged += Operations_Changed;
+        UpdateTaskbarBadge();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico"));
@@ -58,23 +80,41 @@ public sealed partial class MainWindow : Window
         Activated += (_, args) =>
         {
             bool active = args.WindowActivationState != WindowActivationState.Deactivated;
+            _windowIsActive = active;
             if (PageHost.Content is HomePage home)
                 home.SetWindowActive(active);
             if (!active)
             {
                 AsyncImage.TrimForBackground();
                 _cacheBudgetTimer.Stop();
+                if (!_operations.HasPending)
+                    _backgroundMemoryTimer.Start();
             }
             else
             {
+                _backgroundMemoryTimer.Stop();
                 AsyncImage.RestoreForegroundBudget();
                 _cacheBudgetTimer.Start();
+                if (_catalogReleasedForBackground && PageHost.Content is HomePage homePage)
+                {
+                    _catalogReleasedForBackground = false;
+                    _ = homePage.ResumeFromBackgroundAsync();
+                }
             }
         };
         AppWindow.Closing += AppWindow_Closing;
         Closed += Window_Closed;
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             _motionSettings.AnimationsEnabledChanged += MotionSettings_AnimationsEnabledChanged;
+    }
+    private void ProvisioningMenuEnabledChanged(bool enabled)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_isClosing) return;
+            if (!enabled && _currentNavigationTag == "provisioning") Navigate("home");
+            ProvisioningNavigationItem.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        });
     }
     private void MotionSettings_AnimationsEnabledChanged(Windows.UI.ViewManagement.UISettings sender, object args)
     {
@@ -114,6 +154,8 @@ public sealed partial class MainWindow : Window
     {
         if (_isClosing || App.CurrentApp.IsShuttingDown || App.CurrentApp.ShutdownComplete)
             return;
+        if (tag == "provisioning" && !_applicationPreferences.ProvisioningMenuEnabled)
+            return;
 
         var selected = RootNavigation.MenuItems.Concat(RootNavigation.FooterMenuItems).OfType<NavigationViewItem>().First(item => (string)item.Tag == tag);
         if (_currentNavigationTag == tag)
@@ -134,6 +176,7 @@ public sealed partial class MainWindow : Window
             "installed" => _services.GetRequiredService<InstalledPackagesPage>(),
             "collections" => _services.GetRequiredService<CollectionsPage>(),
             "office" => _services.GetRequiredService<OfficePage>(),
+            "provisioning" => _services.GetRequiredService<ProvisioningPage>(),
             "account" => _services.GetRequiredService<AccountSyncPage>(),
             "settings" => _services.GetRequiredService<SettingsPage>(),
             "more" => _services.GetRequiredService<MorePage>(),
@@ -189,9 +232,35 @@ public sealed partial class MainWindow : Window
     }
     private void Operations_Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
+        if (args.PropertyName is nameof(OperationsViewModel.HasPending) or nameof(OperationsViewModel.HasFailedOperations))
+            UpdateTaskbarBadge();
         if (args.PropertyName != nameof(OperationsViewModel.HasPending)) return;
         _queueAutoClose.Stop();
         if (!_operations.HasPending && _operations.HasOperations) _queueAutoClose.Start();
+        if (!_windowIsActive && !_operations.HasPending && !_details.IsOpen && PageHost.Content is HomePage)
+            _backgroundMemoryTimer.Start();
+        else if (_operations.HasPending)
+            _backgroundMemoryTimer.Stop();
+    }
+    private void UpdateTaskbarBadge()
+    {
+        // Badge notifications require package identity; this app is currently deployed unpackaged.
+        try { _ = Windows.ApplicationModel.Package.Current.Id; }
+        catch (InvalidOperationException) { return; }
+
+        try
+        {
+            if (_operations.HasFailedOperations)
+                BadgeNotificationManager.Current.SetBadgeAsGlyph(BadgeNotificationGlyph.Error);
+            else if (_operations.HasPending)
+                BadgeNotificationManager.Current.SetBadgeAsGlyph(BadgeNotificationGlyph.Activity);
+            else
+                BadgeNotificationManager.Current.ClearBadge();
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Warning(exception, "TaskbarBadge");
+        }
     }
     public void ShowStartupSplash() { StartupSplashOverlay.Visibility = Visibility.Visible; MainContentLayer.Opacity = 0; MainContentLayer.IsHitTestVisible = false; }
     public void HideStartupSplash() { StartupSplashOverlay.Visibility = Visibility.Collapsed; MainContentLayer.Opacity = 1; MainContentLayer.IsHitTestVisible = true; }
@@ -219,6 +288,7 @@ public sealed partial class MainWindow : Window
     }
     private void Window_Closed(object sender, WindowEventArgs args)
     {
+        _applicationPreferences.ProvisioningMenuEnabledChanged -= ProvisioningMenuEnabledChanged;
         QueuePopup.IsOpen = false;
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             _motionSettings.AnimationsEnabledChanged -= MotionSettings_AnimationsEnabledChanged;

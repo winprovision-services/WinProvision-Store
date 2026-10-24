@@ -26,8 +26,10 @@ internal static class ViperSessionStore
     {
         try
         {
-            if (new FileInfo(path).Length > 16 * 1024 * 1024) return null;
-            return JsonSerializer.Deserialize(File.ReadAllBytes(path), ViperJson.Default.ViperSession);
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                4096, FileOptions.SequentialScan);
+            if (file.Length > 16 * 1024 * 1024) return null;
+            return JsonSerializer.Deserialize(file, ViperJson.Default.ViperSession);
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { return null; }
     }
@@ -38,7 +40,7 @@ internal static class ViperSessionStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                file.Write(JsonSerializer.SerializeToUtf8Bytes(session, ViperJson.Default.ViperSession));
+                JsonSerializer.Serialize(file, session, ViperJson.Default.ViperSession);
                 file.Flush(true);
             }
             File.Move(temporary, path, true);

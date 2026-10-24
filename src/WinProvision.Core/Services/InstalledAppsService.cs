@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using WinProvision.Core.Models;
 using WinProvision.Core.Services;
 
 namespace WinProvision.Core.Services;
@@ -16,14 +17,15 @@ namespace WinProvision.Core.Services;
 [SupportedOSPlatform("windows")]
 public class InstalledAppsService
 {
+    private const string UninstallRegistryPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly WingetExecutor? _wingetExecutor;
 
     // Mudança: Deixamos de usar HashSet<string> para guardar a lista detalhada de apps
     private List<InstalledAppDetail> _installedApps = new();
     private HashSet<string> _wingetInstalledIds = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, HashSet<string>> _wingetIdsByDisplayName = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _installedDisplayNames = new(StringComparer.OrdinalIgnoreCase);
-    private bool _hasWingetSnapshot;
     private bool _loaded;
 
     public event Action? Changed;
@@ -53,34 +55,42 @@ public class InstalledAppsService
             Task<(bool Succeeded, List<string> PackageIds)>? wingetTask = _wingetExecutor is null
                 ? null
                 : _wingetExecutor.TryGetInstalledPackageIdsAsync(cancellationToken);
+            Task<List<UpgradablePackage>>? wingetListTask = _wingetExecutor?.ListInstalledPackagesAsync(cancellationToken);
+            _wingetIdsByDisplayName = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
             if (wingetTask is not null)
-                await Task.WhenAll(registryTask, ObserveWingetSnapshotAsync(wingetTask, cancellationToken));
+                await Task.WhenAll(registryTask, ObserveWingetSnapshotAsync(wingetTask, cancellationToken),
+                    ObserveWingetListAsync(wingetListTask!, cancellationToken));
             var registryApps = await registryTask;
+            var installedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (wingetTask is not null)
             {
                 try
                 {
                     var snapshot = await wingetTask;
-                    _hasWingetSnapshot = snapshot.Succeeded;
-                    _wingetInstalledIds = snapshot.PackageIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    if (snapshot.Succeeded) installedIds.UnionWith(snapshot.PackageIds);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    CoreLog.Warning(exception, "ReadInstalledWingetSnapshot");
-                    _hasWingetSnapshot = false;
-                    _wingetInstalledIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception) { CoreLog.Warning(exception, "ReadInstalledWingetSnapshot"); }
             }
-            else
+            if (wingetListTask is not null)
             {
-                _hasWingetSnapshot = false;
-                _wingetInstalledIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    var listed = await wingetListTask;
+                    foreach (var package in listed)
+                        if (!string.IsNullOrWhiteSpace(package.Id)) installedIds.Add(package.Id.Trim());
+                    _wingetIdsByDisplayName = listed
+                        .Where(package => !string.IsNullOrWhiteSpace(package.Name) && !string.IsNullOrWhiteSpace(package.Id))
+                        .GroupBy(package => NormalizeDisplayName(package.Name), StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(group => group.Key,
+                            group => group.Select(package => package.Id.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                            StringComparer.OrdinalIgnoreCase);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception) { CoreLog.Warning(exception, "ReadInstalledWingetList"); }
             }
+            _wingetInstalledIds = installedIds;
             _installedApps = registryApps;
             _installedDisplayNames = registryApps
                 .Select(app => NormalizeDisplayName(app.DisplayName))
@@ -104,6 +114,13 @@ public class InstalledAppsService
         catch (Exception exception) { CoreLog.Warning(exception, "ReadInstalledWingetSnapshot"); }
     }
 
+    private static async Task ObserveWingetListAsync(Task<List<UpgradablePackage>> task, CancellationToken cancellationToken)
+    {
+        try { await task.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { CoreLog.Warning(exception, "ReadInstalledWingetList"); }
+    }
+
     /// <summary>
     /// Retorna todos os aplicativos (EXE/MSI) detectados para a tela de Desinstalação.
     /// </summary>
@@ -114,19 +131,47 @@ public class InstalledAppsService
     /// </summary>
     public bool IsInstalled(string displayName, string? packageId = null)
     {
-        if (_hasWingetSnapshot && !string.IsNullOrWhiteSpace(packageId)
-            && _wingetInstalledIds.Contains(packageId.Trim()))
-            return true;
-
-        if (string.IsNullOrWhiteSpace(displayName))
-            return false;
-
-        string expectedName = NormalizeDisplayName(displayName);
-        return _installedDisplayNames.Contains(expectedName);
+        return IsInstalledByIdentity(displayName, packageId, _wingetInstalledIds,
+            _wingetIdsByDisplayName, _installedDisplayNames);
     }
+
+    internal static bool IsInstalledByIdentity(string displayName, string? packageId,
+        IReadOnlySet<string> installedIds, IReadOnlyDictionary<string, HashSet<string>> installedIdsByDisplayName,
+        IReadOnlySet<string> registryDisplayNames)
+    {
+        if (!string.IsNullOrWhiteSpace(packageId)
+            && (installedIds.Contains(packageId.Trim()) || HasKnownPackageIdAlias(packageId, installedIds)))
+            return true;
+        if (string.IsNullOrWhiteSpace(displayName)) return false;
+        string name = NormalizeDisplayName(displayName);
+        if (!string.IsNullOrWhiteSpace(packageId)
+            && installedIdsByDisplayName.TryGetValue(name, out var sameNameIds)
+            && sameNameIds.Count > 0
+            && !sameNameIds.Contains(packageId.Trim())
+            && !sameNameIds.Any(id => AreKnownPackageIdAliases(packageId, id)))
+            return false;
+        return registryDisplayNames.Contains(name);
+    }
+
+    private static bool HasKnownPackageIdAlias(string packageId, IReadOnlySet<string> installedIds) =>
+        installedIds.Any(installedId => AreKnownPackageIdAliases(packageId, installedId));
+
+    private static bool AreKnownPackageIdAliases(string left, string right) =>
+        (left.Equals("Devolutions.UniGetUI", StringComparison.OrdinalIgnoreCase)
+            && right.Equals("XPFFTQ032PTPHF", StringComparison.OrdinalIgnoreCase))
+        || (right.Equals("Devolutions.UniGetUI", StringComparison.OrdinalIgnoreCase)
+            && left.Equals("XPFFTQ032PTPHF", StringComparison.OrdinalIgnoreCase));
 
     private static string NormalizeDisplayName(string displayName) =>
         string.Join(' ', displayName.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    internal static (RegistryHive Hive, RegistryView View, string Path)[] GetRegistryLocations() =>
+    [
+        (RegistryHive.LocalMachine, RegistryView.Registry64, UninstallRegistryPath),
+        (RegistryHive.LocalMachine, RegistryView.Registry32, UninstallRegistryPath),
+        (RegistryHive.CurrentUser, RegistryView.Registry64, UninstallRegistryPath),
+        (RegistryHive.CurrentUser, RegistryView.Registry32, UninstallRegistryPath)
+    ];
 
     // Uma operação concluída invalida a varredura em memória. Releia o Registro
     // antes de notificar as telas para que a Visão Geral não reutilize estado antigo.
@@ -158,12 +203,7 @@ public class InstalledAppsService
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // As 3 fontes principais de programas clássicos no Windows
-        var registryLocations = new[]
-        {
-            new { Hive = RegistryHive.LocalMachine, View = RegistryView.Registry64, Path = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" },
-            new { Hive = RegistryHive.LocalMachine, View = RegistryView.Registry32, Path = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" },
-            new { Hive = RegistryHive.CurrentUser, View = RegistryView.Registry64, Path = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" }
-        };
+        var registryLocations = GetRegistryLocations();
 
         foreach (var loc in registryLocations)
         {

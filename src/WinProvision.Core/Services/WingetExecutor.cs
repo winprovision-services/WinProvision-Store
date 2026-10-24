@@ -38,6 +38,8 @@ public class WingetExecutionResult
 [SupportedOSPlatform("windows")]
 public class WingetExecutor
 {
+    private const int MaxTransientDownloadRetries = 2;
+    private static readonly TimeSpan TransientDownloadRetryBaseDelay = TimeSpan.FromSeconds(1);
     private readonly WingetBootstrapper? _bootstrapper;
 
     /// <param name="bootstrapper">
@@ -492,7 +494,9 @@ public class WingetExecutor
                 FailureReason = WingetFailureReason.ElevationProhibited
             };
 
-        string args = $"update --id {QuoteArgument(appId)} --exact --source {QuoteArgument(source)} --accept-source-agreements";
+        string args = $"update --id {QuoteArgument(appId)} --exact";
+        if (!string.IsNullOrWhiteSpace(source)) args += $" --source {QuoteArgument(source)}";
+        args += " --accept-source-agreements";
         if (!string.IsNullOrWhiteSpace(version)) args += $" --version {QuoteArgument(version)}";
         if (ignoreSecurityHash) args += " --ignore-security-hash";
         bool useInteractive = interactive || source.Equals("msstore", StringComparison.OrdinalIgnoreCase);
@@ -586,19 +590,40 @@ public class WingetExecutor
                 effectiveArguments, onLogReceived, cancellationToken, forceElevation);
         }
 
-        // Falha de download ocorre antes de o instalador ser iniciado. Faça um retry único
-        // para falhas de rede transitórias; nunca repita depois de elevar ou após erro de hash.
-        if (!result.Success && !result.WasElevated && !forceElevation
-            && !cancellationToken.IsCancellationRequested
-            && unchecked((uint)result.ExitCode) == 0x8A150008)
+        // Falha de download ocorre antes de iniciar o instalador. Limita a repetição a
+        // falhas classificadas como DownloadError: erros de hash, política, elevação ou
+        // instalação podem deixar efeitos parciais e não são repetidos automaticamente.
+        // O teto explícito evita qualquer ciclo de auto retry; cada volta exige o mesmo
+        // código transitório e respeita o cancelamento.
+        for (int retry = 1; ShouldRetryTransientDownload(result, retry, forceElevation, cancellationToken); retry++)
         {
-            onLogReceived?.Invoke("O download falhou; tentando novamente uma vez...");
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+            onLogReceived?.Invoke($"O download falhou por um motivo transitório; nova tentativa {retry} de {MaxTransientDownloadRetries}...");
+            await Task.Delay(GetTransientDownloadRetryDelay(retry), cancellationToken).ConfigureAwait(false);
             result = await ExecuteWithElevationFallbackAsync(
                 effectiveArguments, onLogReceived, cancellationToken, forceElevation: false);
         }
 
         return result;
+    }
+
+    internal static bool ShouldRetryTransientDownload(
+        WingetExecutionResult result,
+        int retryNumber,
+        bool forceElevation,
+        CancellationToken cancellationToken) =>
+        retryNumber <= MaxTransientDownloadRetries
+        && !result.Success
+        && !result.WasElevated
+        && !result.InstallerStarted
+        && !forceElevation
+        && !cancellationToken.IsCancellationRequested
+        && WingetErrorTranslator.Classify(result.ExitCode, result.Output) == WingetFailureReason.DownloadError;
+
+    internal static TimeSpan GetTransientDownloadRetryDelay(int retryNumber)
+    {
+        if (retryNumber is < 1 or > MaxTransientDownloadRetries)
+            throw new ArgumentOutOfRangeException(nameof(retryNumber));
+        return TransientDownloadRetryBaseDelay * retryNumber;
     }
 
     private static WingetExecutionResult NormalizeInstallOutcome(WingetExecutionResult result, bool isUpgrade)

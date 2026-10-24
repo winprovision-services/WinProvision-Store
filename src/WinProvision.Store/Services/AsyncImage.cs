@@ -104,7 +104,10 @@ public sealed partial class AsyncImage : DependencyObject
         foreach (CancellationTokenSource cancellation in ActiveImageCancellations.Values)
         {
             try { cancellation.Cancel(); }
-            catch (ObjectDisposedException) { }
+            catch (ObjectDisposedException)
+            {
+                continue;
+            }
         }
 
         Task[] activeImageLoads = ActiveImageLoads.Values.ToArray();
@@ -272,6 +275,7 @@ public sealed partial class AsyncImage : DependencyObject
         }
         catch (OperationCanceledException)
         {
+            return;
         }
         catch (Exception exception)
         {
@@ -360,7 +364,6 @@ public sealed partial class AsyncImage : DependencyObject
         try
         {
             bool isRemote = IsHttpUri(url);
-            byte[]? previousBytes = null;
             BitmapImage? previousBitmap = null;
             if (isRemote)
             {
@@ -372,7 +375,6 @@ public sealed partial class AsyncImage : DependencyObject
                     cancellationToken.ThrowIfCancellationRequested();
                     if (cachedBitmap is not null)
                     {
-                        previousBytes = cachedBytes;
                         previousBitmap = cachedBitmap;
                         var metadata = ImageCacheTransfer.ReadMetadata(cachePath + ".meta.json");
                         DateTimeOffset validated = metadata?.ValidatedUtc ?? new DateTimeOffset(File.GetLastWriteTimeUtc(cachePath));
@@ -398,10 +400,14 @@ public sealed partial class AsyncImage : DependencyObject
             }
 
             ImageDownload? download = isRemote ? IsNegativeCached(requestKey) ? new(null) : await LoadSharedRemoteBytesAsync(url, generation, cancellationToken) : null;
-            byte[]? bytes = isRemote ? download!.NotModified ? previousBytes : download.Bytes
+            byte[]? bytes = isRemote ? download!.Bytes
                 : await LoadLocalBytesAsync(url, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            BitmapImage? bitmap = bytes is null ? null : await DecodeAsync(bytes, width);
+            // A 304 response has no new image data. Reuse the bitmap decoded from disk
+            // above instead of decoding and transcoding the same bytes a second time.
+            BitmapImage? bitmap = isRemote && download!.NotModified
+                ? previousBitmap
+                : bytes is null ? null : await DecodeAsync(bytes, width);
             cancellationToken.ThrowIfCancellationRequested();
             if (bitmap is null)
             {
@@ -751,10 +757,10 @@ public sealed partial class AsyncImage : DependencyObject
         GCMemoryInfo memory = GC.GetGCMemoryInfo();
         long available = memory.TotalAvailableMemoryBytes;
         long budget = available is > 0 and <= 4L * 1024 * 1024 * 1024
-            ? 8L * 1024 * 1024
+            ? 4L * 1024 * 1024
             : available is > 0 and <= 8L * 1024 * 1024 * 1024
-                ? 16L * 1024 * 1024
-                : 24L * 1024 * 1024;
+                ? 8L * 1024 * 1024
+                : 12L * 1024 * 1024;
         if (memory.HighMemoryLoadThresholdBytes > 0 &&
             memory.MemoryLoadBytes >= memory.HighMemoryLoadThresholdBytes * 0.9)
         {

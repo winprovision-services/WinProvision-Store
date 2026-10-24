@@ -8,6 +8,28 @@ namespace WinProvision.Core.Tests;
 
 public sealed class WingetCdnCatalogTests
 {
+    [Theory]
+    [InlineData("manifests/c/app/app.json", true)]
+    [InlineData("manifests//app/app.json", false)]
+    [InlineData("manifests/./app/app.json", false)]
+    [InlineData("manifests/../app/app.json", false)]
+    [InlineData("manifests/c\\app/app.json", false)]
+    [InlineData("manifests/c?/app.json", false)]
+    [InlineData("manifests/c#/app.json", false)]
+    [InlineData("manifests/c\u0001/app.json", false)]
+    public void ValidatesIndexPathsWithoutChangingCatalogRules(string appPath, bool valid)
+    {
+        string index = $$"""[{"id":"Contoso.App","appPath":"{{appPath.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\u0001", "\\u0001", StringComparison.Ordinal)}}","appSha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"App","latestVersion":"1.0"}]""";
+        string hash = Hash(index);
+        string catalog = """{"schemaVersion":1,"generation":"commit","generatedAtUtc":"2026-10-21T00:00:00Z","packageCount":1,"searchIndexPath":"winget/v1/search/INDEXHASH.json","searchIndexSha256":"INDEXHASH"}"""
+            .Replace("INDEXHASH", hash, StringComparison.Ordinal);
+
+        if (valid)
+            Assert.Single(WingetCdnCatalog.ParseSnapshot(Encoding.UTF8.GetBytes(catalog), Encoding.UTF8.GetBytes(index)).Apps);
+        else
+            Assert.Throws<InvalidDataException>(() => WingetCdnCatalog.ParseSnapshot(Encoding.UTF8.GetBytes(catalog), Encoding.UTF8.GetBytes(index)));
+    }
+
     [Fact]
     public async Task ReadsRelativeMediaAndVersionInstallersAfterHashValidation()
     {

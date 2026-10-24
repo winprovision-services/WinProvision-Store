@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="using:WinProvision.Store.Controls"
              xmlns:conv="using:WinProvision.Store.Services"
+             xmlns:vm="using:WinProvision.Store.ViewModels"
+             x:DataType="vm:OperationsViewModel"
              x:Name="Root"
              FontFamily="{StaticResource StoreFontFamily}"
              FontSize="14"
@@ -137,7 +139,7 @@
                     </ItemsControl.ItemsPanel>
 
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate x:DataType="vm:OperationViewModel">
                             <Border Margin="0,0,0,8"
                                     Padding="12,10"
                                     CornerRadius="{StaticResource ControlCornerRadius}"

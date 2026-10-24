@@ -12,6 +12,8 @@ namespace WinProvision.Store.Views;
 
 public sealed partial class CollectionsPage : Page
 {
+    private void ViewModeMain_Click(SplitButton sender, SplitButtonClickEventArgs e) { ViewModel.SetViewMode(ViewModel.ViewMode == "list" ? "grid" : ViewModel.ViewMode == "grid" ? "icons" : "list"); }
+
     private bool _loaded;
     private bool _suppressSort;
     private double _filterWidth = 260;
@@ -67,11 +69,10 @@ public sealed partial class CollectionsPage : Page
         FilterSidebarPanel.Visibility = ViewModel.IsFiltersVisible ? Visibility.Visible : Visibility.Collapsed;
         FilterSplitter.Visibility = FilterSidebarPanel.Visibility;
         ToggleFiltersButton.IsChecked = ViewModel.IsFiltersVisible;
-        ListViewToggleButton.IsChecked = ViewModel.ViewMode == "list";
-        GridViewToggleButton.IsChecked = ViewModel.ViewMode == "grid";
-        IconsViewToggleButton.IsChecked = ViewModel.ViewMode == "icons";
+        CollectionViewModeButtonIcon.Icon = ViewModel.ViewMode == "list" ? Icon.TextBulletList : ViewModel.ViewMode == "grid" ? Icon.Grid : Icon.Apps;
+        CollectionViewModeButton.IsChecked = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CollectionViewModeButton, ViewModel.ViewMode == "list" ? "Visualização em lista" : ViewModel.ViewMode == "grid" ? "Visualização em cartões" : "Visualização em ícones");
         MasterSelectionCheckBox.IsChecked = ViewModel.MasterSelection;
-        CollectionErrorInfoBar.IsOpen = ViewModel.HasError;
         InterruptionButton.Visibility = ViewModel.IsBusy && !ViewModel.IsExportingOffline ? Visibility.Visible : Visibility.Collapsed;
         OfflineProgressBar.Value = ViewModel.OfflineProgress;
         OfflineProgressBar.IsIndeterminate = ViewModel.OfflineProgressIndeterminate;
@@ -174,9 +175,7 @@ public sealed partial class CollectionsPage : Page
         }, ascending: true);
     }
 
-    private void ListViewMode_Click(object sender, RoutedEventArgs e) => ViewModel.SetViewMode("list");
-    private void GridViewMode_Click(object sender, RoutedEventArgs e) => ViewModel.SetViewMode("grid");
-    private void IconsViewMode_Click(object sender, RoutedEventArgs e) => ViewModel.SetViewMode("icons");
+    private void CollectionViewMode_Click(object sender, RoutedEventArgs e) => ViewModel.SetViewMode((sender as FrameworkElement)?.Tag as string ?? "list");
 
     private void RenameProfile_Click(object sender, RoutedEventArgs e)
     {

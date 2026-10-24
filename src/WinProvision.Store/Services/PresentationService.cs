@@ -6,6 +6,7 @@ namespace WinProvision.Store.Services;
 public interface IPresentationService
 {
     Task<string?> PickOpenAsync();
+    Task<string?> PickImageAsync();
     Task<string?> PickSaveAsync(string name, string? extension = null);
     Task<string?> PickFolderAsync();
     Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar");
@@ -28,6 +29,15 @@ public sealed partial class PresentationService : IPresentationService
         var picker = new FileOpenPicker();
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
         picker.FileTypeFilter.Add(".json");
+        return (await picker.PickSingleFileAsync())?.Path;
+    }
+    public async Task<string?> PickImageAsync()
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        picker.FileTypeFilter.Add(".jpg");
+        picker.FileTypeFilter.Add(".jpeg");
+        picker.FileTypeFilter.Add(".png");
         return (await picker.PickSingleFileAsync())?.Path;
     }
     public async Task<string?> PickSaveAsync(string name, string? extension = null)

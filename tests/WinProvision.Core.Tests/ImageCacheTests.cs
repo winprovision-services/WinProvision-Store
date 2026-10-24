@@ -40,6 +40,23 @@ public class ImageCacheTests
     }
 
     [Fact]
+    public async Task TransientServerFailureIsRetriedBeforePublishingImage()
+    {
+        int attempts = 0;
+        using var client = new HttpClient(new Handler(_ =>
+        {
+            if (Interlocked.Increment(ref attempts) == 1)
+                return new(HttpStatusCode.ServiceUnavailable);
+            return new(HttpStatusCode.OK) { Content = new ByteArrayContent([4, 5, 6]) };
+        }));
+
+        var result = await ImageCacheTransfer.DownloadAsync(client, "https://example.test/wallpaper", null, default);
+
+        Assert.Equal(2, attempts);
+        Assert.Equal(new byte[] { 4, 5, 6 }, result.Bytes);
+    }
+
+    [Fact]
     public async Task OversizedAndCanceledRequestsCannotBePublished()
     {
         using var client = new HttpClient(new Handler(_ =>

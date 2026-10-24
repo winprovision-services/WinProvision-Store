@@ -1,10 +1,7 @@
-<Page xmlns:ic="using:FluentIcons.WinUI" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.CollectionsPage" x:Name="CollectionsRoot" Background="Transparent" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged" KeyDown="Page_KeyDown" FontFamily="{StaticResource StoreFontFamily}" FontSize="13">
+<Page xmlns:vm="using:WinProvision.Store.ViewModels" xmlns:ic="using:FluentIcons.WinUI" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:conv="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.CollectionsPage" x:Name="CollectionsRoot" Background="Transparent" Loaded="Page_Loaded" Unloaded="Page_Unloaded" SizeChanged="Page_SizeChanged" KeyDown="Page_KeyDown" FontFamily="{StaticResource StoreFontFamily}" FontSize="13" x:DataType="vm:CollectionsViewModel">
     <Page.Resources>
-        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+<conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
-        <Style x:Key="CollectionModeButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource UpdatesViewModeToggleStyle}">
-            <Setter Property="CornerRadius" Value="{StaticResource UpdatesViewModeCornerRadius}" />
-        </Style>
         <DataTemplate x:Key="CollectionRowTemplate">
             <Border Style="{StaticResource InstalledTableRowStyle}" Tag="{Binding}" Tapped="PackageRow_Tapped" RightTapped="PackageRow_RightTapped" controls:InstalledSelection.IsSelected="{Binding IsSelected}" controls:InstalledSelection.Kind="Row" DoubleTapped="PackageRow_DoubleTapped" KeyDown="PackageRow_KeyDown" MinHeight="64" Padding="8,6" Margin="0,0,0,2">
                 <FlyoutBase.AttachedFlyout>
@@ -600,7 +597,6 @@
                         <TextBlock Text="{Binding EmptyStateMessage}" Style="{StaticResource PageEmptyStateMessageStyle}" />
                         <Button Content="Limpar pesquisa e filtros" Click="ClearFilters_Click" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <InfoBar x:Name="CollectionErrorInfoBar" Grid.RowSpan="2" IsOpen="{Binding HasError, Mode=TwoWay}" Title="{Binding ErrorTitle}" Message="{Binding ErrorMessage}" Severity="Error" IsClosable="True" VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="720" />
                 </Grid>
             </Border>
         </Grid>
@@ -610,17 +606,11 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Grid VerticalAlignment="Center" Margin="0,0,12,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <ic:FluentIcon Style="{StaticResource PageStatusIconStyle}" Grid.Column="0" />
-                    <TextBlock Text="{Binding SelectionSummaryText}" Style="{StaticResource PageStatusPrimaryTextStyle}" Grid.Column="1" />
-                    <TextBlock Text=" · " Foreground="{ThemeResource TextFillColorTertiaryBrush}" Grid.Column="2" />
-                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource PageStatusTextStyle}" Grid.Column="3" />
+                <Grid Grid.Column="0" ColumnSpacing="8" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding SelectionSummaryText}" Style="{StaticResource PageStatusPrimaryTextStyle}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding SelectionSummaryText}" />
+                    <TextBlock Grid.Column="1" Text="·" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                    <controls:StatusInfoBar Grid.Column="2" StatusMessage="{Binding StatusText}" />
                 </Grid>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Classificar por:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,8,0" />
@@ -630,15 +620,18 @@
                         <ComboBoxItem Content="Versão" />
                         <ComboBoxItem Content="Origem" />
                     </ComboBox>
-                    <ToggleButton x:Name="ListViewToggleButton" AutomationProperties.AutomationId="ListViewToggleButton" Style="{StaticResource CollectionModeButtonStyle}" ToolTipService.ToolTip="Visualização em lista" AutomationProperties.Name="Visualização em lista" Click="ListViewMode_Click">
-                        <ic:FluentIcon Icon="AppsList" IconVariant="Color" IconSize="Size24" />
-                    </ToggleButton>
-                    <ToggleButton x:Name="GridViewToggleButton" AutomationProperties.AutomationId="GridViewToggleButton" Style="{StaticResource CollectionModeButtonStyle}" ToolTipService.ToolTip="Visualização em cartões" AutomationProperties.Name="Visualização em cartões" Click="GridViewMode_Click">
-                        <ic:FluentIcon Icon="AppsListDetail" IconVariant="Color" IconSize="Size20" />
-                    </ToggleButton>
-                    <ToggleButton x:Name="IconsViewToggleButton" AutomationProperties.AutomationId="IconsViewToggleButton" Style="{StaticResource CollectionModeButtonStyle}" ToolTipService.ToolTip="Visualização em ícones" AutomationProperties.Name="Visualização em ícones" Click="IconsViewMode_Click">
-                        <ic:FluentIcon Icon="Apps" IconVariant="Color" IconSize="Size16" />
-                    </ToggleButton>
+                    <ToggleSplitButton x:Name="CollectionViewModeButton" AutomationProperties.AutomationId="CollectionViewModeButton" AutomationProperties.Name="Visualização em lista" ToolTipService.ToolTip="Visualização em lista" Click="ViewModeMain_Click" IsChecked="True">
+                        <ic:FluentIcon x:Name="CollectionViewModeButtonIcon" Icon="TextBulletList" IconVariant="Regular" IconSize="Size16" />
+                        <ToggleSplitButton.Flyout>
+                            <Flyout Placement="Bottom">
+                                <StackPanel>
+                                    <Button AutomationProperties.AutomationId="CollectionListViewMode" Content="Lista" Tag="list" Click="CollectionViewMode_Click" HorizontalAlignment="Stretch" />
+                                    <Button AutomationProperties.AutomationId="CollectionGridViewMode" Content="Cartões" Tag="grid" Click="CollectionViewMode_Click" HorizontalAlignment="Stretch" />
+                                    <Button AutomationProperties.AutomationId="CollectionIconsViewMode" Content="Ícones" Tag="icons" Click="CollectionViewMode_Click" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                            </Flyout>
+                        </ToggleSplitButton.Flyout>
+                    </ToggleSplitButton>
                 </StackPanel>
             </Grid>
         </Border>

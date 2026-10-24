@@ -171,8 +171,20 @@ public sealed partial class InstalledPackagesService(
 
     internal static void Merge(List<InstalledPackageInfo> packages, InstalledPackageInfo incoming)
     {
-        int index = packages.FindIndex(existing => existing.Id.Equals(incoming.Id, StringComparison.OrdinalIgnoreCase)
-            || existing.Name.Trim().Equals(incoming.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+        int index = packages.FindIndex(existing => PackageIdentityMatcher.SamePackage(
+            existing.Id, existing.Source, incoming.Id, incoming.Source));
+        if (index < 0 && !string.IsNullOrWhiteSpace(incoming.UninstallString))
+        {
+            var sameName = packages.Select((package, candidateIndex) => (package, candidateIndex))
+                .Where(candidate => candidate.package.Name.Trim().Equals(incoming.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var managedMatches = sameName.Where(candidate => SourceCategory(candidate.package.Source) != "PC Local").ToArray();
+            if (managedMatches.Length == 1)
+                index = managedMatches[0].candidateIndex;
+            else if (managedMatches.Length == 0 && sameName.Length == 1
+                && SourceCategory(sameName[0].package.Source) == "PC Local")
+                index = sameName[0].candidateIndex;
+        }
         if (index < 0) { packages.Add(incoming); return; }
         var original = packages[index];
         packages[index] = original with

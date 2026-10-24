@@ -22,7 +22,7 @@ public sealed partial class AppDetailsOverlay : UserControl
     private readonly List<Task> _retired = [];
     private Session? _session;
     private string[] _screenshots = [];
-    private int _index, _previewGeneration, _lightboxGeneration;
+    private int _index, _lightboxGeneration;
     private UIElement? _previousFocus;
     private Storyboard? _animation;
     private SpriteVisual? _shadowVisual;
@@ -129,9 +129,9 @@ public sealed partial class AppDetailsOverlay : UserControl
     private void UpdateSize()
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
-        Card.Margin = new Thickness(ActualWidth < 641 ? 12 : 24);
-        Card.Width = Math.Max(0, Math.Min(1120, ActualWidth - Card.Margin.Left - Card.Margin.Right));
-        Card.MaxHeight = Math.Max(0, Math.Min(880, ActualHeight - Card.Margin.Top - Card.Margin.Bottom));
+        Card.Margin = new Thickness(ActualWidth < 641 ? 8 : 12);
+        Card.Width = Math.Max(0, Math.Min(1200, Math.Min(ActualWidth * 0.86, ActualWidth - Card.Margin.Left - Card.Margin.Right)));
+        Card.Height = Math.Max(0, Math.Min(800, Math.Min(ActualHeight * 0.84, ActualHeight - Card.Margin.Top - Card.Margin.Bottom)));
         bool single = Card.Width < 950;
         foreach (var pair in new[] { (AppDetailsColumns, (FrameworkElement)AppDetailsRightColumn), (WallpaperDetailsColumns, (FrameworkElement)WallpaperDetailsRightColumn) })
         {
@@ -188,8 +188,8 @@ public sealed partial class AppDetailsOverlay : UserControl
     {
         if (!IsOpen) return;
         if (_session is { } session) { _session = null; _retired.Add(RetireAsync(session)); }
-        _previewGeneration++; _screenshots = [];
-        CloseLightbox(); ScreenshotImage.Source = null;
+        _screenshots = [];
+        CloseLightbox(); Gallery.ItemsSource = null; FlipViewPipsPager.NumberOfPages = 0;
         _model.Clear();
         Animate(false);
     }
@@ -220,71 +220,30 @@ public sealed partial class AppDetailsOverlay : UserControl
         if (preserve && _screenshots.SequenceEqual(_model.Screenshots, StringComparer.OrdinalIgnoreCase)) return;
         _screenshots = _model.Screenshots;
         _index = preserve ? Math.Clamp(_index, 0, Math.Max(0, _screenshots.Length - 1)) : 0;
+        Gallery.ItemsSource = _screenshots;
+        Gallery.SelectedIndex = _screenshots.Length == 0 ? -1 : _index;
+        FlipViewPipsPager.NumberOfPages = _screenshots.Length;
+        FlipViewPipsPager.SelectedPageIndex = _index;
         ScreenshotsEmptyText.Text = "Este pacote ainda não tem capturas de tela no catálogo.";
         ScreenshotsEmptyText.Visibility = _screenshots.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ScreenshotPreviewButton.Visibility = _screenshots.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        PreviousScreenshotButton.Visibility = NextScreenshotButton.Visibility = _screenshots.Length > 1 ? Visibility.Visible : Visibility.Collapsed;
         ScreenshotLoadingBar.Visibility = Visibility.Collapsed;
-        ScreenshotCounterText.Text = _screenshots.Length == 0 ? "" : $"{_index + 1} / {_screenshots.Length}";
-        ScreenshotCounterSurface.Visibility = _screenshots.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        ScreenshotIndicators.Children.Clear();
-        for (int position = 0; position < _screenshots.Length; position++)
-        {
-            ScreenshotIndicators.Children.Add(new Rectangle
-            {
-                Width = _screenshots.Length > 20 ? 6 : 14,
-                Height = 4,
-                RadiusX = 2,
-                RadiusY = 2,
-                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))
-            });
-        }
-        UpdateScreenshotIndicators();
-        ScreenshotImage.Source = null;
-        if (_screenshots.Length > 0) Track(session, LoadScreenshotAsync(session));
     }
-    private async Task LoadScreenshotAsync(Session session)
+    private void Gallery_SelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        int generation = ++_previewGeneration, index = _index;
-        int lightboxGeneration = ++_lightboxGeneration;
-        string url = _screenshots[index];
-        ScreenshotImage.Source = null; ScreenshotLightboxImage.Source = null;
-        ScreenshotsEmptyText.Visibility = Visibility.Collapsed;
-        ScreenshotLoadingBar.Visibility = Visibility.Visible;
-        ScreenshotCounterText.Text = $"{index + 1} / {_screenshots.Length}";
-        UpdateScreenshotIndicators();
-        try
-        {
-            var image = await _images.LoadAsync(url, 720, session.Source.Token);
-            if (_session != session || generation != _previewGeneration || session.Source.IsCancellationRequested) return;
-            ScreenshotLoadingBar.Visibility = Visibility.Collapsed;
-            if (image is null)
-            {
-                ScreenshotsEmptyText.Text = "Não foi possível carregar esta captura. Verifique o endereço da imagem no catálogo.";
-                ScreenshotsEmptyText.Visibility = Visibility.Visible;
-                return;
-            }
-            ScreenshotImage.Source = image;
-            if (IsLightboxOpen) await LoadLightboxAsync(session, url, lightboxGeneration);
-        }
-        catch (OperationCanceledException) when (session.Source.IsCancellationRequested) { }
-        catch (Exception exception) { WinProvisionLog.Warning(exception, "DetailsScreenshot"); }
-    }
-    private void UpdateScreenshotIndicators()
-    {
-        for (int position = 0; position < ScreenshotIndicators.Children.Count; position++)
-            ScreenshotIndicators.Children[position].Opacity = position == _index ? 1 : 0.35;
+        if (Gallery.SelectedIndex < 0 || Gallery.SelectedIndex >= _screenshots.Length) return;
+        _index = Gallery.SelectedIndex;
+        if (IsLightboxOpen && _session is { } session)
+            Track(session, LoadLightboxAsync(session, _screenshots[_index], ++_lightboxGeneration));
     }
     internal void MoveScreenshot(int offset)
     {
-        if (_screenshots.Length < 2 || _session is null) return;
-        _index = (_index + offset + _screenshots.Length) % _screenshots.Length;
-        Track(_session, LoadScreenshotAsync(_session));
+        if (_screenshots.Length < 2) return;
+        Gallery.SelectedIndex = (_index + offset + _screenshots.Length) % _screenshots.Length;
     }
     internal Task OpenLightboxAsync()
     {
-        if (ScreenshotImage.Source is null || _session is null || _screenshots.Length == 0) return Task.CompletedTask;
-        ScreenshotLightboxImage.Source = ScreenshotImage.Source;
+        if (_session is null || _screenshots.Length == 0) return Task.CompletedTask;
+        ScreenshotLightboxImage.Source = null;
         ScreenshotLightbox.Visibility = Visibility.Visible; CloseScreenshotLightboxButton.Focus(FocusState.Programmatic);
         var task = LoadLightboxAsync(_session, _screenshots[_index], ++_lightboxGeneration);
         Track(_session, task);
@@ -304,11 +263,11 @@ public sealed partial class AppDetailsOverlay : UserControl
     {
         _lightboxGeneration++;
         ScreenshotLightbox.Visibility = Visibility.Collapsed; ScreenshotLightboxImage.Source = null;
-        if (IsOpen) ScreenshotPreviewButton.Focus(FocusState.Programmatic);
+        if (IsOpen) Gallery.Focus(FocusState.Programmatic);
     }
+    private async void ScreenshotPreviewButton_Click(object sender, RoutedEventArgs args) => await OpenLightboxAsync();
     private void PreviousScreenshotButton_Click(object sender, RoutedEventArgs args) => MoveScreenshot(-1);
     private void NextScreenshotButton_Click(object sender, RoutedEventArgs args) => MoveScreenshot(1);
-    private async void ScreenshotPreviewButton_Click(object sender, RoutedEventArgs args) => await OpenLightboxAsync();
     private void CloseScreenshotLightboxButton_Click(object sender, RoutedEventArgs args) => CloseLightbox();
     private void ScreenshotLightbox_Tapped(object sender, TappedRoutedEventArgs args) { if (ReferenceEquals(args.OriginalSource, ScreenshotLightbox)) CloseLightbox(); args.Handled = true; }
     private void OptionsStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)

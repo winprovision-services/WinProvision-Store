@@ -83,6 +83,8 @@ public partial class App : Application
         services.AddSingleton<WinProvision.Core.Services.Indexing.MsStoreCatalogService>();
         services.AddSingleton(p => new WindowsAppNotificationService(p.GetRequiredService<OperationPreferencesService>()) { SuppressNotifications = IsSmokeTest, Log = WinProvisionLog.Write });
         services.AddSingleton<CollectionsViewModel>();
+        services.AddSingleton<ProvisioningWallpaperCatalogService>();
+        services.AddSingleton<ProvisioningViewModel>();
         services.AddSingleton<OfficeDeploymentToolService>();
         services.AddSingleton<IOfficeCollectionInstaller, OfficeCollectionInstaller>();
         services.AddSingleton<OfficeInstalledProductsDetector>();
@@ -120,6 +122,7 @@ public partial class App : Application
         services.AddTransient<UpdatesPage>();
         services.AddTransient<InstalledPackagesPage>();
         services.AddTransient<OfficePage>();
+        services.AddTransient<ProvisioningPage>();
         services.AddSingleton<MoreViewModel>();
         services.AddTransient<MorePage>();
         services.AddSingleton<WinUiBackupSyncService>(provider => new WinUiBackupSyncService(
@@ -145,8 +148,6 @@ public partial class App : Application
                 TaskScheduler.Default);
             return;
         }
-        _services.GetRequiredService<WinUiBackupSyncService>();
-        _memoryMilestoneLog?.RecordOnce("backup_sync_resolved");
         _window = new MainWindow(_services);
         _memoryMilestoneLog?.RecordOnce("mainwindow_created");
         _services.GetRequiredService<WindowsAppNotificationService>().TryRegister(() =>

@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.ComponentModel;
+using FluentIcons.Common;
 using WinProvision.Store.ViewModels;
 using WinRT;
 
@@ -8,6 +9,8 @@ namespace WinProvision.Store.Views;
 
 public sealed partial class OfficePage : Page
 {
+    private void ViewModeMain_Click(SplitButton sender, SplitButtonClickEventArgs e) { ViewModel.AppsViewMode = ViewModel.AppsViewMode == OfficeAppsViewMode.List ? OfficeAppsViewMode.Cards : ViewModel.AppsViewMode == OfficeAppsViewMode.Cards ? OfficeAppsViewMode.Icons : OfficeAppsViewMode.List; RefreshAppsView(); }
+
     private bool _loaded;
 
     public OfficeViewModel ViewModel { get; }
@@ -82,16 +85,15 @@ public sealed partial class OfficePage : Page
     }
     private void OfficeViewMode_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<OfficeAppsViewMode>(tag, out var mode))
+        if (Enum.TryParse<OfficeAppsViewMode>((sender as FrameworkElement)?.Tag as string ?? "List", true, out var mode))
             ViewModel.AppsViewMode = mode;
         RefreshAppsView();
     }
     private void RefreshAppsView()
     {
         var mode = ViewModel.AppsViewMode;
-        OfficeListViewButton.IsChecked = mode == OfficeAppsViewMode.List;
-        OfficeCardsViewButton.IsChecked = mode == OfficeAppsViewMode.Cards;
-        OfficeIconsViewButton.IsChecked = mode == OfficeAppsViewMode.Icons;
+        OfficeViewModeButtonIcon.Icon = mode == OfficeAppsViewMode.List ? Icon.TextBulletList : mode == OfficeAppsViewMode.Cards ? Icon.Grid : Icon.Apps;
+        OfficeViewModeButton.IsChecked = true;
         OfficeAppsItemsControl.ItemTemplate = Resources[mode == OfficeAppsViewMode.List ? "OfficeListTemplate" : mode == OfficeAppsViewMode.Icons ? "OfficeIconsTemplate" : "OfficeToggleTemplate"].As<DataTemplate>();
         OfficeAppsItemsControl.ItemsPanel = Resources[mode == OfficeAppsViewMode.List ? "OfficeListPanel" : "OfficeWrapPanel"].As<ItemsPanelTemplate>();
     }

@@ -43,7 +43,6 @@ public sealed partial class SettingsViewModel
         PackageInstallMethod.ComApi => "Usa somente o WinGet COM.",
         PackageInstallMethod.WinProvisionApi => "Usa somente a WinProvision API.",
         PackageInstallMethod.WingetCli => "Usa somente o WinGet CLI.",
-        PackageInstallMethod.WinGetPkgsViper => "Consulta o manifesto no WinGet-Pkgs, baixa com Viper, valida SHA-256 e instala silenciosamente quando compatível.",
         _ => "Seleciona a rota disponível e usa fallback quando necessário."
     };
     [ObservableProperty] public partial string UpdateSubtitle { get; set; } = "Verifique se existe uma nova versão.";

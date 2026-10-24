@@ -22,6 +22,20 @@ public sealed class OperationHistoryService
         get { lock (_gate) return _entries.ToArray(); }
     }
 
+    public IReadOnlyList<OperationHistoryEntry> Search(string? query)
+    {
+        IReadOnlyList<OperationHistoryEntry> entries = Entries;
+        string[] terms = (query ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (terms.Length == 0) return entries;
+
+        return entries.Where(entry =>
+        {
+            string searchable = string.Join(" ", [entry.AppName, entry.KindLabel, entry.StateLabel,
+                entry.MethodLabel, entry.LogDetails]);
+            return terms.All(term => searchable.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }).ToArray();
+    }
+
     public OperationHistoryService(string? filePath = null)
     {
         string directory = Path.Combine(

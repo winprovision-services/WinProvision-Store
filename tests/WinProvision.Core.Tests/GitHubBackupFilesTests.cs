@@ -75,6 +75,42 @@ public class GitHubBackupFilesTests
     }
 
     [Fact]
+    public async Task ExpiredAccessTokenRefreshesAndRetriesTheGitHubRequest()
+    {
+        bool expired = false;
+        int gistRequests = 0;
+        using var http = new HttpClient(new Handler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (path == "/user") return Json("{\"login\":\"tester\"}");
+            if (path == "/gists")
+            {
+                gistRequests++;
+                if (expired && request.Headers.Authorization?.Parameter != "fresh-access")
+                    return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                return Json("[]");
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }));
+        using var raw = new HttpClient(new Handler(request =>
+        {
+            if (request.RequestUri?.Host == "github.com" && request.RequestUri.AbsolutePath == "/login/oauth/access_token")
+                return Json("{\"access_token\":\"fresh-access\",\"refresh_token\":\"rotated-refresh\"}");
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }));
+        string folder = Path.Combine(Path.GetTempPath(), "WinProvision-refresh-test-" + Guid.NewGuid().ToString("N"));
+        using var backup = new GitHubBackupService(folder, http, raw);
+
+        Assert.True((await backup.ConnectAsync("old-access", refreshToken: "old-refresh")).Success);
+        expired = true;
+        IReadOnlyList<CloudBackupFile> files = await backup.ListBackupFilesAsync();
+
+        Assert.Empty(files);
+        Assert.True(backup.IsConnected);
+        Assert.Equal(3, gistRequests); // lookup during login, expired request, retry after refresh
+    }
+
+    [Fact]
     public async Task DeletesOnlyVerifiedAppGists()
     {
         const string bootstrap = "WinProvision Store — bootstrap de instalação e perfil";

@@ -23,6 +23,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial SettingsThemeOption? SelectedThemeOption { get; set; }
 
     [ObservableProperty]
+    public partial bool SearchOnDemand { get; set; }
+
+    [ObservableProperty]
+    public partial bool ProvisioningMenuEnabled { get; set; }
+
+    [ObservableProperty]
     public partial string StatusText { get; private set; } = "Configurações prontas.";
 
     public SettingsViewModel(
@@ -53,7 +59,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         _isInstalledFromSetup = updater.IsCurrentProcessInstalled;
         _isInitializing = true;
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);
+        SearchOnDemand = preferences.SearchOnDemand;
+        ProvisioningMenuEnabled = preferences.ProvisioningMenuEnabled;
         _isInitializing = false;
+        preferences.ProvisioningMenuEnabledChanged += OnProvisioningPreferenceChanged;
         ReloadScheduledMaintenance();
         LoadPortabilitySettings();
     }
@@ -76,5 +85,53 @@ public sealed partial class SettingsViewModel : ObservableObject
             SelectedThemeOption = ThemeOptions.First(option => option.Preference == _themeService.Preference);
             _isInitializing = false;
         }
+    }
+
+    partial void OnSearchOnDemandChanged(bool value)
+    {
+        if (_isInitializing) return;
+        try
+        {
+            _preferences.SetSearchOnDemand(value);
+            StatusText = value
+                ? "A vitrine carregará aplicativos somente após uma pesquisa."
+                : "A vitrine completa será carregada ao abrir Descobrir.";
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "SettingsViewModel.SetSearchOnDemand");
+            StatusText = "Não foi possível salvar esta opção. A preferência anterior foi mantida.";
+            _isInitializing = true;
+            SearchOnDemand = _preferences.SearchOnDemand;
+            _isInitializing = false;
+        }
+    }
+
+    partial void OnProvisioningMenuEnabledChanged(bool value)
+    {
+        if (_isInitializing) return;
+        try
+        {
+            _preferences.SetProvisioningMenuEnabled(value);
+            StatusText = value
+                ? "O menu Provisionamento está disponível na navegação."
+                : "O menu Provisionamento foi ocultado da navegação.";
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Error(exception, "SettingsViewModel.SetProvisioningMenuEnabled");
+            StatusText = "Não foi possível salvar esta opção. A preferência anterior foi mantida.";
+            _isInitializing = true;
+            ProvisioningMenuEnabled = _preferences.ProvisioningMenuEnabled;
+            _isInitializing = false;
+        }
+    }
+
+    private void OnProvisioningPreferenceChanged(bool enabled)
+    {
+        if (ProvisioningMenuEnabled == enabled) return;
+        _isInitializing = true;
+        ProvisioningMenuEnabled = enabled;
+        _isInitializing = false;
     }
 }

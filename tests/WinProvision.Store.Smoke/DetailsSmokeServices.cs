@@ -10,6 +10,7 @@ internal sealed partial class SmokePresentationService(PresentationService prese
     public string? OpenPath { get; set; }
     public string? SavePath { get; set; }
     public Task<string?> PickOpenAsync() => Task.FromResult(OpenPath);
+    public Task<string?> PickImageAsync() => Task.FromResult<string?>(null);
     public Task<string?> PickSaveAsync(string name, string? extension = null) => Task.FromResult(SavePath);
     public Task<string?> PickFolderAsync() => Task.FromResult<string?>("C:\\Apps\\Exemplo");
     public Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar") => Task.FromResult(ConfirmResult);

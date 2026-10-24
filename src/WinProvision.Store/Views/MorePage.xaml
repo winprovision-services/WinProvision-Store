@@ -1,4 +1,4 @@
-<Page
+<Page xmlns:vm="using:WinProvision.Store.ViewModels"
     xmlns:ic="using:FluentIcons.WinUI" x:Class="WinProvision.Store.Views.MorePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,10 +8,10 @@
     Unloaded="MorePage_Unloaded"
     Background="Transparent"
     FontFamily="{StaticResource StoreFontFamily}"
-    FontSize="13">
+    FontSize="13" x:DataType="vm:MoreViewModel">
     <Page.Resources>
-        <Style x:Key="MoreToolCardButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="340" />
+<Style x:Key="MoreToolCardButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="420" />
             <Setter Property="Height" Value="205" />
             <Setter Property="Margin" Value="0,0,12,12" />
             <Setter Property="Padding" Value="20" />
@@ -52,7 +52,8 @@
         <ScrollViewer x:Name="MoreContentScrollViewer"
             Grid.Row="1"
             HorizontalScrollBarVisibility="Disabled"
-            VerticalScrollBarVisibility="Auto">
+            VerticalScrollBarVisibility="Auto"
+            SizeChanged="MoreContentScrollViewer_SizeChanged">
             <StackPanel>
                 <controls:WrapPanel>
                     <Button
@@ -164,13 +165,7 @@
                     </Button>
                 </controls:WrapPanel>
 
-                <InfoBar
-                    x:Name="MoreStatusInfoBar"
-                    IsOpen="{Binding HasStatusMessage}"
-                    Message="{Binding StatusMessage}"
-                    Severity="Warning"
-                    IsClosable="True"
-                    Margin="0,4,12,12" />
+                <controls:StatusInfoBar x:Name="MoreStatusInfoBar" StatusMessage="{Binding StatusMessage}" Margin="0,4,12,12" />
 
                 <Border
                     x:Name="AboutPanel"
@@ -288,6 +283,7 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Grid Margin="0,0,0,12">
@@ -301,10 +297,16 @@
                                 <Button Content="Limpar histórico" Command="{Binding ClearHistoryCommand}" Style="{StaticResource StoreActionButtonStyle}" />
                             </StackPanel>
                         </Grid>
-                        <Grid Grid.Row="1">
+                        <TextBox
+                            Grid.Row="1"
+                            Margin="0,0,0,12"
+                            PlaceholderText="Pesquisar por aplicativo, tipo, resultado, método ou texto do log"
+                            Text="{Binding HistorySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="Pesquisar no histórico de operações" />
+                        <Grid Grid.Row="2">
                             <TextBlock
                                 x:Name="HistoryEmptyState"
-                                Text="As operações concluídas aparecerão aqui."
+                                Text="{Binding HistoryEmptyMessage}"
                                 Visibility="{Binding HasHistory, Converter={StaticResource BoolVisibility}, ConverterParameter=Invert}"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 TextAlignment="Center"

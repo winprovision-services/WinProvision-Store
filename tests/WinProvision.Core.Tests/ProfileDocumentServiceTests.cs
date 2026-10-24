@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using WinProvision.Core.Models;
+using WinProvision.Core.Models.Provisioning;
 using WinProvision.Core.Services;
 using WinProvision.Core.Services.Office;
 using Xunit;
@@ -48,6 +49,30 @@ public sealed class ProfileDocumentServiceTests
         Assert.Equal(2, ProfileDocumentService.CreateExecutionPlan(ProfileDocumentService.Parse(json)).Count);
         backup.Tabs[1].Apps[0].PinnedVersion = "24.09";
         Assert.Throws<InvalidDataException>(() => ProfileDocumentService.CreateExecutionPlan(backup));
+    }
+
+    [Fact]
+    public void ProvisioningProfileRoundTripsAndCanBeImportedWithoutApps()
+    {
+        var profile = new ProfileManifest
+        {
+            Name = "Estação padrão",
+            Apps = [],
+            Provisioning = new ProvisioningManifest
+            {
+                SystemTheme = SystemThemeMode.Escuro,
+                ShowFileExtensions = true,
+                MachineName = "ESTACAO-01"
+            }
+        };
+
+        string json = AotJson.Serialize(profile, WinProvisionJsonOptions.Profile);
+        ProfileBackupSet parsed = ProfileDocumentService.Parse(json);
+
+        Assert.Empty(Assert.Single(parsed.Tabs).Apps);
+        Assert.Equal(SystemThemeMode.Escuro, parsed.Tabs[0].Provisioning!.SystemTheme);
+        Assert.True(parsed.Tabs[0].Provisioning!.ShowFileExtensions);
+        Assert.Equal("ESTACAO-01", parsed.Tabs[0].Provisioning!.MachineName);
     }
 
     [Theory]
