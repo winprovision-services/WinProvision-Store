@@ -7,6 +7,9 @@ namespace WinProvision.Store.ViewModels;
 public sealed partial record SettingsThemeOption(string Label, AppThemePreference Preference);
 
 [WinRT.GeneratedBindableCustomProperty]
+public sealed partial record StartupPageOption(string Label, ApplicationStartupPage Page);
+
+[WinRT.GeneratedBindableCustomProperty]
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ApplicationThemeService _themeService;
@@ -18,6 +21,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         new("Claro", AppThemePreference.Light),
         new("Escuro", AppThemePreference.Dark)
     ];
+
+    public IReadOnlyList<StartupPageOption> StartupPageOptions { get; } =
+    (WinProvision.Store.ViewModels.StartupPageOption[])[
+        new("Descobrir", ApplicationStartupPage.Discover),
+        new("Atualizações", ApplicationStartupPage.Updates),
+        new("Aplicativos instalados", ApplicationStartupPage.Installed)
+    ];
+
+    [ObservableProperty]
+    public partial StartupPageOption? SelectedStartupPageOption { get; set; }
 
     [ObservableProperty]
     public partial SettingsThemeOption? SelectedThemeOption { get; set; }
@@ -61,6 +74,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedThemeOption = ThemeOptions.First(option => option.Preference == themeService.Preference);
         SearchOnDemand = preferences.SearchOnDemand;
         ProvisioningMenuEnabled = preferences.ProvisioningMenuEnabled;
+        SelectedStartupPageOption = StartupPageOptions.First(option => option.Page == preferences.StartupPage);
         _isInitializing = false;
         preferences.ProvisioningMenuEnabledChanged += OnProvisioningPreferenceChanged;
         ReloadScheduledMaintenance();
@@ -83,6 +97,24 @@ public sealed partial class SettingsViewModel : ObservableObject
             StatusText = "Não foi possível salvar o tema. A preferência anterior foi mantida.";
             _isInitializing = true;
             SelectedThemeOption = ThemeOptions.First(option => option.Preference == _themeService.Preference);
+            _isInitializing = false;
+        }
+    }
+
+    partial void OnSelectedStartupPageOptionChanged(StartupPageOption? value)
+    {
+        if (_isInitializing || value is null) return;
+        try
+        {
+            _preferences.SetStartupPage(value.Page);
+            StatusText = $"O aplicativo abrirá em {value.Label}.";
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Warning(exception, "SettingsViewModel.SetStartupPage");
+            StatusText = "Não foi possível salvar a página inicial. A preferência anterior foi mantida.";
+            _isInitializing = true;
+            SelectedStartupPageOption = StartupPageOptions.First(option => option.Page == _preferences.StartupPage);
             _isInitializing = false;
         }
     }

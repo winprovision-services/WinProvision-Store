@@ -71,6 +71,7 @@ public static class WinProvisionJsonOptions
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.OperationState>(namingPolicy: null, allowIntegerValues: true));
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.WingetMethod>(namingPolicy: null, allowIntegerValues: true));
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.PackageInstallMethod>(namingPolicy: null, allowIntegerValues: true));
+        opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.PackageUpdateMethod>(namingPolicy: null, allowIntegerValues: true));
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.Office.OfficeEditionCategory>(namingPolicy: null, allowIntegerValues: true));
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.Office.OfficeDisplayLevel>(namingPolicy: null, allowIntegerValues: true));
         opts.Converters.Add(new JsonStringEnumConverter<WinProvision.Core.Models.Office.OfficeUninstallOutcome>(namingPolicy: null, allowIntegerValues: true));

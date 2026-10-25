@@ -56,7 +56,34 @@ internal static partial class SmokeTest
         historyItem.AppendLog("Instalação concluída com sucesso.");
         historyItem.State = OperationState.Completed;
         services.GetRequiredService<OperationHistoryService>().Record(historyItem);
-        await services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecuteAsync(null);
+        var updatesViewModel = services.GetRequiredService<UpdatesViewModel>();
+        await updatesViewModel.ScanCommand.ExecuteAsync(null);
+        var updateBackend = (SmokePackageBackend)services.GetRequiredService<IPackageBackend>();
+        updateBackend.UpdateHandler = (_, _) => Task.FromResult(new WingetExecutionResult { Success = true });
+        await updatesViewModel.RunUpdateOnPackagesAsync(
+            [new UpgradablePackage { Id = "Test.Package", Name = "Aplicativo de teste", Source = "winget", CurrentVersion = "1", AvailableVersion = "2" }],
+            ignoreSecurityHash: true);
+        Check(updateBackend.LastUpdateOptions?.IgnoreSecurityHash == true,
+            "Atualizações: ignorar hash é uma escolha explícita e válida só para a operação atual");
+        UpgradablePackage? detailsUpdatePackage = null;
+        updateBackend.UpdateHandler = (package, _) =>
+        {
+            detailsUpdatePackage = package;
+            return Task.FromResult(new WingetExecutionResult
+            {
+                Success = false,
+                FailureReason = WingetFailureReason.InstallError,
+                Output = "A atualização foi executada, mas não foi confirmada. A versão instalada não corresponde ao alvo 2 (encontrada: 1)."
+            });
+        };
+        var detailsViewModel = services.GetRequiredService<AppDetailsViewModel>();
+        detailsViewModel.SetApp(app, "1", "2");
+        await detailsViewModel.UpdateAsync();
+        Check(detailsUpdatePackage is { CurrentVersion: "1", AvailableVersion: "2" },
+            "Detalhes: atualização encaminha versões instalada e alvo ao backend");
+        Check(detailsViewModel.StatusText.Contains("alvo 2") && detailsViewModel.StatusText.Contains("encontrada: 1"),
+            "Detalhes: falha de confirmação informa a versão observada sem saída bruta do WinGet");
+        updateBackend.UpdateHandler = null;
         await services.GetRequiredService<InstalledPackagesViewModel>().RefreshCommand.ExecuteAsync(null);
         var applicationPreferences = services.GetRequiredService<ApplicationPreferencesService>();
         Check(!applicationPreferences.ProvisioningMenuEnabled
@@ -108,6 +135,24 @@ internal static partial class SmokeTest
                     }
                 }
                 await CaptureAsync(window.RootElement, $"{tag}-{theme}.png");
+                if (window.CurrentPage is Views.UpdatesPage updates)
+                {
+                    var apiSource = (CheckBox)updates.FindName("SourceWinProvisionCheck");
+                    var wingetSource = (CheckBox)updates.FindName("SourceWingetCheck");
+                    Check(apiSource.IsChecked == true, $"Atualizações: fonte WinProvision API disponível em {theme}");
+                    updatesViewModel.FilterWinget = false;
+                    updatesViewModel.ApplyFilters();
+                    Check(updatesViewModel.Packages.Count == 1 && updatesViewModel.Packages[0].UpdateSource == "winprovision",
+                        $"Atualizações: desativar WinGet preserva a fonte WinProvision API em {theme}");
+                    updatesViewModel.FilterWinProvision = false;
+                    updatesViewModel.ApplyFilters();
+                    Check(updatesViewModel.Packages.Count == 0, $"Atualizações: fonte API possui filtro independente em {theme}");
+                    updatesViewModel.FilterWinget = true;
+                    updatesViewModel.FilterWinProvision = true;
+                    updatesViewModel.ApplyFilters();
+                    Check(wingetSource.IsChecked == true && apiSource.IsChecked == true,
+                        $"Atualizações: bindings dos filtros de origem restaurados em {theme}");
+                }
                 if (window.CurrentPage is Views.InstalledPackagesPage installed)
                 {
                     var list = (ListView)installed.FindName("InstalledListView");
@@ -521,8 +566,8 @@ internal static partial class SmokeTest
             Check(window.CurrentPage!.ActualWidth > 0, $"{route}: janela compacta permanece utilizável");
             await CaptureAsync(window.RootElement, imageName);
         }
+        await services.GetRequiredService<PresentationService>().ShowDetailsAsync(app);
         var details = services.GetRequiredService<AppDetailsOverlay>();
-        await details.ShowAsync(app);
         await Task.Delay(300);
         Check(details.IsOpen, "Detalhes: overlay abre");
         var detailsOptions = services.GetRequiredService<AppDetailsViewModel>();
@@ -566,6 +611,15 @@ internal static partial class SmokeTest
         detailsOptions.IsOptionsBodyPanelVisible = true;
         await Task.Delay(150);
         await CaptureAsync(window.RootElement, "details.png");
+        if (details.FindName("AppDetailsContent") is ScrollViewer detailsContent)
+        {
+            detailsContent.ChangeView(null, 300, null, disableAnimation: true);
+            await Task.Delay(150);
+            await CaptureAsync(window.RootElement, "details-options.png");
+            detailsContent.ChangeView(null, 600, null, disableAnimation: true);
+            await Task.Delay(150);
+            await CaptureAsync(window.RootElement, "details-hooks.png");
+        }
         details.Close();
         await Task.Delay(300);
         Check(!details.IsOpen, "Detalhes: overlay fecha e conclui a animação");
@@ -622,6 +676,11 @@ internal static partial class SmokeTest
                 && methodCombo.Items.OfType<ComboBoxItem>().All(item => (string?)item.Tag != "WinGetPkgsViper")
                 && methodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WinProvisionApi"),
                 $"Instalação: método duplicado removido e WinProvision API disponível em {theme}");
+            Check(settingsPage.FindName("UpdateMethodComboBox") is ComboBox updateMethodCombo
+                && updateMethodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "ComApi")
+                && updateMethodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WinProvisionApi")
+                && updateMethodCombo.Items.OfType<ComboBoxItem>().Any(item => (string?)item.Tag == "WingetCli"),
+                $"Atualizações: seleção independente de método funcional disponível em {theme}");
             Check(ReferenceEquals(((Button)settingsPage.FindName("AuthorizeElevationButton")).Command,
                 settingsPage.ViewModel.AuthorizeElevationCommand), "Elevação: nova autorização por sessão disponível");
             Check(WinProvision.Core.Services.GsudoElevationService.CacheMinutes == 5, "Elevação: cache fixo de 5 minutos por padrão");

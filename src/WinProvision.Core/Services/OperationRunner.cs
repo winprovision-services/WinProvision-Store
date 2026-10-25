@@ -22,7 +22,8 @@ public static partial class OperationRunner
     private static Func<string, Action<string>?, CancellationToken, PackageInstallOptions, Action<InstallProgressUpdate>?, string, Task<WingetExecutionResult>>? _installHandler;
     private static Action<string, string>? _successfulInstallObserver;
     private static Func<bool, Action<string>?, CancellationToken, Task>? _installWarmupHandler;
-    private static Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, Task<WingetExecutionResult>>? _updateHandler;
+    private static Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, UpgradablePackage?, PackageInstallOptions?, Task<WingetExecutionResult>>? _updateHandler;
+    private static Func<UpgradablePackage, WingetExecutionResult, CancellationToken, Task<WingetExecutionResult>>? _updateVerifier;
     private static Func<string, string, PackageInstallOptions?>? _packageInstallOptionsProvider;
 
     public static void ConfigurePackageInstallOptionsProvider(
@@ -69,9 +70,15 @@ public static partial class OperationRunner
     /// puro, sem a API própria como alternativa).
     /// </summary>
     public static void ConfigureUpdateHandler(
-        Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, Task<WingetExecutionResult>> updateHandler)
+        Func<string, Action<string>?, CancellationToken, string, Action<InstallProgressUpdate>?, UpgradablePackage?, PackageInstallOptions?, Task<WingetExecutionResult>> updateHandler)
     {
         _updateHandler = updateHandler ?? throw new ArgumentNullException(nameof(updateHandler));
+    }
+
+    public static void ConfigureUpdateVerifier(
+        Func<UpgradablePackage, WingetExecutionResult, CancellationToken, Task<WingetExecutionResult>> verifier)
+    {
+        _updateVerifier = verifier ?? throw new ArgumentNullException(nameof(verifier));
     }
 
     /// <summary>
@@ -115,7 +122,10 @@ public static partial class OperationRunner
         bool useSavedPackageOptions = true,
         bool requiresElevation = false,
         string? version = null,
-        string? customArguments = null)
+        string? customArguments = null,
+        string? preInstallScript = null,
+        string? postInstallScript = null,
+        bool runInstallHooks = false)
     {
         PackageInstallOptions? savedOptions = useSavedPackageOptions
             ? _packageInstallOptionsProvider?.Invoke(appId, source)
@@ -128,6 +138,8 @@ public static partial class OperationRunner
         requiresElevation |= savedOptions?.RequiresElevation == true;
         version ??= savedOptions?.Version;
         customArguments ??= savedOptions?.CustomArguments;
+        preInstallScript ??= savedOptions?.PreInstallScript;
+        postInstallScript ??= savedOptions?.PostInstallScript;
 
         var item = queue.Enqueue(appName, OperationKind.Install, iconUrl);
         item.StatusText = "Preparando...";
@@ -148,12 +160,24 @@ public static partial class OperationRunner
                 InstallLocation: installLocation,
                 RequiresElevation: requiresElevation,
                 Version: version,
-                CustomArguments: customArguments);
+                CustomArguments: customArguments,
+                PreInstallScript: preInstallScript,
+                PostInstallScript: postInstallScript,
+                RunInstallHooks: runInstallHooks);
             if (_installHandler is null)
             {
                 item.Method = WingetMethod.WingetExe;
                 // Envia um progresso inicial para garantir que a cor seja aplicada
                 onProgress(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+            }
+
+            if (runInstallHooks && !await PackageInstallHookRunner.RunAsync(preInstallScript, item.CancellationTokenSource.Token).ConfigureAwait(false))
+            {
+                var hookFailure = PackageInstallHookRunner.Failure("pré-instalação");
+                AppendResultLog(item, source, hookFailure);
+                item.State = OperationState.Failed;
+                item.StatusText = hookFailure.Output;
+                return hookFailure;
             }
 
             var result = _installHandler is null
@@ -169,6 +193,12 @@ public static partial class OperationRunner
                     installOptions,
                     onProgress,
                     source);
+
+            if (result.Success && runInstallHooks
+                && !await PackageInstallHookRunner.RunAsync(postInstallScript, item.CancellationTokenSource.Token).ConfigureAwait(false))
+            {
+                result = PackageInstallHookRunner.Failure("pós-instalação");
+            }
 
             AppendResultLog(item, source, result);
 
@@ -189,6 +219,14 @@ public static partial class OperationRunner
                 InstalledPackageMethodHistory.Record(appId, item.Method);
                 installedAppsService?.MarkInstalled();
                 if (result.RebootRequired) item.StatusText = "Instalação concluída; reinicie o Windows.";
+            }
+            else if (result.InstallHookFailed && result.InstallerStarted)
+            {
+                // O instalador terminou, mas o pós-hook falhou; atualize o inventário
+                // para impedir que a falha do hook provoque uma nova instalação.
+                InstalledPackageMethodHistory.Record(appId, item.Method);
+                installedAppsService?.MarkInstalled();
+                item.StatusText = result.Output;
             }
             else if (item.State is OperationState.Failed or OperationState.Canceled)
             {
@@ -226,16 +264,28 @@ public static partial class OperationRunner
         string? scope = null,
         string? architecture = null,
         bool useSavedPackageOptions = true,
-        string? version = null)
+        string? version = null,
+        UpgradablePackage? offeredPackage = null,
+        PackageInstallOptions? packageOptions = null)
     {
         PackageInstallOptions? savedOptions = useSavedPackageOptions
             ? _packageInstallOptionsProvider?.Invoke(appId, source)
             : null;
-        interactive |= savedOptions?.Interactive == true;
-        ignoreSecurityHash |= savedOptions?.IgnoreSecurityHash == true;
-        scope ??= savedOptions?.Scope;
-        architecture ??= savedOptions?.Architecture;
-        version ??= savedOptions?.Version;
+        interactive |= packageOptions?.Interactive == true || savedOptions?.Interactive == true;
+        ignoreSecurityHash |= packageOptions?.IgnoreSecurityHash == true || savedOptions?.IgnoreSecurityHash == true;
+        scope ??= packageOptions?.Scope ?? savedOptions?.Scope;
+        architecture ??= packageOptions?.Architecture ?? savedOptions?.Architecture;
+        version ??= packageOptions?.Version ?? savedOptions?.Version;
+        elevated |= packageOptions?.RequiresElevation == true || savedOptions?.RequiresElevation == true;
+        var effectiveOptions = (packageOptions ?? savedOptions ?? new PackageInstallOptions()) with
+        {
+            Interactive = interactive,
+            IgnoreSecurityHash = ignoreSecurityHash,
+            Scope = scope,
+            Architecture = architecture,
+            Version = version,
+            RequiresElevation = elevated
+        };
 
         var item = queue.Enqueue(appName, OperationKind.Update, iconUrl);
         item.StatusText = "Preparando atualização...";
@@ -253,9 +303,7 @@ public static partial class OperationRunner
             // Os handlers de catálogo/API representam a atualização padrão. As variantes
             // precisam chegar aos argumentos da CLI para honrar elevação, escopo, arquitetura,
             // interação e hash.
-            bool useWingetCli = updateHandler is null || elevated || interactive || ignoreSecurityHash
-                || !string.IsNullOrWhiteSpace(version)
-                || !string.IsNullOrWhiteSpace(scope) || !string.IsNullOrWhiteSpace(architecture);
+            bool useWingetCli = updateHandler is null;
             if (useWingetCli)
             {
                 item.Method = WingetMethod.WingetExe;
@@ -274,13 +322,19 @@ public static partial class OperationRunner
                     requiresElevation: elevated,
                     interactive: interactive,
                     ignoreSecurityHash: ignoreSecurityHash,
-                    version: version)
+                    version: version ?? offeredPackage?.AvailableVersion)
                 : await updateHandler!(
                     appId,
                     onLogReceived,
                     item.CancellationTokenSource.Token,
                     source,
-                    onProgress);
+                    onProgress,
+                    offeredPackage,
+                    effectiveOptions);
+
+            if (useWingetCli && offeredPackage is not null && _updateVerifier is not null)
+                result = await _updateVerifier(offeredPackage, result, item.CancellationTokenSource.Token)
+                    .ConfigureAwait(false);
 
             AppendResultLog(item, source, result);
 
@@ -297,7 +351,9 @@ public static partial class OperationRunner
 
             if (!result.Success && item.State is OperationState.Failed or OperationState.Canceled)
             {
-                item.StatusText = WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", appName);
+                item.StatusText = result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
+                    ? result.Output
+                    : WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", appName);
             }
             else if (result.Success)
             {

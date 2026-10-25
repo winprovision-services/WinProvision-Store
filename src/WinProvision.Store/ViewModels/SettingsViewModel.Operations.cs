@@ -45,6 +45,24 @@ public sealed partial class SettingsViewModel
         PackageInstallMethod.WingetCli => "Usa somente o WinGet CLI.",
         _ => "Seleciona a rota disponível e usa fallback quando necessário."
     };
+    public string SelectedUpdateMethodName
+    {
+        get => _installation.PreferredUpdateMethod.ToString();
+        set
+        {
+            if (Enum.TryParse<PackageUpdateMethod>(value, out var method)
+                && method != _installation.PreferredUpdateMethod)
+                Run(() => _installation.SetPreferredUpdateMethod(method), "Método de atualização salvo.");
+            OnPropertyChanged(); OnPropertyChanged(nameof(UpdateMethodDescription));
+        }
+    }
+    public string UpdateMethodDescription => _installation.PreferredUpdateMethod switch
+    {
+        PackageUpdateMethod.ComApi => "Atualiza somente pela API COM do WinGet.",
+        PackageUpdateMethod.WinProvisionApi => "Compara os aplicativos instalados com o catálogo WinProvision e atualiza pelo Viper, preservando o escopo e o tipo do instalador.",
+        PackageUpdateMethod.WingetCli => "Atualiza somente pela CLI do WinGet.",
+        _ => "Tenta COM, depois WinProvision API compatível e WinGet CLI como fallback."
+    };
     [ObservableProperty] public partial string UpdateSubtitle { get; set; } = "Verifique se existe uma nova versão.";
     [ObservableProperty] public partial string UpdateAvailableText { get; private set; } = string.Empty;
     [ObservableProperty] public partial bool HasPendingUpdate { get; private set; }
@@ -179,7 +197,7 @@ public sealed partial class SettingsViewModel
     }
     private void ResetPreferences()
     {
-        Run(() => { ApplyTheme(AppThemePreference.System); _preferences.SetLaunchAtStartup(false); _installation.SetPreferredMethod(PackageInstallMethod.Automatic); }, "Configurações restauradas para os padrões originais.");
+        Run(() => { ApplyTheme(AppThemePreference.System); SelectedStartupPageOption = StartupPageOptions.Single(option => option.Page == ApplicationStartupPage.Discover); _preferences.SetLaunchAtStartup(false); _installation.SetPreferredMethod(PackageInstallMethod.Automatic); _installation.SetPreferredUpdateMethod(PackageUpdateMethod.Automatic); }, "Configurações restauradas para os padrões originais.");
         NotifyPreferences();
     }
     private async Task ClearCacheAsync()
@@ -213,7 +231,7 @@ public sealed partial class SettingsViewModel
         try { action(); StatusText = status; }
         catch (Exception ex) { WinProvisionLog.Error(ex, "Settings.Preferences"); StatusText = "Não foi possível aplicar a configuração."; }
     }
-    private void NotifyPreferences() { OnPropertyChanged(nameof(LaunchAtStartup)); OnPropertyChanged(nameof(SelectedMethodName)); OnPropertyChanged(nameof(InstallMethodDescription)); }
+    private void NotifyPreferences() { OnPropertyChanged(nameof(LaunchAtStartup)); OnPropertyChanged(nameof(SelectedMethodName)); OnPropertyChanged(nameof(InstallMethodDescription)); OnPropertyChanged(nameof(SelectedUpdateMethodName)); OnPropertyChanged(nameof(UpdateMethodDescription)); }
     public async Task ShutdownAsync()
     {
         var commands = new IAsyncRelayCommand[] { CheckUpdateCommand, InstallUpdateCommand, ClearCacheCommand, RefreshCatalogCommand, OpenReleaseCommand, AuthorizeElevationCommand, RefreshElevatorCommand, RevokeElevationCommand, SaveElevatorOptionsCommand, MeasureCacheCommand, ReleaseImageMemoryCommand, ClearImagesCacheCommand, ClearCatalogCacheCommand, SaveImageCacheOptionsCommand, PickDownloadDirectoryCommand };

@@ -31,7 +31,8 @@ winprovision --version
 - Pesquise aplicativos por nome, consulte seus detalhes e copie o link público do pacote quando disponível.
 - Pesquise também a origem Microsoft Store pelo WinGet; a Display Catalog fornece os metadados e URLs de ícones e banners em tempo real, sem publicar arquivos de mídia da Store no R2.
 - Instale, atualize e remova aplicativos, acompanhando o resultado das operações.
-- Nas opções de instalação de pacotes WinGet, as versões publicadas pela CDN aparecem automaticamente. O escopo por usuário ou máquina depende dos instaladores da versão selecionada. A verificação de hash pode ser ignorada explicitamente no fluxo WinGet para uma operação, com menor segurança; permanece ativa por padrão.
+- Em **Configurações → Preferências gerais → Método de atualização preferencial**, escolha **WinProvision API** para comparar os aplicativos instalados com o catálogo próprio e atualizar por ele, inclusive quando a instalação original foi feita fora do WinProvision. Esse fluxo lê o inventário diretamente do Windows, sem exigir WinGet para listar, preparar, executar ou conferir a atualização. A oferta depende de versão mais nova publicada no R2 e instalador compatível.
+- Nas opções de instalação de pacotes WinGet, as versões publicadas pela CDN aparecem automaticamente. O escopo por usuário ou máquina depende dos instaladores da versão selecionada. É possível salvar argumentos do instalador e scripts locais antes/depois da instalação; os scripts exigem ativação explícita em cada instalação individual. A verificação de hash pode ser ignorada explicitamente no fluxo WinGet para uma operação, com menor segurança; permanece ativa por padrão.
 - Escolha **WinProvision API** como método explícito de instalação pelo catálogo próprio. Ela usa o detalhe da versão publicado na CDN, valida SHA-256 e baixa instaladores com o Viper quando compatível; a rota automática continua sendo a recomendada.
 - Organize listas de aplicativos em coleções e prepare arquivos para uso offline.
 - Prepare perfis opcionais de provisionamento do Windows com personalização, barra de tarefas, energia e opções do Explorador; importe e exporte esses ajustes junto dos perfis JSON.
@@ -80,10 +81,13 @@ A solução para abrir no Visual Studio é `WinProvision.Store.slnx` (a versão 
 ```powershell
 dotnet test .\tests\WinProvision.Core.Tests\WinProvision.Core.Tests.csproj
 .\scripts\smoke-test.ps1
+.\scripts\updates-smoke-test.ps1 -Mode com
 .\scripts\check-repository.ps1
 ```
 
 O smoke verifica navegação, bindings e temas com dados de teste. Testes simulados não comprovam instalações reais. Saídas de desenvolvimento em `artifacts/validation` não fazem parte da distribuição.
+
+`updates-smoke-test.ps1` abre a aba Atualizações com os serviços reais, consulta e recarrega a lista sem instalar pacotes, e grava versões, tempos e captura em `artifacts/validation/updates-real-<modo>`. Os modos `com`, `auto` e `cli` permitem conferir cada caminho; `-MinimumExpectedCount 1` exige resultados em uma máquina com atualizações conhecidas. `-SkipBuild` reutiliza o build de validação já compilado.
 
 ## Organização
 

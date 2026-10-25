@@ -6,7 +6,7 @@ Na distribuição portátil, mantenha o conteúdo completo da pasta `cli`, inclu
 
 A CLI executa o motor compartilhado do WinProvision em um processo de console, sem iniciar a janela, carregar WinUI 3 ou depender do executável da interface. Ela verifica o WinGet quando uma operação precisa dele e tenta provisioná-lo se estiver ausente, inclusive em uma sessão nova do Windows. Esse preparo exige conexão e pode levar alguns minutos. Ajuda e versão não iniciam downloads.
 
-Instalações e atualizações compartilham o serviço do aplicativo: API COM, API própria e, por último, WinGet CLI. O fallback respeita cancelamento e não reinicia um instalador já iniciado. Se o provisionamento falhar, pacotes compatíveis do catálogo próprio ainda podem ser instalados com verificação de integridade.
+Instalações e atualizações compartilham o serviço do aplicativo: API COM, API própria e, por último, WinGet CLI. O fallback respeita cancelamento e não reinicia um instalador já iniciado. Após atualizar, a versão instalada é consultada novamente antes de registrar sucesso; uma instalação inconclusiva ou ainda pendente de reinicialização retorna falha de confirmação, sem repetir o instalador. Se o provisionamento falhar, pacotes compatíveis do catálogo próprio ainda podem ser instalados com verificação de integridade.
 
 Busca e detalhes consultam a COM e o catálogo próprio antes de recorrer ao executável WinGet. Downloads do catálogo próprio verificam SHA-256. Inventário e descoberta de atualizações usam os recursos locais do WinGet; exportação gera um perfil nativo do WinProvision. Recursos sem alternativa compatível dependem de o provisionamento do WinGet terminar com sucesso.
 

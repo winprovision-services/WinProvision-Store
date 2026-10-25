@@ -61,16 +61,6 @@ public sealed partial class HomePage : Page
         if (args.PropertyName is nameof(StorefrontViewModel.SelectedBanner) or nameof(StorefrontViewModel.RightPromoApp) or nameof(StorefrontViewModel.CurrentShelf)) UpdatePresentation();
     }
     public void SetWindowActive(bool active) { _active = active; RefreshHeroTimer(); }
-    public async Task SuspendForBackgroundAsync()
-    {
-        await Storefront.OnNavigatedFromAsync();
-        Storefront.ReleaseCatalogMemory();
-        await ViewModel.ReleaseCatalogMemoryAsync();
-    }
-    public async Task ResumeFromBackgroundAsync()
-    {
-        await Storefront.OnNavigatedToAsync();
-    }
     private void RefreshHeroTimer()
     {
         if (_active && IsLoaded && !_heroRotationPaused && !_heroPointerOver

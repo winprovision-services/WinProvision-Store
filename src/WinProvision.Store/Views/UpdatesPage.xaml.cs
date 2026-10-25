@@ -67,8 +67,9 @@ public sealed partial class UpdatesPage : Page
     {
         if (!_loaded) return;
         ViewModel.FilterWinget = SourceWingetCheck.IsChecked == true; ViewModel.FilterMsStore = SourceMsStoreCheck.IsChecked == true; ViewModel.FilterOther = SourceOtherCheck.IsChecked == true;
+        ViewModel.FilterWinProvision = SourceWinProvisionCheck.IsChecked == true;
         ViewModel.HideSameVersion = HideSameVersionCheck.IsChecked == true; ViewModel.SearchName = SearchModeNameRadio.IsChecked == true; ViewModel.SearchId = SearchModeIdRadio.IsChecked == true; ViewModel.ExactSearch = SearchModeExactRadio.IsChecked == true;
-        AllSourcesChip.IsChecked = ViewModel.FilterWinget && ViewModel.FilterMsStore && ViewModel.FilterOther;
+        AllSourcesChip.IsChecked = ViewModel.FilterWinget && ViewModel.FilterWinProvision && ViewModel.FilterMsStore && ViewModel.FilterOther;
         Controls.UpdateSelection.SetFiltersActive(ToggleFiltersButton, AllSourcesChip.IsChecked != true || !ViewModel.HideSameVersion);
         ViewModel.ApplyFilters();
     }
@@ -97,7 +98,7 @@ public sealed partial class UpdatesPage : Page
     internal void SetFiltersVisible(bool visible) { ToggleFiltersButton.IsChecked=visible; FilterSidebarColumn.Width=new(visible?260:0); FilterSplitterColumn.Width=new(visible?8:0); FilterSidebarPanel.Visibility=FilterSplitter.Visibility=visible?Visibility.Visible:Visibility.Collapsed; }
     private void ToggleFiltersButton_Click(object sender,RoutedEventArgs e)=>SetFiltersVisible(ToggleFiltersButton.IsChecked==true);
     private void MoreActionsButton_Click(object sender,RoutedEventArgs e)=>FlyoutBase.ShowAttachedFlyout(MoreActionsButton);
-    private void SetSources(bool selected) { ViewModel.FilterWinget=ViewModel.FilterMsStore=ViewModel.FilterOther=selected; SourceWingetCheck.IsChecked=SourceMsStoreCheck.IsChecked=SourceOtherCheck.IsChecked=selected; ApplyFilters(); }
+    private void SetSources(bool selected) { ViewModel.FilterWinget=ViewModel.FilterWinProvision=ViewModel.FilterMsStore=ViewModel.FilterOther=selected; SourceWingetCheck.IsChecked=SourceWinProvisionCheck.IsChecked=SourceMsStoreCheck.IsChecked=SourceOtherCheck.IsChecked=selected; ApplyFilters(); }
     private void AllSourcesChip_Click(object sender,RoutedEventArgs e)=>SetSources(AllSourcesChip.IsChecked==true);
     private void SelectAllSources_Click(object sender,RoutedEventArgs e)=>SetSources(true);
     private void ClearSources_Click(object sender,RoutedEventArgs e)=>SetSources(false);
@@ -114,6 +115,16 @@ public sealed partial class UpdatesPage : Page
     private async void ContextMenuUpdate_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) await ViewModel.RunUpdateOnPackagesAsync([p]); }
     private async void ContextMenuUpdateAdmin_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) await ViewModel.RunUpdateOnPackagesAsync([p],elevated:true); }
     private async void ContextMenuUpdateInteractive_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) await ViewModel.RunUpdateOnPackagesAsync([p],interactive:true); }
+    private async void ContextMenuUpdateIgnoreHash_Click(object sender,RoutedEventArgs e)
+    {
+        if (ContextPackage(sender) is not { } package) return;
+        if (!string.Equals(package.Source, "winget", StringComparison.OrdinalIgnoreCase))
+        {
+            ViewModel.StatusText = "Ignorar a verificação de hash está disponível apenas para pacotes WinGet.";
+            return;
+        }
+        await ViewModel.RunUpdateOnPackagesAsync([package], ignoreSecurityHash: true);
+    }
     private async void ContextMenuDetails_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) await OpenDetailsAsync(p); }
     private void ContextMenuIgnoreVersion_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) ViewModel.Ignore((WinProvision.Core.Models.UpgradablePackage[])[p]); }
     private void ContextMenuCopyId_Click(object sender,RoutedEventArgs e) { if(ContextPackage(sender) is {} p) ViewModel.StatusText=_clipboard.TrySetText(p.Id)?$"ID '{p.Id}' copiado para a área de transferência.":"Não foi possível copiar o ID."; }

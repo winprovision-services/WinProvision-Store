@@ -88,7 +88,7 @@ internal static partial class Program
         var result = request.Operation == "install"
             ? await service.InstallWithMethodAsync(request.PackageId, WinProvision.Core.Models.PackageInstallMethod.ComApi,
                 Log, token, request.InstallLocation, Progress)
-            : request.Operation == "update" ? await service.UpdateAsync(request.PackageId, Log, token, onProgress: Progress)
+            : request.Operation == "update" ? await service.UpdateComOnlyAsync(request.PackageId, Log, token, onProgress: Progress)
             : await service.UninstallComOnlyAsync(request.PackageId, null, token)
                 ?? new WinProvision.Core.Services.WingetExecutionResult { Success = false, ExitCode = -1, Output = "Pacote não localizado pela COM local." };
         Console.Out.WriteLine(WinProvision.PackageManagement.ElevatedComProtocol.EncodeResult(result));

@@ -290,6 +290,27 @@ public sealed class ViperEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task RotatingMirrorSelectionIsResolvedOnceAndDoesNotLeakCredentials()
+    {
+        await using var selected = new ViperTestServer();
+        await using var incompatible = new ViperTestServer { ETag = "\"other-mirror\"" };
+        await using var source = new ViperTestServer();
+        int selections = 0;
+        source.Override = _ => new(302, [], new() { ["Location"] =
+            Interlocked.Increment(ref selections) == 1 ? selected.Url.ToString() : incompatible.Url.ToString() });
+        await using var engine = new ViperEngine(Options);
+        var result = await engine.DownloadAsync(new(source.Url, Target("mirror.bin"))
+        {
+            Sha256 = Hash(selected.Payload), Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer original-only" }
+        });
+        Assert.True(result.Segmented);
+        Assert.Equal(1, selections);
+        Assert.Empty(incompatible.Requests);
+        Assert.All(selected.Requests, request => Assert.False(request.Headers.ContainsKey("Authorization")));
+        Assert.Equal(selected.Payload, await File.ReadAllBytesAsync(result.Destination));
+    }
+
+    [Fact]
     public async Task ShutdownCancelsAndObservesActiveDownloads()
     {
         await using var server = new ViperTestServer { BodyDelayMilliseconds = 5000 };

@@ -466,6 +466,25 @@
                                                        MaxWidth="{StaticResource AppDetailsSize220}" />
                                         </controls:WrapPanel>
 
+                                        <StackPanel Visibility="{Binding IsInstallHooksOptionsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" Text="Scripts desta operação"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Margin="{StaticResource AppDetailsSpacing0_12_0_4}" />
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}"
+                                                   Text="Os scripts são salvos apenas neste dispositivo e nunca entram em perfis exportados. Ao marcar a opção, executam na instalação individual seguinte, no contexto atual do Windows e sem elevação automática. Não executam em atualizações ou lotes."
+                                                   TextWrapping="Wrap"
+                                                   Margin="{StaticResource AppDetailsSpacing0_0_0_8}" />
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Antes da instalação (PowerShell)" />
+                                        <TextBox AutomationProperties.Name="Script antes da instalação" Text="{Binding PreInstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="160" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Depois da instalação (PowerShell)" Margin="{StaticResource AppDetailsSpacing0_8_0_4}" />
+                                        <TextBox AutomationProperties.Name="Script depois da instalação" Text="{Binding PostInstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="160" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                        <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="RunInstallHooksCheckBox" IsChecked="{Binding RunInstallHooks, Mode=TwoWay}"
+                                                  Content="Executar os scripts na próxima instalação deste pacote"
+                                                  Margin="{StaticResource AppDetailsSpacing0_8_0_4}" />
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Argumentos adicionais do instalador (WinGet)" Margin="{StaticResource AppDetailsSpacing0_8_0_4}" />
+                                        <TextBox AutomationProperties.Name="Argumentos adicionais do instalador" Text="{Binding CustomArguments, Mode=TwoWay}" MaxLength="4096" IsSpellCheckEnabled="False" />
+                                        </StackPanel>
+
                                         <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" Text="Prévia do comando WinGet no PowerShell"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                    Margin="{StaticResource AppDetailsSpacing0_12_0_4}" />
@@ -580,9 +599,23 @@
                                     </HyperlinkButton>
                                 </controls:WrapPanel>
 
-                                <TextBlock Text="SHA256 do Instalador:"
-                                           Style="{StaticResource AppDetailsRowLabelStyle}"
-                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}" />
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}">
+                                    <TextBlock Text="SHA256 do Instalador:"
+                                               Style="{StaticResource AppDetailsRowLabelStyle}"
+                                               VerticalAlignment="Center" />
+                                    <Button x:Name="CopyInstallerSha256Button" AutomationProperties.AutomationId="CopyInstallerSha256Button"
+                                            IsEnabled="{Binding IsSha256CopyEnabled}" Click="CopyInstallerSha256Button_Click"
+                                            Padding="6,2" MinWidth="0" MinHeight="0" Margin="8,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            ToolTipService.ToolTip="Copiar SHA-256">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <ic:FluentIcon Icon="Copy" IconVariant="Regular" IconSize="Size16"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="Copiar" Style="{StaticResource AppDetailsCaptionStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Button>
+                                </controls:WrapPanel>
                                 <TextBlock Style="{StaticResource AppDetailsCodeTextStyle}" x:Name="Sha256Text" Text="{Binding Sha256Text}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextWrapping="Wrap"

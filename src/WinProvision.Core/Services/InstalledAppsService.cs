@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using System.Reflection.PortableExecutable;
 using WinProvision.Core.Models;
 using WinProvision.Core.Services;
 
@@ -51,7 +52,7 @@ public class InstalledAppsService
             // O inventário do winget permite comparar PackageIdentifier exato. O export
             // pode omitir um pacote que winget list e o Registro ainda reconhecem;
             // nesses casos o nome registrado complementa o inventário.
-            Task<List<InstalledAppDetail>> registryTask = Task.Run(GetDesktopAppsFromRegistry, cancellationToken);
+            Task<List<InstalledAppDetail>> registryTask = Task.Run(() => GetDesktopAppsFromRegistry(cancellationToken), cancellationToken);
             Task<(bool Succeeded, List<string> PackageIds)>? wingetTask = _wingetExecutor is null
                 ? null
                 : _wingetExecutor.TryGetInstalledPackageIdsAsync(cancellationToken);
@@ -196,17 +197,22 @@ public class InstalledAppsService
 
     /// <summary>
     /// Motor de varredura profunda no Registro para capturar apenas EXE e MSI.
+    /// Executa em milissegundos sem depender de processos externos ou do WinGet.
     /// </summary>
-    private List<InstalledAppDetail> GetDesktopAppsFromRegistry()
+    public static List<InstalledAppDetail> GetDesktopAppsFromRegistry(CancellationToken cancellationToken = default)
+        => ReadRegistryApps(includeSystemComponents: false, cancellationToken);
+
+    private static List<InstalledAppDetail> ReadRegistryApps(bool includeSystemComponents, CancellationToken cancellationToken)
     {
         var apps = new List<InstalledAppDetail>();
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenRegistrations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // As 3 fontes principais de programas clássicos no Windows
+        // As fontes principais de programas clássicos no Windows (HKLM e HKCU, 64-bit e 32-bit)
         var registryLocations = GetRegistryLocations();
 
         foreach (var loc in registryLocations)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             using var baseKey = RegistryKey.OpenBaseKey(loc.Hive, loc.View);
             using var uninstallKey = baseKey.OpenSubKey(loc.Path);
 
@@ -214,36 +220,61 @@ public class InstalledAppsService
 
             foreach (var subKeyName in uninstallKey.GetSubKeyNames())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 using var appKey = uninstallKey.OpenSubKey(subKeyName);
                 if (appKey == null) continue;
 
-                // 1. Filtro: Se for um componente de sistema do Windows, ignorar
+                // 1. Filtro: Se for componente de sistema ou atualização do Windows, ignorar
                 var systemComponent = appKey.GetValue("SystemComponent") as int?;
-                if (systemComponent == 1) continue;
+                if (systemComponent == 1 && !includeSystemComponents) continue;
+
+                var parentKey = appKey.GetValue("ParentKeyName") as string;
+                if (!string.IsNullOrWhiteSpace(parentKey)) continue;
+
+                var releaseType = appKey.GetValue("ReleaseType") as string;
+                if (!string.IsNullOrWhiteSpace(releaseType) &&
+                    (releaseType.Contains("Update", StringComparison.OrdinalIgnoreCase) ||
+                     releaseType.Contains("Hotfix", StringComparison.OrdinalIgnoreCase)))
+                    continue;
 
                 string? displayName = appKey.GetValue("DisplayName") as string;
                 string? uninstallString = appKey.GetValue("UninstallString") as string;
                 string? quietUninstallString = appKey.GetValue("QuietUninstallString") as string;
                 string? publisher = appKey.GetValue("Publisher") as string;
-                string? version = appKey.GetValue("DisplayVersion") as string;
+                string version = DetermineRegistryVersion(name => appKey.GetValue(name));
 
-                // 2. Filtro: Só adicionamos se tiver Nome e tiver um executável de Desinstalação (ignora lixo)
-                if (!string.IsNullOrWhiteSpace(displayName) && !string.IsNullOrWhiteSpace(uninstallString))
+                bool hasUninstall = !string.IsNullOrWhiteSpace(uninstallString)
+                    || !string.IsNullOrWhiteSpace(quietUninstallString)
+                    || (appKey.GetValue("WindowsInstaller") is int wi && wi == 1);
+
+                // 2. Filtro: Só adicionamos se tiver Nome e tiver meio de Desinstalação (ignora lixo)
+                if (!string.IsNullOrWhiteSpace(displayName) && hasUninstall)
                 {
-                    // Evita duplicatas se o mesmo app estiver registrado no HKLM e HKCU
-                    string normalizedName = NormalizeDisplayName(displayName);
-                    if (seenNames.Add(normalizedName))
+                    // HKCU can be shared across views; distinct machine/user registrations must remain distinct.
+                    string registryIdentity = $"{loc.Hive}:{(loc.Hive == RegistryHive.CurrentUser ? "shared" : loc.View.ToString())}:{subKeyName}";
+                    if (seenRegistrations.Add(registryIdentity))
                     {
+                        bool isMsi = appKey.GetValue("WindowsInstaller") is int installerFlag && installerFlag == 1;
+                        bool isBundle = appKey.GetValue("BundleUpgradeCode") is not null;
                         apps.Add(new InstalledAppDetail
                         {
                             Id = subKeyName,
+                            RegistryIdentity = registryIdentity,
                             DisplayName = displayName.Trim(),
-                            Publisher = publisher?.Trim() ?? "Desconhecido",
+                            Publisher = publisher?.Trim() ?? string.Empty,
                             DisplayVersion = version?.Trim() ?? "",
-                            UninstallString = uninstallString.Trim(),
+                            UninstallString = uninstallString?.Trim() ?? string.Empty,
                             QuietUninstallString = quietUninstallString?.Trim() ?? string.Empty,
                             InstallLocation = appKey.GetValue("InstallLocation") as string ?? string.Empty,
-                            DisplayIcon = appKey.GetValue("DisplayIcon") as string ?? string.Empty
+                            DisplayIcon = appKey.GetValue("DisplayIcon") as string ?? string.Empty,
+                            Scope = loc.Hive == RegistryHive.CurrentUser ? "user" : "machine",
+                            IsWindowsInstaller = isMsi,
+                            IsBundle = isBundle,
+                            IsSystemComponent = systemComponent == 1,
+                            // MSI platform is authoritative. A bundle EXE may be x86
+                            // while installing x64 payloads, so its icon cannot prove bitness.
+                            Architecture = isMsi || isBundle || systemComponent == 1 ? null
+                                : ReadExecutableArchitecture(appKey.GetValue("DisplayIcon") as string)
                         });
                     }
                 }
@@ -252,6 +283,98 @@ public class InstalledAppsService
 
         // Retorna a lista ordenada por nome
         return apps.OrderBy(a => a.DisplayName).ToList();
+    }
+
+    /// <summary>
+    /// Converte o inventário de programas clássicos do Registro para itens utilizáveis na verificação de atualizações.
+    /// </summary>
+    public static List<UpgradablePackage> GetRegistryInventory(CancellationToken cancellationToken = default)
+        => BuildRegistryInventory(ReadRegistryApps(includeSystemComponents: true, cancellationToken));
+
+    internal static List<UpgradablePackage> BuildRegistryInventory(IReadOnlyList<InstalledAppDetail> apps)
+    {
+        static bool SameRelease(InstalledAppDetail left, InstalledAppDetail right) =>
+            left.Scope == right.Scope && left.Publisher.Equals(right.Publisher, StringComparison.OrdinalIgnoreCase)
+            && WinProvisionApiService.NormalizeInstalledName(left.DisplayName, left.DisplayVersion)
+                == WinProvisionApiService.NormalizeInstalledName(right.DisplayName, right.DisplayVersion)
+            && WinProvisionApiService.NumericVersionsEqual(left.DisplayVersion, right.DisplayVersion);
+        // Hidden MSI children are inventory evidence only when a visible bundle
+        // identifies the same release. Unrelated system components stay excluded.
+        var visible = apps.Where(app => !app.IsSystemComponent || app.IsWindowsInstaller
+            && apps.Any(bundle => bundle.IsBundle && !bundle.IsSystemComponent && SameRelease(app, bundle))).ToList();
+        // Burn bundles also register their child MSI. Keep the MSI registration when
+        // exactly one child describes the same installed release and scope.
+        return visible.Where(app => !app.IsBundle || visible.Count(other => other.IsWindowsInstaller && SameRelease(other, app)) != 1)
+            .Select(ToUpdateInventoryEntry).ToList();
+    }
+
+    // Same precedence as WinGet ARPHelper::DetermineVersion; keep unknown versions unknown.
+    internal static string DetermineRegistryVersion(Func<string, object?> read)
+    {
+        if (read("DisplayVersion") is string display && !string.IsNullOrWhiteSpace(display)) return display.Trim();
+        foreach (var (majorName, minorName) in new[] { ("VersionMajor", "VersionMinor"), ("MajorVersion", "MinorVersion") })
+        {
+            uint major = read(majorName) is int majorValue ? unchecked((uint)majorValue) : 0;
+            uint minor = read(minorName) is int minorValue ? unchecked((uint)minorValue) : 0;
+            if (major != 0 || minor != 0) return $"{major}.{minor}";
+        }
+        if (read("Version") is int packed && packed != 0)
+        {
+            uint value = unchecked((uint)packed);
+            return $"{value >> 24}.{(value >> 16) & 0xff}.{value & 0xffff}";
+        }
+        return string.Empty;
+    }
+
+    internal static UpgradablePackage ToUpdateInventoryEntry(InstalledAppDetail app)
+        => new()
+        {
+            Id = app.Id,
+            Name = app.DisplayName,
+            CurrentVersion = app.DisplayVersion,
+            Publisher = app.Publisher,
+            Source = "winget",
+            InstalledScope = app.Scope,
+            InstalledArchitecture = app.Architecture ?? (app.IsWindowsInstaller ? WindowsInstallerInventory.ReadArchitecture(app.Id) : null),
+            InstalledRegistryId = string.IsNullOrWhiteSpace(app.RegistryIdentity) ? app.Id : app.RegistryIdentity,
+            InstalledPublisher = app.Publisher,
+            // UninstallString describes removal, not the technology allowed for an
+            // upgrade. An EXE uninstaller does not rule out a vendor MSI migration.
+            InstalledInstallerType = app.IsWindowsInstaller
+                || app.UninstallString.Contains("msiexec", StringComparison.OrdinalIgnoreCase) ? "msi" : null
+        };
+
+    internal static string? ReadExecutableArchitecture(string? displayIcon)
+    {
+        if (string.IsNullOrWhiteSpace(displayIcon)) return null;
+        string path = Environment.ExpandEnvironmentVariables(displayIcon.Trim());
+        if (path.StartsWith('"'))
+        {
+            int end = path.IndexOf('"', 1);
+            if (end < 0) return null;
+            path = path[1..end];
+        }
+        else
+        {
+            int comma = path.LastIndexOf(',');
+            if (comma >= 0 && int.TryParse(path[(comma + 1)..], out _)) path = path[..comma].Trim();
+        }
+        if (!Path.IsPathFullyQualified(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return null;
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var pe = new PEReader(stream);
+            return pe.PEHeaders.CoffHeader.Machine switch
+            {
+                Machine.Amd64 => "x64", Machine.I386 => "x86", Machine.Arm64 => "arm64",
+                Machine.ArmThumb2 => "arm", _ => null
+            };
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or BadImageFormatException or ArgumentException)
+        {
+            CoreLog.Warning(exception, "ReadInstalledExecutableArchitecture");
+            return null;
+        }
     }
 }
 
@@ -266,4 +389,10 @@ public class InstalledAppDetail
     public string QuietUninstallString { get; set; } = string.Empty;
     public string InstallLocation { get; set; } = string.Empty;
     public string DisplayIcon { get; set; } = string.Empty;
+    public string Scope { get; set; } = "machine";
+    public string? Architecture { get; set; }
+    public bool IsWindowsInstaller { get; set; }
+    public bool IsBundle { get; set; }
+    public bool IsSystemComponent { get; set; }
+    public string RegistryIdentity { get; set; } = string.Empty;
 }

@@ -128,7 +128,7 @@
                 </Border>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <TextBlock Text="Interface e inicialização" FontSize="15" FontWeight="SemiBold" />
-                  <TextBlock Text="Tema do aplicativo e inicialização com o Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                  <TextBlock Text="Tema, página inicial e inicialização com o Windows." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                 </StackPanel>
                 <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" FontSize="18" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
               </Grid>
@@ -239,6 +239,24 @@
                 </ComboBox>
               </Grid>
             </Border>
+            <Border x:Name="UpdateMethodCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                  <TextBlock Text="Método de atualização preferencial" FontWeight="SemiBold" />
+                  <TextBlock x:Name="UpdateMethodDescriptionText" Text="{Binding UpdateMethodDescription}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <ComboBox x:Name="UpdateMethodComboBox" AutomationProperties.AutomationId="UpdateMethodComboBox" Grid.Column="1" Width="240" SelectedValuePath="Tag" SelectedValue="{Binding SelectedUpdateMethodName, Mode=TwoWay}">
+                  <ComboBoxItem Content="Automático (recomendado)" Tag="Automatic" />
+                  <ComboBoxItem Content="API COM do WinGet" Tag="ComApi" />
+                  <ComboBoxItem Content="WinProvision API — Viper" Tag="WinProvisionApi" />
+                  <ComboBoxItem Content="WinGet CLI" Tag="WingetCli" />
+                </ComboBox>
+              </Grid>
+            </Border>
             <TextBlock Text="Atualizações do aplicativo" Margin="0,8,0,8" FontSize="16" FontWeight="SemiBold" />
             <Border x:Name="AppUpdateCard" Padding="18" Margin="0,0,0,12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
               <StackPanel>
@@ -297,6 +315,9 @@
               <ToggleSwitch x:Name="SearchOnDemandSwitch" AutomationProperties.AutomationId="SearchOnDemandSwitch" AutomationProperties.Name="Carregar aplicativos somente ao pesquisar" IsOn="{Binding SearchOnDemand, Mode=OneWay}" OnContent="Ativado" OffContent="Desativado" Toggled="SearchOnDemandSwitch_Toggled" />
             </settings:SettingsCard>
             <TextBlock Text="Inicialização" Margin="0,8,0,8" FontSize="16" FontWeight="SemiBold" />
+            <settings:SettingsCard x:Name="StartupPageCard" Header="Página inicial" Description="Escolha qual seção será aberta quando o WinProvision Store iniciar." Margin="0,0,0,12">
+              <ComboBox x:Name="StartupPageComboBox" AutomationProperties.AutomationId="StartupPageComboBox" AutomationProperties.Name="Página inicial do aplicativo" ItemsSource="{Binding StartupPageOptions}" SelectedItem="{Binding SelectedStartupPageOption, Mode=TwoWay}" DisplayMemberPath="Label" MinWidth="220" />
+            </settings:SettingsCard>
             <settings:SettingsCard x:Name="StartupCard" Header="Iniciar com o Windows" Description="Executa atualizações automáticas pela CLI ao entrar nesta conta do Windows, sem abrir a interface." Margin="0,0,0,12">
               <ToggleSwitch x:Name="LaunchAtStartupSwitch" AutomationProperties.AutomationId="LaunchAtStartupSwitch" IsOn="{Binding LaunchAtStartup, Mode=OneWay}" OnContent="Ativado" OffContent="Desativado" Toggled="LaunchAtStartupSwitch_Toggled" AutomationProperties.Name="Iniciar com o Windows" />
             </settings:SettingsCard>

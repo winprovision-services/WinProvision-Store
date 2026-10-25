@@ -16,6 +16,16 @@ public partial class App
     }
     partial void ConfigureValidationServices(ServiceCollection services)
     {
+        if (Environment.GetCommandLineArgs().Contains("--probe-updates")
+            && Environment.GetCommandLineArgs().FirstOrDefault(argument => argument.StartsWith("--probe-update-method=", StringComparison.Ordinal)) is { } methodArgument)
+        {
+            if (!Enum.TryParse<PackageUpdateMethod>(methodArgument.Split('=', 2)[1], out var method) || !Enum.IsDefined(method))
+                throw new ArgumentException("Método inválido no diagnóstico de atualizações.");
+            string preferencesPath = Path.Combine(AppContext.BaseDirectory, "updates-probe-preferences.json");
+            var preferences = new InstallationPreferencesService(preferencesPath);
+            preferences.SetPreferredUpdateMethod(method);
+            services.AddSingleton(preferences);
+        }
         if (IsSmokeTest)
         {
             var historyPath = Path.Combine(SmokeTest.OutputDirectory, "operation-history-test.json");
@@ -52,6 +62,12 @@ public partial class App
     }
     partial void TryLaunchValidation(ref bool handled)
     {
+        if (Environment.GetCommandLineArgs().Contains("--probe-updates"))
+        {
+            _backgroundUpdateTask = RunUpdatesProbeAsync();
+            handled = true;
+            return;
+        }
         if (Environment.GetCommandLineArgs().Contains("--probe-home"))
         {
             _backgroundUpdateTask = RunHomeProbeAsync();

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 #if WINDOWS
 using System.Security.Principal;
@@ -24,6 +25,23 @@ public class WingetExecutionResult
     public bool WingetUnavailable { get; set; }
     /// <summary>Indica que o instalador iniciou ou que o estado ficou incerto; evita repetir a operação automaticamente.</summary>
     public bool InstallerStarted { get; set; }
+    /// <summary>True when an opt-in pre/post installation hook failed.</summary>
+    public bool InstallHookFailed { get; set; }
+    /// <summary>Versão que a rota WinProvision confirmou e instalou; metadado interno para verificação.</summary>
+    [JsonIgnore]
+    public string? ApiUpdateTargetVersion { get; set; }
+    /// <summary>ProductCode do instalador validado, para conferir migrações que substituem a chave antiga.</summary>
+    [JsonIgnore]
+    public string? ApiUpdateProductCode { get; set; }
+    /// <summary>O ProductCode foi lido do MSI executado após validar seu hash e versão.</summary>
+    [JsonIgnore]
+    public bool ApiUpdateProductCodeFromInstaller { get; set; }
+    /// <summary>A conferência desta operação já confirmou a versão instalada.</summary>
+    [JsonIgnore]
+    public bool UpdateVersionVerified { get; set; }
+    /// <summary>Uma consulta nova comprovou que o alvo já está satisfeito, sem executar instalador.</summary>
+    [JsonIgnore]
+    public bool UpdateAlreadySatisfied { get; set; }
 
     /// <summary>
     /// Motivo canônico da falha (ver <see cref="WingetErrorTranslator"/>), já classificado a
@@ -38,8 +56,6 @@ public class WingetExecutionResult
 [SupportedOSPlatform("windows")]
 public class WingetExecutor
 {
-    private const int MaxTransientDownloadRetries = 2;
-    private static readonly TimeSpan TransientDownloadRetryBaseDelay = TimeSpan.FromSeconds(1);
     private readonly WingetBootstrapper? _bootstrapper;
 
     /// <param name="bootstrapper">
@@ -70,7 +86,8 @@ public class WingetExecutor
         bool interactive = false,
         bool ignoreSecurityHash = false,
         string? version = null,
-        string? customArguments = null)
+        string? customArguments = null,
+        bool force = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         // Garante a resolução do WinGet para o
@@ -117,6 +134,7 @@ public class WingetExecutor
         if (!string.IsNullOrWhiteSpace(version)) args += $" --version {QuoteArgument(version)}";
         if (ignoreSecurityHash) args += " --ignore-security-hash";
         if (!string.IsNullOrWhiteSpace(customArguments)) args += $" --custom {QuoteArgument(customArguments)}";
+        if (force) args += " --force";
         // Store packages are licensed and installed through the Store service. Forcing
         // silent mode can suppress the Store hand-off/consent UI and leave the request
         // looking successful or stalled; let WinGet use its interactive Store flow.
@@ -512,7 +530,67 @@ public class WingetExecutor
             InstallerElevationPolicy.RequiresElevation(normalizedScope, requiresElevation, elevationProhibited),
             preserveScopeOnRetry: WinProvisionApiService.IsRunningAsSystem());
 
+        if (CanRepairUpdateWithInstall(result, source, version, cancellationToken.IsCancellationRequested))
+        {
+            try
+            {
+                var installed = await ListInstalledPackagesAsync(cancellationToken, source).ConfigureAwait(false);
+                if (HasOlderInstalledVersion(installed, appId, version!))
+                {
+                    onLogReceived?.Invoke("O WinGet não encontrou uma atualização aplicável antes de iniciar o instalador; tentando uma reinstalação única da versão-alvo.");
+                    var repair = await InstallAppAsync(appId, onLogReceived, cancellationToken,
+                        source: source, scope: normalizedScope, architecture: normalizedArchitecture,
+                        requiresElevation: requiresElevation, elevationProhibited: elevationProhibited,
+                        interactive: interactive, ignoreSecurityHash: ignoreSecurityHash,
+                        version: version, force: true).ConfigureAwait(false);
+                    repair.InstallerStarted = true;
+                    repair.Output = repair.Success
+                        ? "Reinstalação de reparo executada pelo WinGet; aguardando conferência da versão instalada."
+                        : $"A atualização falhou antes do instalador e a reinstalação de reparo também falhou: {repair.Output}";
+                    return repair;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or FormatException)
+            {
+                onLogReceived?.Invoke($"Não foi possível conferir a instalação antes do reparo ({exception.GetType().Name}); a reinstalação automática foi omitida.");
+            }
+        }
+
         return NormalizeInstallOutcome(result, isUpgrade: true);
+    }
+
+    internal static bool CanRepairUpdateWithInstall(WingetExecutionResult result, string source,
+        string? targetVersion, bool canceled) =>
+        !result.Success && !result.InstallerStarted && !result.WasElevated && !canceled
+        && string.Equals(source, "winget", StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrWhiteSpace(targetVersion)
+        && unchecked((uint)result.ExitCode) is 0x8A150010 or 0x8A15002B or 0x8A15004F;
+
+    internal static bool HasOlderInstalledVersion(IEnumerable<UpgradablePackage> installed,
+        string packageId, string targetVersion)
+    {
+        var matches = installed.Where(item => item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)).ToArray();
+        return matches.Length == 1
+            && TryParseNumericVersion(matches[0].CurrentVersion, out var current)
+            && TryParseNumericVersion(targetVersion, out var target)
+            && current.CompareTo(target) < 0;
+    }
+
+    private static bool TryParseNumericVersion(string? value, out Version version)
+    {
+        version = null!;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        string[] segments = value.Trim().TrimStart('v', 'V').Split('.');
+        if (segments.Length is < 2 or > 4 || segments.Any(segment => segment.Length == 0 || !segment.All(char.IsAsciiDigit)))
+            return false;
+        if (!Version.TryParse(string.Join('.', segments.Concat(Enumerable.Repeat("0", 4 - segments.Length))), out var parsed))
+            return false;
+        version = parsed;
+        return true;
     }
 
     /// <summary>
@@ -594,36 +672,27 @@ public class WingetExecutor
         // falhas classificadas como DownloadError: erros de hash, política, elevação ou
         // instalação podem deixar efeitos parciais e não são repetidos automaticamente.
         // O teto explícito evita qualquer ciclo de auto retry; cada volta exige o mesmo
-        // código transitório e respeita o cancelamento.
-        for (int retry = 1; ShouldRetryTransientDownload(result, retry, forceElevation, cancellationToken); retry++)
+        // código explicitamente elegível, aplica orçamentos total e por código e respeita o cancelamento.
+        int totalRetries = 0;
+        var retriesByErrorCode = new System.Collections.Generic.Dictionary<int, int>();
+        while (WingetAutoRetryPolicy.CanRetry(
+            result,
+            totalRetries,
+            retriesByErrorCode.GetValueOrDefault(result.ExitCode),
+            forceElevation,
+            cancellationToken.IsCancellationRequested))
         {
-            onLogReceived?.Invoke($"O download falhou por um motivo transitório; nova tentativa {retry} de {MaxTransientDownloadRetries}...");
-            await Task.Delay(GetTransientDownloadRetryDelay(retry), cancellationToken).ConfigureAwait(false);
+            int errorCode = result.ExitCode;
+            int retryNumber = totalRetries + 1;
+            onLogReceived?.Invoke($"O WinGet informou uma falha transitória de download; nova tentativa {retryNumber} de {WingetAutoRetryPolicy.MaxRetriesPerOperation}...");
+            await Task.Delay(WingetAutoRetryPolicy.GetDelay(retryNumber), cancellationToken).ConfigureAwait(false);
+            totalRetries++;
+            retriesByErrorCode[errorCode] = retriesByErrorCode.GetValueOrDefault(errorCode) + 1;
             result = await ExecuteWithElevationFallbackAsync(
                 effectiveArguments, onLogReceived, cancellationToken, forceElevation: false);
         }
 
         return result;
-    }
-
-    internal static bool ShouldRetryTransientDownload(
-        WingetExecutionResult result,
-        int retryNumber,
-        bool forceElevation,
-        CancellationToken cancellationToken) =>
-        retryNumber <= MaxTransientDownloadRetries
-        && !result.Success
-        && !result.WasElevated
-        && !result.InstallerStarted
-        && !forceElevation
-        && !cancellationToken.IsCancellationRequested
-        && WingetErrorTranslator.Classify(result.ExitCode, result.Output) == WingetFailureReason.DownloadError;
-
-    internal static TimeSpan GetTransientDownloadRetryDelay(int retryNumber)
-    {
-        if (retryNumber is < 1 or > MaxTransientDownloadRetries)
-            throw new ArgumentOutOfRangeException(nameof(retryNumber));
-        return TransientDownloadRetryBaseDelay * retryNumber;
     }
 
     private static WingetExecutionResult NormalizeInstallOutcome(WingetExecutionResult result, bool isUpgrade)
@@ -896,10 +965,11 @@ public class WingetExecutor
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
             // Export corrompido/incompleto: melhor devolver lista vazia do que derrubar
             // a reconciliação — quem chama trata "nada instalado detectado" como seguro.
+            CoreLog.Warning(exception, "ParseInstalledIdsFromExportJson");
         }
 
         return ids;

@@ -1,4 +1,6 @@
 using Microsoft.Management.Deployment;
+using Microsoft.Win32;
+using System.Runtime.InteropServices;
 using WinProvision.Core.Models;
 using WinProvision.Core.Services;
 
@@ -50,8 +52,15 @@ public sealed partial class WinGetService
                 token.ThrowIfCancellationRequested();
                 dispatched = true;
                 var result = await manager.UninstallPackageAsync(package, uninstallOptions).AsTask(token).ConfigureAwait(false);
+                int extendedError = result.ExtendedErrorCode?.HResult ?? 0;
+                int effectiveError = GetComUninstallFailureCode(result.UninstallerErrorCode, extendedError);
+                bool installerStarted = WasComUninstallerDispatched(result.Status, extendedError);
                 return new WingetExecutionResult { Success = result.Status == UninstallResultStatus.Ok,
-                    ExitCode = unchecked((int)result.UninstallerErrorCode), Output = result.Status.ToString(), InstallerStarted = true };
+                    ExitCode = effectiveError, Output = result.Status.ToString(),
+                    InstallerStarted = installerStarted,
+                    FailureReason = result.Status == UninstallResultStatus.BlockedByPolicy
+                        ? WingetFailureReason.BlockedByPolicy
+                        : InstallerExitCodes.Classify(effectiveError) };
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception exception)
@@ -62,6 +71,25 @@ public sealed partial class WinGetService
             }
         }, token).ConfigureAwait(false);
     }
+
+    internal static bool WasComUninstallerDispatched(UninstallResultStatus status, int extendedErrorCode)
+    {
+        // The official API maps these statuses before the execution stage. InternalError
+        // is deliberately conservative: it can also represent a failure after execution.
+        if (status is UninstallResultStatus.InvalidOptions or UninstallResultStatus.CatalogError
+            or UninstallResultStatus.ManifestError or UninstallResultStatus.BlockedByPolicy)
+            return false;
+
+        // GetUninstallInfo can fail before execution yet maps this HRESULT to UninstallError.
+        // ExecuteUninstaller failures have a different, explicitly documented HRESULT.
+        if (unchecked((uint)extendedErrorCode) == 0x8A15002F)
+            return false;
+
+        return true;
+    }
+
+    internal static int GetComUninstallFailureCode(uint uninstallerErrorCode, int extendedErrorCode) =>
+        uninstallerErrorCode != 0 ? unchecked((int)uninstallerErrorCode) : extendedErrorCode;
     public async Task<IReadOnlyList<WinGetPackageMatch>> SearchComOnlyAsync(string query, CancellationToken token)
     {
         if (!await EnsureWingetProvisionedAsync(null, token).ConfigureAwait(false) || WinGetFactoryHelper.IsComDisabled)
@@ -69,7 +97,8 @@ public sealed partial class WinGetService
         return await Task.Run(() => SearchApiAsync(query, token), token).ConfigureAwait(false);
     }
 
-    public async Task<List<UpgradablePackage>> ListComOnlyAsync(string? source, CancellationToken token)
+    public async Task<List<UpgradablePackage>> ListComOnlyAsync(string? source, CancellationToken token,
+        bool includeInstallerMetadata = false)
     {
         if (!await EnsureWingetProvisionedAsync(null, token).ConfigureAwait(false) || WinGetFactoryHelper.IsComDisabled)
             throw new InvalidOperationException("API COM indisponível.");
@@ -102,10 +131,50 @@ public sealed partial class WinGetService
                 else if (origin.Contains("winget", StringComparison.Ordinal)) origin = "winget";
                 // Keep uncorrelated local entries out of installable/exported package IDs.
                 if (origin is not ("winget" or "msstore") || (source is not null && origin != source)) continue;
-                packages.Add(new UpgradablePackage { Id = package.Id, Name = package.Name, CurrentVersion = installed.Version, Source = origin });
+                var entry = new UpgradablePackage { Id = package.Id, Name = package.Name, CurrentVersion = installed.Version, Source = origin };
+                if (includeInstallerMetadata)
+                {
+                    try
+                    {
+                        entry.InstalledScope = installed.GetMetadata(PackageVersionMetadataField.InstalledScope)?.Trim().ToLowerInvariant() switch
+                        {
+                            "user" => "user", "machine" or "system" => "machine", _ => null
+                        };
+                        entry.InstalledInstallerType = installed.GetMetadata(PackageVersionMetadataField.InstallerType)?.Trim().ToLowerInvariant();
+                        entry.InstalledArchitecture = ReadInstalledArchitecture(installed, entry.InstalledScope, token);
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+                    catch (Exception exception) { PackageDiagnostics.Warning(exception, "ReadInstalledUpdateMetadata"); }
+                }
+                packages.Add(entry);
             }
             WinGetFactoryHelper.ReportComSuccess();
             return packages;
         }, token).ConfigureAwait(false);
+    }
+
+    private static string? ReadInstalledArchitecture(PackageVersionInfo installed, string? scope, CancellationToken token)
+    {
+        var architectures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string productCode in IndexedCollectionReader.Read(installed.ProductCodes, token))
+        {
+            if (string.IsNullOrWhiteSpace(productCode) || productCode.IndexOfAny(['\\', '/']) >= 0) continue;
+            foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+            {
+                if (scope == "user" && hive != RegistryHive.CurrentUser || scope == "machine" && hive != RegistryHive.LocalMachine)
+                    continue;
+                foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+                {
+                    token.ThrowIfCancellationRequested();
+                    using var root = RegistryKey.OpenBaseKey(hive, view);
+                    using var key = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + productCode);
+                    if (key is null) continue;
+                    // HKCU can be shared between registry views, so it cannot prove bitness.
+                    if (hive == RegistryHive.LocalMachine)
+                        architectures.Add(view == RegistryView.Registry32 ? "x86" : RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant());
+                }
+            }
+        }
+        return architectures.Count == 1 ? architectures.Single() : null;
     }
 }

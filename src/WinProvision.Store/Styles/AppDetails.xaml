@@ -91,6 +91,7 @@
 <x:Double x:Key="AppDetailsSize220">220</x:Double>
     
 <Thickness x:Key="AppDetailsSpacing0_12_0_4">0,12,0,4</Thickness>
+<Thickness x:Key="AppDetailsSpacing0_8_0_4">0,8,0,4</Thickness>
     
 <x:Double x:Key="AppDetailsSize48">48</x:Double>
     

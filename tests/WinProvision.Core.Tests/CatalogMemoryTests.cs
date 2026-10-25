@@ -10,6 +10,30 @@ namespace WinProvision.Core.Tests;
 public sealed class CatalogMemoryTests
 {
     [Fact]
+    public async Task SearchLoadsValidatedIndexFromR2WhenNoLocalCacheExists()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "WinProvision-catalog-search-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string index = """[{"id":"Test.App","appPath":"manifests/t/test/app/app.json","appSha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"Teste","publisher":"Teste","latestVersion":"1.0","architectures":["x64"],"tags":[]}]""";
+            string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(index))).ToLowerInvariant();
+            string catalog = $$"""{"schemaVersion":1,"generation":"test","generatedAtUtc":"2026-10-21T00:00:00Z","packageCount":1,"searchIndexPath":"winget/v1/search/{{hash}}.json","searchIndexSha256":"{{hash}}"}""";
+            using var handler = new CatalogHandler(catalog, index);
+            handler.AllowResponse.SetResult();
+            using var client = new HttpClient(handler);
+            await using var service = new StoreService(client, null, directory);
+
+            await service.LoadCatalogAsync();
+
+            Assert.Equal("Test.App", Assert.Single(service.Search("Test.App")).Id);
+            Assert.True(File.Exists(Path.Combine(directory, "winget-v1-search.json")));
+            Assert.Equal(1, handler.IndexRequests);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public async Task UnchangedRevalidationKeepsInstances()
     {
         string directory = Path.Combine(Path.GetTempPath(), "WinProvision-catalog-" + Guid.NewGuid().ToString("N"));

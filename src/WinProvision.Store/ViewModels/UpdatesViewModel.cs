@@ -72,6 +72,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
     public bool? MasterSelection { get; set => Set(ref field, value); } = false;
     public string SearchText { get; set => Set(ref field, value); } = string.Empty;
     public bool FilterWinget { get; set => Set(ref field, value); } = true;
+    public bool FilterWinProvision { get; set => Set(ref field, value); } = true;
     public bool FilterMsStore { get; set => Set(ref field, value); } = true;
     public bool FilterOther { get; set => Set(ref field, value); } = true;
     public bool HideSameVersion { get; set => Set(ref field, value); } = true;
@@ -161,6 +162,8 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
             Name = package.Name,
             Source = string.IsNullOrWhiteSpace(package.Source) ? "winget" : package.Source,
             Version = package.AvailableVersion,
+            Publisher = package.Publisher,
+            Description = package.Description,
             IconUrl = package.IconUrl
         };
 
@@ -189,21 +192,28 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         }
         StatusText = "Procurando atualizações disponíveis...";
         SubtitleText = "Procurando atualizações disponíveis...";
+        using var scanTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        scanTimeout.CancelAfter(TimeSpan.FromSeconds(60));
+        CancellationToken scanToken = scanTimeout.Token;
+        Task<List<UpgradablePackage>>? scan = null;
 
         try
         {
-            var upgradable = await _backend.ScanUpdatesAsync(cancellationToken);
+            scan = Task.Run(() => _backend.ScanUpdatesAsync(scanToken), CancellationToken.None);
+            var upgradable = await scan.WaitAsync(scanToken);
 
             var catalog = _storeService.GetAll();
             var catalogById = new Dictionary<string, AppEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var app in catalog)
-                catalogById.TryAdd(app.Id, app);
+                catalogById.TryAdd($"{app.Source}\u001f{app.Id}", app);
 
             foreach (var package in upgradable)
             {
-                if (catalogById.TryGetValue(package.Id, out var match))
+                if (catalogById.TryGetValue($"{package.Source}\u001f{package.Id}", out var match))
                 {
                     package.IconUrl = match.IconUrl;
+                    if (string.IsNullOrWhiteSpace(package.Publisher)) package.Publisher = match.Publisher;
+                    if (string.IsNullOrWhiteSpace(package.Description)) package.Description = match.Description ?? string.Empty;
                 }
             }
 
@@ -232,10 +242,18 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
                 ? "Nenhuma atualização disponível. Tudo em dia."
                 : $"Encontradas {_rawPackages.Count} atualizações.";
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _lifetime.IsCancellationRequested)
         {
             StatusText = "Verificação cancelada.";
             ApplyFilters();
+        }
+        catch (OperationCanceledException) when (scanTimeout.IsCancellationRequested)
+        {
+            _lastCheckFailed = true;
+            HasError = true;
+            ErrorMessage = "A consulta demorou mais que o esperado. Recarregue para tentar novamente.";
+            StatusText = "O limite de tempo da verificação foi atingido.";
+            WinProvisionLog.Write("UPDATE UI discovery timeout after=60s");
         }
         catch (Exception ex)
         {
@@ -249,12 +267,21 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         }
         finally
         {
+            if (scan is not null && !scan.IsCompleted)
+                _ = ObserveScanCompletionAsync(scan);
             CanReload = true;
             UpdateSubtitleAndCounters();
             IsBusy = false;
             IsInitialLoading = false; IsScanning = false;
             ApplyFilters();
         }
+    }
+
+    private static async Task ObserveScanCompletionAsync(Task scan)
+    {
+        try { await scan.ConfigureAwait(false); }
+        catch (OperationCanceledException) { WinProvisionLog.Write("UPDATE UI consulta encerrada após cancelamento."); }
+        catch (Exception exception) { WinProvisionLog.Warning(exception, "Updates.ScanLateCompletion"); }
     }
 
     private static bool HasNewerAvailableVersion(UpgradablePackage package)
@@ -275,17 +302,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
             return false;
         }
 
-        if (Version.TryParse(current, out Version? currentParsed)
-            && Version.TryParse(available, out Version? availableParsed))
-        {
-            var normalizedCurrent = new Version(
-                currentParsed.Major, currentParsed.Minor, Math.Max(currentParsed.Build, 0), Math.Max(currentParsed.Revision, 0));
-            var normalizedAvailable = new Version(
-                availableParsed.Major, availableParsed.Minor, Math.Max(availableParsed.Build, 0), Math.Max(availableParsed.Revision, 0));
-            return normalizedAvailable > normalizedCurrent;
-        }
-
-        return true;
+        return WinProvisionApiService.IsStrictlyNewerNumericVersion(current, available);
     }
 
     public void ApplyFilters()
@@ -302,6 +319,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         queryable = queryable.Where(p =>
         {
             string source = (p.Source ?? string.Empty).ToLowerInvariant();
+            if (p.IsWinProvisionApiUpdate || source.Contains("winprovision")) return FilterWinProvision;
             if (source.Contains("winget")) return filterWinget;
             if (source.Contains("msstore")) return filterMsStore;
             return filterOther;
@@ -460,7 +478,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
     public async Task ShutdownAsync()
     {
         _lifetime.Cancel(); ScanCommand.Cancel(); UpdateSelectedCommand.Cancel();
-        foreach (var task in _work.ToArray()) { try { await task; } catch (OperationCanceledException) { } catch(Exception ex) { WinProvisionLog.Warning(ex,"Updates.Shutdown"); } }
+        foreach (var task in _work.ToArray()) { try { await task; } catch (OperationCanceledException) { WinProvisionLog.Write("UPDATE UI operação cancelada durante o encerramento."); } catch(Exception ex) { WinProvisionLog.Warning(ex,"Updates.Shutdown"); } }
     }
     private async Task RunUpdateCoreAsync(List<UpgradablePackage> selected, bool elevated, bool interactive, bool ignoreSecurityHash, CancellationToken token)
     {
@@ -485,7 +503,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
                     {
                         PackageInstallOptions? options = elevated || interactive || ignoreSecurityHash
                             ? (_packageOptions.Get(package.Id, package.Source) ?? new PackageInstallOptions()) with
-                            { Interactive = interactive || _packageOptions.Get(package.Id,package.Source)?.Interactive == true, IgnoreSecurityHash = false, RequiresElevation = elevated || _packageOptions.Get(package.Id,package.Source)?.RequiresElevation == true } : null;
+                            { Interactive = interactive || _packageOptions.Get(package.Id,package.Source)?.Interactive == true, IgnoreSecurityHash = ignoreSecurityHash, RequiresElevation = elevated || _packageOptions.Get(package.Id,package.Source)?.RequiresElevation == true } : null;
                         var result = await _backend.UpdateAsync(package, options);
                         if (result.Success) { succeeded++; _rawPackages.Remove(package); _filteredPackages.Remove(package); }
                         else { failed++; package.IsSelectedForUpdate = false; }

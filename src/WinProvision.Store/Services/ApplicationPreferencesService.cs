@@ -34,6 +34,13 @@ public enum BackgroundUpdateSchedule
     Interval
 }
 
+public enum ApplicationStartupPage
+{
+    Discover,
+    Updates,
+    Installed
+}
+
 public sealed partial class ApplicationPreferencesService
 {
     private const string StartupRegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -51,6 +58,7 @@ public sealed partial class ApplicationPreferencesService
     public bool AutomaticCloudBackupEnabled { get; private set; } = true;
     public bool UseViperOfficeDownload { get; private set; }
     public bool SearchOnDemand { get; private set; }
+    public ApplicationStartupPage StartupPage { get; private set; } = ApplicationStartupPage.Discover;
     public event Action<bool>? SearchOnDemandChanged;
     public bool ProvisioningMenuEnabled { get; private set; }
     public event Action<bool>? ProvisioningMenuEnabledChanged;
@@ -94,6 +102,7 @@ public sealed partial class ApplicationPreferencesService
                     AutomaticCloudBackupEnabled = saved.AutomaticCloudBackupEnabled;
                     UseViperOfficeDownload = saved.UseViperOfficeDownload;
                     SearchOnDemand = saved.SearchOnDemand;
+                    if (saved.StartupPage is { } startupPage && Enum.IsDefined(startupPage)) StartupPage = startupPage;
                     ProvisioningMenuEnabled = saved.ProvisioningMenuEnabled;
                 }
             }
@@ -195,6 +204,15 @@ public sealed partial class ApplicationPreferencesService
         SearchOnDemandChanged?.Invoke(enabled);
     }
 
+    public void SetStartupPage(ApplicationStartupPage page)
+    {
+        if (!Enum.IsDefined(page)) page = ApplicationStartupPage.Discover;
+        ApplicationStartupPage previous = StartupPage;
+        StartupPage = page;
+        try { Save(); }
+        catch { StartupPage = previous; throw; }
+    }
+
     public void SetProvisioningMenuEnabled(bool enabled)
     {
         if (ProvisioningMenuEnabled == enabled) return;
@@ -284,12 +302,13 @@ public sealed partial class ApplicationPreferencesService
         Theme, LaunchAtStartup, AutoUpdateAtStartup, AutoMaintenanceUpdates, AutoMaintenanceDrivers,
         AutomaticCloudBackupEnabled, UpdateMode, UpdateScope, UpdateSchedule, UpdateScheduleTime,
         UpdateScheduleDay, UpdateIntervalMinutes, UpdateNotificationsEnabled,
-        _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(), UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled);
+        _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(), UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled, StartupPage);
 
     public void ImportPortablePreferences(PortableApplicationPreferences value)
     {
         if (!Enum.IsDefined(value.Theme) || !Enum.IsDefined(value.UpdateMode) || !Enum.IsDefined(value.UpdateScope)
             || !Enum.IsDefined(value.UpdateSchedule) || !Enum.IsDefined(value.UpdateScheduleDay)
+            || !Enum.IsDefined(value.StartupPage)
             || value.UpdateIntervalMinutes is < 15 or > 1440
             || !TimeOnly.TryParseExact(value.UpdateScheduleTime, "HH:mm", out _))
             throw new ArgumentException("O arquivo contém opções inválidas.");
@@ -309,6 +328,7 @@ public sealed partial class ApplicationPreferencesService
         UseViperOfficeDownload = value.UseViperOfficeDownload;
         SearchOnDemand = value.SearchOnDemand;
         ProvisioningMenuEnabled = value.ProvisioningMenuEnabled;
+        StartupPage = value.StartupPage;
         _autoUpdatePackageKeys.Clear();
         foreach (string key in value.AutoUpdatePackageKeys ?? [])
             if (!string.IsNullOrWhiteSpace(key) && key.Length <= 512) _autoUpdatePackageKeys.Add(key);
@@ -362,7 +382,7 @@ public sealed partial class ApplicationPreferencesService
             UpdateScheduleDay,
             _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
             AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc,
-            AutomaticCloudBackupEnabled, UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled)));
+            AutomaticCloudBackupEnabled, UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled, StartupPage)));
     }
 
     private bool? _savedAutoUpdateEnabled;
@@ -384,7 +404,8 @@ public sealed partial class ApplicationPreferencesService
         bool AutomaticCloudBackupEnabled = true,
         bool UseViperOfficeDownload = false,
         bool SearchOnDemand = false,
-        bool ProvisioningMenuEnabled = false);
+        bool ProvisioningMenuEnabled = false,
+        ApplicationStartupPage? StartupPage = null);
 }
 
 public sealed record PortableApplicationPreferences(
@@ -395,4 +416,5 @@ public sealed record PortableApplicationPreferences(
     bool UpdateNotificationsEnabled, string[] AutoUpdatePackageKeys,
     bool UseViperOfficeDownload = false,
     bool SearchOnDemand = false,
-    bool ProvisioningMenuEnabled = false);
+    bool ProvisioningMenuEnabled = false,
+    ApplicationStartupPage StartupPage = ApplicationStartupPage.Discover);

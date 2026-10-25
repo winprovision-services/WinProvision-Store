@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace WinProvision.Core.Models;
 
@@ -18,7 +19,32 @@ public partial class UpgradablePackage : INotifyPropertyChanged
     public string CurrentVersion { get; init; } = string.Empty;
     public string AvailableVersion { get; init; } = string.Empty;
     public string Source { get; init; } = string.Empty;
-    public string SourceLabel => Source.Trim().ToLowerInvariant() switch
+
+    /// <summary>Metadados enriquecidos para a interface; não alteram o contrato JSON da CLI.</summary>
+    [JsonIgnore]
+    public string Publisher { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string Description { get; set; } = string.Empty;
+    [JsonIgnore]
+    public List<string> AvailableVersions { get; set; } = [];
+    /// <summary>Alvo validado pelo catálogo WinProvision, independente da oferta do WinGet.</summary>
+    [JsonIgnore]
+    public string WinProvisionApiAvailableVersion { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string? InstalledScope { get; set; }
+    [JsonIgnore]
+    public string? InstalledInstallerType { get; set; }
+    [JsonIgnore]
+    public string? InstalledArchitecture { get; set; }
+    [JsonIgnore]
+    public string? InstalledRegistryId { get; set; }
+    [JsonIgnore]
+    public string? InstalledPublisher { get; set; }
+    [JsonIgnore]
+    public bool IsWinProvisionApiUpdate { get; set; }
+    [JsonIgnore]
+    public string UpdateSource => IsWinProvisionApiUpdate ? "winprovision" : Source;
+    public string SourceLabel => IsWinProvisionApiUpdate ? "WinProvision API" : Source.Trim().ToLowerInvariant() switch
     {
         "winget" => "WinGet",
         "msstore" => "Microsoft Store",

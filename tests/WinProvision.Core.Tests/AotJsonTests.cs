@@ -77,7 +77,8 @@ public sealed class AotJsonTests
     public void PackageOptionsRetainAllExecutionArguments()
     {
         var options = new PackageInstallOptions(true, "machine", "arm64", true, @"C:\Apps",
-            true, "1.2.3", "/custom", true, 2);
+            true, "1.2.3", "/custom", true, 2,
+            PreInstallScript: "Write-Output 'pre'", PostInstallScript: "Write-Output 'post'", RunInstallHooks: true);
         Assert.Equal(options, AotJson.Deserialize<PackageInstallOptions>(AotJson.Serialize(options)));
     }
 

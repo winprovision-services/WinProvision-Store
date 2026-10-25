@@ -17,12 +17,9 @@ public sealed partial class MainWindow : Window
     private readonly ApplicationPreferencesService _applicationPreferences;
     private readonly Windows.UI.ViewManagement.UISettings _motionSettings = new();
     private readonly OperationsViewModel _operations;
-    private readonly Controls.AppDetailsOverlay _details;
+    private Controls.AppDetailsOverlay? _details;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _queueAutoClose;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _cacheBudgetTimer;
-    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _backgroundMemoryTimer;
-    private bool _windowIsActive = true;
-    private bool _catalogReleasedForBackground;
     private bool? _compactNavigation;
     private bool _isNavigating;
     private bool _isClosing;
@@ -30,6 +27,9 @@ public sealed partial class MainWindow : Window
     public FrameworkElement RootElement => Root;
     internal Visibility ProvisioningMenuVisibility => ProvisioningNavigationItem.Visibility;
     internal Page? CurrentPage => PageHost.Content as Page;
+    internal Controls.AppDetailsOverlay? CreatedDetailsOverlay => _details;
+    internal AppDetailsViewModel? CreatedDetailsViewModel =>
+        _details is null ? null : _services.GetRequiredService<AppDetailsViewModel>();
     public MainWindow(IServiceProvider services)
     {
         _services = services;
@@ -43,12 +43,10 @@ public sealed partial class MainWindow : Window
         QueuePanel.DataContext = _operations;
         Root.ActualThemeChanged += (_, _) => QueuePanel.RequestedTheme = Root.ActualTheme;
         QueuePopup.Closed += (_, _) => QueuePanel.CloseOutput();
-        _details = services.GetRequiredService<Controls.AppDetailsOverlay>();
-        DetailsOverlayHost.Content = _details;
-        services.GetRequiredService<PresentationService>().DetailsPresenter = _details.ShowAsync;
+        services.GetRequiredService<PresentationService>().DetailsPresenter = ShowDetailsAsync;
         services.GetRequiredService<PresentationService>().AppUpdatesPresenter = () =>
         {
-            _details.Close();
+            _details?.Close();
             Navigate("settings");
             if (CurrentPage is SettingsPage settings) settings.NavigateToCategory("General");
         };
@@ -58,18 +56,6 @@ public sealed partial class MainWindow : Window
         _cacheBudgetTimer.Interval = TimeSpan.FromSeconds(15);
         _cacheBudgetTimer.Tick += (_, _) => AsyncImage.RefreshMemoryBudget();
         _cacheBudgetTimer.Start();
-        _backgroundMemoryTimer = DispatcherQueue.CreateTimer();
-        _backgroundMemoryTimer.Interval = TimeSpan.FromSeconds(30);
-        _backgroundMemoryTimer.Tick += async (_, _) =>
-        {
-            _backgroundMemoryTimer.Stop();
-            if (_windowIsActive || _operations.HasPending || _details.IsOpen || PageHost.Content is not HomePage home)
-                return;
-            await home.SuspendForBackgroundAsync();
-            _catalogReleasedForBackground = !_windowIsActive;
-            if (_windowIsActive)
-                await home.ResumeFromBackgroundAsync();
-        };
         _operations.PropertyChanged += Operations_Changed;
         UpdateTaskbarBadge();
         ExtendsContentIntoTitleBar = true;
@@ -80,26 +66,17 @@ public sealed partial class MainWindow : Window
         Activated += (_, args) =>
         {
             bool active = args.WindowActivationState != WindowActivationState.Deactivated;
-            _windowIsActive = active;
             if (PageHost.Content is HomePage home)
                 home.SetWindowActive(active);
             if (!active)
             {
                 AsyncImage.TrimForBackground();
                 _cacheBudgetTimer.Stop();
-                if (!_operations.HasPending)
-                    _backgroundMemoryTimer.Start();
             }
             else
             {
-                _backgroundMemoryTimer.Stop();
                 AsyncImage.RestoreForegroundBudget();
                 _cacheBudgetTimer.Start();
-                if (_catalogReleasedForBackground && PageHost.Content is HomePage homePage)
-                {
-                    _catalogReleasedForBackground = false;
-                    _ = homePage.ResumeFromBackgroundAsync();
-                }
             }
         };
         AppWindow.Closing += AppWindow_Closing;
@@ -123,9 +100,18 @@ public sealed partial class MainWindow : Window
             if (!_isClosing)
             {
                 Controls.FluentMotion.RefreshTree(Root);
-                _details.RefreshMotionPreference();
+                _details?.RefreshMotionPreference();
             }
         });
+    }
+    private Task ShowDetailsAsync(WinProvision.Core.Models.AppEntry app, string? currentVersion, string? availableVersion)
+    {
+        if (_isClosing || App.CurrentApp.IsShuttingDown || App.CurrentApp.ShutdownComplete)
+            return Task.CompletedTask;
+
+        Controls.AppDetailsOverlay details = _details ??= _services.GetRequiredService<Controls.AppDetailsOverlay>();
+        DetailsOverlayHost.Content = details;
+        return details.ShowAsync(app, currentVersion, availableVersion);
     }
     private async void Root_Loaded(object sender, RoutedEventArgs e)
     {
@@ -137,8 +123,13 @@ public sealed partial class MainWindow : Window
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Move(new PointInt32(area.X + Math.Max(0, (area.Width - AppWindow.Size.Width) / 2), area.Y + Math.Max(0, (area.Height - AppWindow.Size.Height) / 2)));
         UpdateNavigationLayout();
-        RootNavigation.SelectedItem = RootNavigation.MenuItems[0];
-        if (!App.IsSmokeTest)
+        Navigate(_applicationPreferences.StartupPage switch
+        {
+            ApplicationStartupPage.Updates => "updates",
+            ApplicationStartupPage.Installed => "installed",
+            _ => "home"
+        });
+        if (!App.IsSmokeTest && CurrentPage is HomePage)
         {
             ShowStartupSplash();
             await _services.GetRequiredService<HomeViewModel>().Storefront.InitialContentReady;
@@ -225,7 +216,7 @@ public sealed partial class MainWindow : Window
     private void Root_KeyDown(object sender, KeyRoutedEventArgs args)
     {
         if (args.Key != Windows.System.VirtualKey.Escape) return;
-        if (_details.HandleBack()) { args.Handled = true; return; }
+        if (_details?.HandleBack() == true) { args.Handled = true; return; }
         if (!_operations.IsQueueOpen) return;
         if (!QueuePanel.CloseOutput()) _operations.IsQueueOpen = false;
         args.Handled = true;
@@ -237,10 +228,6 @@ public sealed partial class MainWindow : Window
         if (args.PropertyName != nameof(OperationsViewModel.HasPending)) return;
         _queueAutoClose.Stop();
         if (!_operations.HasPending && _operations.HasOperations) _queueAutoClose.Start();
-        if (!_windowIsActive && !_operations.HasPending && !_details.IsOpen && PageHost.Content is HomePage)
-            _backgroundMemoryTimer.Start();
-        else if (_operations.HasPending)
-            _backgroundMemoryTimer.Stop();
     }
     private void UpdateTaskbarBadge()
     {

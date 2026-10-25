@@ -16,11 +16,13 @@ public sealed class ApplicationEngine : IAsyncDisposable
     private readonly object _provisionGate = new();
     private Task<WingetBootstrapResult>? _provisionTask;
 
-    public ApplicationEngine(Action<string> diagnostic, Func<PackageInstallMethod>? preferredMethod = null)
+    public ApplicationEngine(Action<string> diagnostic, Func<PackageInstallMethod>? preferredMethod = null,
+        Func<PackageUpdateMethod>? preferredUpdateMethod = null)
     {
         _diagnostic = diagnostic;
         _bootstrapper = new(); _executor = new(); _api = new(); _catalog = new(); _ownsServices = true;
-        _packages = new(_executor, _api, _bootstrapper, preferredMethod, provision: ProvisionAsync, diagnostic: diagnostic);
+        _packages = new(_executor, _api, _bootstrapper, preferredMethod,
+            provision: ProvisionAsync, diagnostic: diagnostic, preferredUpdateMethod: preferredUpdateMethod);
     }
 
     public ApplicationEngine(WinGetService packages, WingetExecutor executor, WinProvisionApiService api,
@@ -33,8 +35,12 @@ public sealed class ApplicationEngine : IAsyncDisposable
         PackageInstallOptions? options = null, Action<InstallProgressUpdate>? onProgress = null, string source = "winget")
         => _packages.InstallPreferredAsync(id, log, token, options, onProgress, source);
     public Task<WingetExecutionResult> UpdateAsync(string id, Action<string>? log = null, CancellationToken token = default,
-        string source = "winget", Action<InstallProgressUpdate>? onProgress = null)
-        => _packages.UpdateAsync(id, log, token, source, onProgress);
+        string source = "winget", Action<InstallProgressUpdate>? onProgress = null,
+        UpgradablePackage? offeredPackage = null, PackageInstallOptions? updateOptions = null)
+        => _packages.UpdateAsync(id, log, token, source, onProgress, offeredPackage, updateOptions);
+    public Task<WingetExecutionResult> VerifySuccessfulUpgradeAsync(UpgradablePackage package,
+        WingetExecutionResult result, CancellationToken token)
+        => _packages.VerifySuccessfulUpgradeAsync(package, result, token);
     public Task PrepareAsync(CancellationToken token, bool includeStore, Action<string>? log)
         => _packages.PrepareAsync(token, includeStore, log);
 
@@ -60,15 +66,43 @@ public sealed class ApplicationEngine : IAsyncDisposable
         await EnsureAsync(token);
         var result = await PackageQueryFallback.RunAsync<List<UpgradablePackage>>(
         [
+            ct => SearchWinProvisionCatalogAsync(request, ct),
             async ct => (await _packages.SearchComOnlyAsync(request.Id ?? request.Query, ct))
                 .Where(p => Matches(p.PackageId, p.Name, p.Source, request))
                 .Select(p => new UpgradablePackage { Id = p.PackageId, Name = p.Name, AvailableVersion = p.Version, Source = p.Source }).ToList(),
-            async ct => (await _catalog.LoadCatalogAsync(cancellationToken: ct))
-                .Where(p => Matches(p.Id, p.Name, p.Source, request))
-                .Select(p => new UpgradablePackage { Id = p.Id, Name = p.Name, AvailableVersion = p.Version, Source = p.Source }).ToList(),
             ct => _cli.SearchAsync(request, ct)
         ], items => items.Count > 0, _diagnostic, token).ConfigureAwait(false);
         return result;
+    }
+
+    private async Task<List<UpgradablePackage>> SearchWinProvisionCatalogAsync(
+        InteractiveCliRequest request, CancellationToken token)
+    {
+        await _catalog.LoadCatalogAsync(cancellationToken: token).ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+
+        string query = request.Id ?? request.Query;
+        return _catalog.Search(query)
+            .Where(app => MatchesWinProvisionCatalogEntry(app, request))
+            .Select(app => new UpgradablePackage
+            {
+                Id = app.Id,
+                Name = app.Name,
+                AvailableVersion = app.Version,
+                Source = app.Source
+            })
+            .ToList();
+    }
+
+    internal static bool MatchesWinProvisionCatalogEntry(AppEntry app, InteractiveCliRequest request)
+    {
+        if (request.Source is not null && !app.Source.Equals(request.Source, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (request.Id is not null)
+            return app.Id.Equals(request.Id, StringComparison.OrdinalIgnoreCase);
+        return !request.Exact
+            || app.Id.Equals(request.Query, StringComparison.OrdinalIgnoreCase)
+            || app.Name.Equals(request.Query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool Matches(string id, string name, string source, InteractiveCliRequest request)
@@ -87,7 +121,6 @@ public sealed class ApplicationEngine : IAsyncDisposable
     }
     public async Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token)
     {
-        await EnsureAsync(token);
         return await _packages.GetUpgradablePackagesAsync(log, token);
     }
     public async Task<string> DetailsAsync(string id, string source, CancellationToken token)
@@ -99,34 +132,26 @@ public sealed class ApplicationEngine : IAsyncDisposable
                     ?? throw new NotSupportedException("Pacote não encontrado pela COM.");
                 return $"{match.Name}\nID: {match.PackageId}\nVersão: {match.Version}\nEditor: {match.Publisher}\nOrigem: {match.Source}";
             },
+            ct => _cli.DetailsAsync(id, source, ct),
             async ct => {
                 var manifest = await _api.GetPackageAsync(id, ct, source) ?? throw new NotSupportedException("Pacote ausente do catálogo próprio.");
                 return $"ID: {manifest.Id}\nVersão: {manifest.Version}\nOrigem: {manifest.Source}\nInstaladores: {manifest.Installers.Count}";
-            },
-            ct => _cli.DetailsAsync(id, source, ct)
+            }
         ], _ => true, _diagnostic, token);
     }
     public async Task<WingetExecutionResult> ExecuteUpdateAsync(UpgradablePackage package, PackageInstallOptions options,
         Action<string> log, CancellationToken token)
     {
-        await EnsureAsync(token);
-        if (options.Interactive || options.RequiresElevation || options.Scope is not null || options.Architecture is not null)
-        {
-            var result = await _executor.UpdateAppAsync(package.Id, log, token, source: package.Source,
-                scope: options.Scope, architecture: options.Architecture, interactive: options.Interactive,
-                requiresElevation: options.RequiresElevation);
-            _packages.RecordSuccessfulUpgrade(package, result);
-            return result;
-        }
-        return await _packages.UpdateAsync(package.Id, log, token, source: package.Source);
+        return await _packages.UpdateAsync(package.Id, log, token, source: package.Source,
+            offeredPackage: package, updateOptions: options);
     }
 
     public async Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
     {
-        await EnsureAsync(token);
         // This shared service owns fallback and the installer-started guard. Never retry its result here.
         return install ? await _packages.InstallPreferredAsync(package.Id, log, token, source: package.Source)
-            : await _packages.UpdateAsync(package.Id, log, token, source: package.Source);
+            : await _packages.UpdateAsync(package.Id, log, token, source: package.Source,
+                offeredPackage: package);
     }
     public async Task<WingetExecutionResult> DownloadAsync(UpgradablePackage package, string? directory, Action<string> log, CancellationToken token)
     {
@@ -169,17 +194,31 @@ public sealed class ApplicationEngine : IAsyncDisposable
     {
         await EnsureAsync(token);
         var comResult = await _packages.UninstallComOnlyAsync(id, source, token);
-        if (comResult is not null) return comResult;
+        if (comResult is { } com)
+        {
+            if (!CanFallbackAfterComUninstall(com)) return com;
+            log("A COM falhou antes de iniciar o desinstalador; tentando a rota verificada do WinProvision.");
+        }
         var installed = new InstalledAppsService();
         await installed.EnsureLoadedAsync(token);
         var match = installed.GetAllInstalledApps().FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
-        if (match is not null && source is not "msstore")
+        if (match is not null && CanUseWinProvisionUninstall(source))
         {
             var ownResult = await _api.UninstallAsync(match, new UninstallerEngineService(), log, token);
             if (ownResult is bool success) return new() { Success = success, ExitCode = success ? 0 : 1, InstallerStarted = true };
         }
         return await _cli.UninstallAsync(id, source, log, token);
     }
+
+    internal static bool CanFallbackAfterComUninstall(WingetExecutionResult result) =>
+        !result.Success
+        && !result.InstallerStarted
+        && result.FailureReason is not (WingetFailureReason.ElevationCanceled
+            or WingetFailureReason.BlockedByPolicy
+            or WingetFailureReason.OperationCanceled);
+
+    internal static bool CanUseWinProvisionUninstall(string? source) =>
+        !string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase);
     public Task<string> OfficeAsync(bool offline, Action<string> log, CancellationToken token)
     {
         var service = new WinProvision.Core.Services.Office.OfficeCliDownloadService(new WinProvision.Core.Services.Profile.OfflineOfficeSource(_api));

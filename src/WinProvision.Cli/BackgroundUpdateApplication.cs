@@ -6,6 +6,9 @@ namespace WinProvision.Cli;
 
 public static class BackgroundUpdateApplication
 {
+    private const int MaxPackageUpdateRetries = 1;
+    private static readonly TimeSpan PackageUpdateRetryDelay = TimeSpan.FromSeconds(1);
+
     public static async Task<int> RunAsync(ICliPackageBackend backend, ApplicationPreferencesService preferences,
         IgnoredUpdatesService ignored, Action<string> log, Action<int>? checkedSummary = null,
         Action<int, int, int>? completedSummary = null, CancellationToken token = default, bool force = false,
@@ -33,8 +36,21 @@ public static class BackgroundUpdateApplication
             token.ThrowIfCancellationRequested();
             try
             {
-                if ((await backend.ExecuteAsync(false, package, log, token)).Success) succeeded++;
-                else failed++;
+                var result = await backend.ExecuteAsync(false, package, log, token);
+                for (int retry = 1; ShouldRetryUpdate(result, retry, token); retry++)
+                {
+                    log($"A atualização de {package.Name} falhou antes de iniciar o instalador; nova tentativa {retry} de {MaxPackageUpdateRetries}.");
+                    await Task.Delay(PackageUpdateRetryDelay, token);
+                    result = await backend.ExecuteAsync(false, package, log, token);
+                }
+                if (result.Success) succeeded++;
+                else
+                {
+                    failed++;
+                    log(result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
+                        ? result.Output
+                        : WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", package.Name));
+                }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch (Exception ex) { failed++; log(CliApplication.Clean(ex.Message)); }
@@ -47,6 +63,12 @@ public static class BackgroundUpdateApplication
         completedSummary?.Invoke(succeeded, failed, candidates.Length - succeeded - failed);
         return failed == 0 ? 0 : 1;
     }
+
+    internal static bool ShouldRetryUpdate(WingetExecutionResult result, int retry, CancellationToken token) =>
+        retry <= MaxPackageUpdateRetries && !token.IsCancellationRequested
+        && !WinProvisionElevationState.HasFailedThisSession && !result.Success
+        && !result.InstallerStarted && !result.WasElevated
+        && result.FailureReason is WingetFailureReason.DownloadError or WingetFailureReason.CatalogError;
 
     public static async Task<int> RunScheduledAsync(CancellationToken token, bool force = false)
     {
@@ -78,7 +100,8 @@ public static class BackgroundUpdateApplication
         if (preferences.UpdateNotificationsEnabled) notifications.TryRegister();
         var installation = new InstallationPreferencesService();
         var options = new PackageInstallOptionsService();
-        await using var backend = new ResilientCliBackend(Log, () => installation.PreferredMethod, options.Get);
+        await using var backend = new ResilientCliBackend(Log, () => installation.PreferredMethod, options.Get,
+            () => installation.PreferredUpdateMethod);
         var previous = BackgroundUpdateRunStore.Read();
         var state = new BackgroundUpdateRunState(DateTimeOffset.UtcNow);
         void SaveState()

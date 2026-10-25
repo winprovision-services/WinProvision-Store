@@ -4,9 +4,11 @@ O cache descartável `Cache/featured-store-banners.json` contém a segunda-feira
 
 Este documento registra as regras de compatibilidade do WinProvision Store.
 
+A identidade MSI lida do instalador validado e os indicadores de identidade comprovada/confirmação de versão são metadados transitórios, omitidos do JSON. A confirmação aceita versões numéricas equivalentes ou superiores ao alvo e não altera históricos anteriores, formatos de coleção, preferências ou códigos públicos da CLI. Uma falha de confirmação registra também as versões e os escopos encontrados no Windows.
+
 `%LOCALAPPDATA%/WinProvisionStore/stuck-upgrades.json` é um estado local descartável de tentativas de atualização WinGet. Guarda origem, ID, versão instalada, versão alvo, contador limitado a três e data. Não faz parte de perfis, backups ou contratos da CLI; arquivo ausente ou inválido reinicia apenas a detecção de ciclos de atualização.
 
-`installation-preferences.json` continua armazenando o enum textual `PreferredMethod`. Preferências existentes com o valor legado `WinGetPkgsViper` são migradas para `Automatic`; o valor permanece no enum para que arquivos antigos continuem legíveis. `Automatic` segue como padrão.
+`installation-preferences.json` armazena os enums `PreferredMethod` e `PreferredUpdateMethod`. O segundo campo é opcional para leitura retrocompatível e assume `Automatic` quando ausente; alterar uma preferência preserva a outra. Preferências existentes com o valor legado `WinGetPkgsViper` são migradas para `Automatic`; o valor permanece no enum para que arquivos antigos continuem legíveis. Ambos os padrões são `Automatic`.
 O histórico preserva o rótulo `WinGet-Pkgs + Viper` para operações gravadas por versões anteriores; novas operações não usam esse método. Os valores existentes dos enums preservam suas posições.
 
 ## Sessões do WinProvision Viper
@@ -18,6 +20,8 @@ O módulo independente usa arquivos adjacentes ao destino: `.viper.part`, `.vipe
 Partes concluídas são sincronizadas no disco antes de substituir atomicamente o checkpoint. Na retomada, o motor valida versão do formato, impressão digital, tamanho, tamanho das partes, ETag e hash de cada parte. Partes locais divergentes são baixadas novamente. O destino final só é publicado após conclusão e eventual validação do SHA-256 esperado; por padrão, um destino existente gera falha e permanece intacto. A API pode selecionar `ReuseIfVerified`, que exige SHA-256 esperado e retorna sucesso sem rede apenas quando o arquivo final já confere; a CLI dedicada expõe esse modo como `--reuse-verified` e no campo opcional `reuseIfVerified` do lote. Cancelamentos preservam trabalho retomável, e falha do SHA-256 final descarta os bytes inválidos. A adição não altera contratos da Store ou da CLI `winprovision`.
 
 ## Preferências e coleções
+
+`%LOCALAPPDATA%/WinProvisionStore/package-install-options.json` mantém as opções reutilizáveis por pacote WinGet, incluindo `CustomArguments`, `PreInstallScript` e `PostInstallScript`. Scripts são texto PowerShell inline, limitados a 32 KiB cada, exclusivos deste arquivo local e nunca entram em perfis, backups ou scripts de coleção. A opção de execução é sempre transitória (`RunInstallHooks=false` ao salvar): apenas a instalação individual iniciada pela interface pode habilitar hooks explicitamente. Arquivos antigos sem esses campos continuam válidos.
 
 Perfis de coleção mantêm `schemaVersion`, `createdAt`, `name` e `apps`; o campo opcional `provisioning` contém configurações do Windows exportadas para uma máquina de destino. `ProfileBackupSet.provisioning` continua aceito por compatibilidade com backups anteriores, e quando há uma configuração por perfil ela é promovida ao nível do backup ao importar coleções. Perfil só de provisionamento pode omitir `apps`; os campos opcionais ausentes significam manter a configuração de destino. O módulo WinUI atual edita e transporta esses dados, preservando perfis antigos sem o campo.
 
@@ -38,6 +42,8 @@ Preferências de agendamento preservam os valores existentes de `UpdateSchedule`
 `app-preferences.json` e as configurações portáteis versão 1 aceitam `SearchOnDemand` (booleano, padrão `false` quando ausente). Quando ativado, Descobrir aguarda uma pesquisa para carregar o catálogo e libera os dados da vitrine ao limpar a consulta. Arquivos anteriores continuam compatíveis e mantêm a vitrine completa como padrão.
 
 `app-preferences.json` e as configurações portáteis versão 1 aceitam `ProvisioningMenuEnabled` (booleano, padrão `false` quando ausente). Quando ativado, exibe o menu Provisionamento na navegação; desativá-lo oculta o menu sem remover os perfis existentes. Arquivos anteriores continuam compatíveis e mantêm o menu oculto.
+
+`app-preferences.json` e as configurações portáteis versão 1 aceitam `StartupPage` (enum numérico opcional: `Discover=0`, `Updates=1`, `Installed=2`; padrão `Discover`). A preferência escolhe a página aberta ao iniciar a interface. Valores ausentes abrem Descobrir; um valor inválido no arquivo local também é ignorado, enquanto a importação portátil rejeita opções inválidas. A inicialização em segundo plano pela CLI não usa essa opção. Exportações portáteis anteriores continuam compatíveis.
 
 O arquivo local `background-update-state.json` armazena `StartedUtc`, `CompletedUtc`, `ExitCode`, `Available` e `Fingerprint`. Ele não altera as coleções nem o contrato JSON público da CLI; ausência ou arquivo inválido não impedem abrir as configurações. A impressão digital identifica o conjunto de IDs, origens e versões disponíveis, sem armazenar saídas brutas de serviços.
 
@@ -139,3 +145,9 @@ Registre mudanças de comportamento no [histórico](../CHANGELOG.md).
 O cache do Elevator passa a ser automático e fixo em 5 minutos de inatividade para interface e CLI, sem opção de duração ou desativação. `--elevation-cache` permanece aceito por compatibilidade e torna-se redundante. A autorização inicial continua no UAC; o vínculo ao processo e a invalidação na saída são preservados.
 
 “Iniciar com o Windows” passa a ativar atualizações pela CLI, preservando o esquema de `app-preferences.json`. Registros existentes de abertura da interface são migrados ao carregar as preferências e passam a habilitar `AutoUpdateAtStartup`. As entradas de logon usam a CLI; a entrada adicional de atualização é omitida quando já existe a entrada principal para evitar execução duplicada. Desativar a atualização automática também desativa essa inicialização.
+
+No modo de atualização WinProvision API, o inventário é lido do Registro do Windows e comparado ao catálogo `winget/v1` ou ao seu cache validado, sem depender de WinGet. A chave local da instalação e a arquitetura conferida no executável são metadados transitórios, omitidos do JSON público da CLI. Registros de usuário e máquina com o mesmo nome não são fundidos. O índice R2 deve publicar a versão nova para que ela seja oferecida; atualizar apenas a fonte externa WinGet não muda o snapshot próprio.
+
+Fabricante e tecnologia desconhecidos permanecem ausentes no inventário de atualizações, sem inferir família EXE a partir de um desinstalador. O ProductCode usado para confirmar uma atualização API vem de `installers[].productCode` do detalhe validado e permanece metadado transitório do resultado, omitido do JSON. Os formatos públicos de catálogo, preferências e CLI não mudam.
+
+A identidade transitória do Registro inclui hive, visão e subchave, evitando confundir instalações de escopos ou arquiteturas diferentes; HKCU compartilhado entre visões é lido uma vez. Fabricante instalado, origem de apresentação e resultado “já atualizado” também são transitórios. `UpdateSource=winprovision` e o rótulo **WinProvision API** distinguem a origem na interface; o campo histórico `source=winget` continua sendo a chave de roteamento do catálogo/JSON público, sem exigir WinGet para consultar o inventário ou atualizar pela API. Nenhuma preferência de filtro é persistida.

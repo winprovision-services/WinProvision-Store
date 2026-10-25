@@ -11,7 +11,10 @@ public sealed record PackageInstallOptions(
     string? Version = null,
     string? CustomArguments = null,
     bool AutoUpdate = false,
-    int? SkipMinorVersionSegments = null)
+    int? SkipMinorVersionSegments = null,
+    string? PreInstallScript = null,
+    string? PostInstallScript = null,
+    bool RunInstallHooks = false)
 {
     public bool RequiresWingetCli => Interactive
         || RequiresElevation

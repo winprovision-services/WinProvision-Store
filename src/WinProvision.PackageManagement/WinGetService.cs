@@ -23,15 +23,18 @@ public sealed partial class WinGetService
     private static readonly TimeSpan ComProgressTimeout = TimeSpan.FromSeconds(180);
     private const int MaxPreflightAttempts = 3;
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan UpdateQueryTimeout = TimeSpan.FromSeconds(20);
     private readonly WingetExecutor _wingetExecutor;
     private readonly WinProvisionApiService _apiService;
     private readonly WinGetPkgsManifestService _winGetPkgs = new();
     private readonly Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>> _provision;
     private readonly Func<PackageInstallMethod> _preferredMethod;
+    private readonly Func<PackageUpdateMethod> _preferredUpdateMethod;
+    private readonly Func<CancellationToken, Task<List<UpgradablePackage>>> _apiInventory;
     private int _postProvisionHandled;
     private readonly WingetBootstrapper _bootstrapper;
     private readonly Action<string> _diagnostic;
-    private readonly StuckUpgradeTracker _stuckUpgrades = new();
+    private readonly StuckUpgradeTracker _stuckUpgrades;
     private readonly ConcurrentDictionary<string, UpgradablePackage> _offeredUpgrades = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string> _localIdentifiers = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _comReadinessGate = new(1, 1);
@@ -75,7 +78,11 @@ public sealed partial class WinGetService
         WinProvisionApiService apiService,
         WingetBootstrapper bootstrapper,
         Func<PackageInstallMethod>? preferredMethod = null,
-        Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>>? provision = null, Action<string>? diagnostic = null)
+        Func<Action<string>?, CancellationToken, Task<WingetBootstrapResult>>? provision = null,
+        Action<string>? diagnostic = null,
+        Func<PackageUpdateMethod>? preferredUpdateMethod = null,
+        Func<CancellationToken, Task<List<UpgradablePackage>>>? apiInventory = null,
+        string? stuckUpgradeStatePath = null)
     {
         _bootstrapper = bootstrapper;
         _diagnostic = diagnostic ?? PackageDiagnostics.Write;
@@ -83,6 +90,9 @@ public sealed partial class WinGetService
         _apiService = apiService;
         _provision = provision ?? ((log, token) => bootstrapper.EnsureOnceAsync(log, token));
         _preferredMethod = preferredMethod ?? (() => PackageInstallMethod.Automatic);
+        _preferredUpdateMethod = preferredUpdateMethod ?? (() => PackageUpdateMethod.Automatic);
+        _apiInventory = apiInventory ?? ReadRegistryInventoryAsync;
+        _stuckUpgrades = new StuckUpgradeTracker(stuckUpgradeStatePath);
     }
 
     /// <summary>
@@ -305,17 +315,24 @@ public sealed partial class WinGetService
         // Compatibilidade com preferências antigas: esse modo duplicava a API própria.
         if (method == PackageInstallMethod.WinGetPkgsViper)
             method = PackageInstallMethod.Automatic;
-        // A API COM instala sempre a versão padrão do CatalogPackage e não oferece
-        // seleção de PackageVersionId. Preserve a versão pedida encaminhando esses
-        // casos ao WinGet CLI, que recebe --version.
-        if (!string.IsNullOrWhiteSpace(options.Version) && method == PackageInstallMethod.ComApi)
+        // COM/API não expõem todas as opções do comando install. Encaminhe as opções
+        // que não podem ser aplicadas com segurança ao CLI, sem perder a seleção do usuário.
+        if (method == PackageInstallMethod.ComApi && RequiresWingetCliForInstallOptions(options))
             return new WingetExecutionResult
             {
                 Success = false,
                 ExitCode = -1,
-                Output = "A API COM do WinGet não permite selecionar uma versão. Escolha Automático, WinProvision API ou WinGet CLI."
+                Output = "A API COM não oferece suporte à versão, arquitetura, argumentos personalizados ou à opção de ignorar o hash solicitados. Escolha Automático ou WinGet CLI."
             };
-        if (!string.IsNullOrWhiteSpace(options.Version) && method == PackageInstallMethod.Automatic)
+        if (method == PackageInstallMethod.WinProvisionApi
+            && RequiresWingetCliForApiInstallOptions(options))
+            return new WingetExecutionResult
+            {
+                Success = false,
+                ExitCode = -1,
+                Output = "A WinProvision API não oferece suporte ao local, modo interativo, argumentos personalizados ou à opção de ignorar o hash solicitados. Escolha Automático ou WinGet CLI."
+            };
+        if (method == PackageInstallMethod.Automatic && RequiresWingetCliForInstallOptions(options))
         {
             onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
             await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
@@ -433,6 +450,26 @@ public sealed partial class WinGetService
         }
     }
 
+    internal static bool RequiresWingetCliForInstallOptions(PackageInstallOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        // A COM aceita modo interativo, escopo e local; a API própria valida o hash
+        // obrigatoriamente. Essas opções, por outro lado, só são executáveis pelo CLI.
+        return !string.IsNullOrWhiteSpace(options.Version)
+            || !string.IsNullOrWhiteSpace(options.Architecture)
+            || !string.IsNullOrWhiteSpace(options.CustomArguments)
+            || options.IgnoreSecurityHash;
+    }
+
+    internal static bool RequiresWingetCliForApiInstallOptions(PackageInstallOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return !string.IsNullOrWhiteSpace(options.InstallLocation)
+            || options.Interactive
+            || !string.IsNullOrWhiteSpace(options.CustomArguments)
+            || options.IgnoreSecurityHash;
+    }
+
     /// <summary>
     /// Atualiza um pacote já instalado. Mesma cadeia de fallback e mesma robustez de
     /// <see cref="InstallAsync"/> (COM com retry/watchdog/heartbeat -&gt; API própria -&gt; CLI),
@@ -450,14 +487,357 @@ public sealed partial class WinGetService
         Action<string>? onLogReceived = null,
         CancellationToken cancellationToken = default,
         string source = "winget",
-        Action<InstallProgressUpdate>? onProgress = null)
+        Action<InstallProgressUpdate>? onProgress = null,
+        UpgradablePackage? offeredPackage = null,
+        PackageInstallOptions? updateOptions = null)
     {
-        var result = await RunInstallOrUpgradeAsync(
-            ComOperationKind.Upgrade, packageId, onLogReceived, cancellationToken, null, onProgress, source)
-            .ConfigureAwait(false);
-        if (_offeredUpgrades.TryGetValue(UpgradeKey(source, packageId), out var offered))
-            RecordSuccessfulUpgrade(offered, result);
+        _offeredUpgrades.TryGetValue(UpgradeKey(source, packageId), out var cachedOffer);
+        var offered = offeredPackage ?? cachedOffer;
+        PackageUpdateMethod method = _preferredUpdateMethod();
+        string? selectedTarget = updateOptions?.Version;
+        if (string.IsNullOrWhiteSpace(selectedTarget) && offered is not null)
+            selectedTarget = method == PackageUpdateMethod.WinProvisionApi
+                ? offered.WinProvisionApiAvailableVersion
+                : null;
+        if (string.IsNullOrWhiteSpace(selectedTarget))
+            selectedTarget = offered?.AvailableVersion;
+        if (offered is not null && !string.IsNullOrWhiteSpace(selectedTarget))
+        {
+            var freshInventory = await GetUpdateInventoryAsync(cancellationToken).ConfigureAwait(false);
+            var current = ResolveCurrentUpdateInstallation(offered, freshInventory);
+            if (current is not null && IsUpdateSatisfied(current.CurrentVersion, selectedTarget))
+                return AlreadyUpdated(current.CurrentVersion, selectedTarget, onLogReceived);
+        }
+        if (offered is not null)
+            _offeredUpgrades[UpgradeKey(source, packageId)] = offered;
+        UpgradablePackage? verificationOffer = offered;
+        if (verificationOffer is not null && !string.IsNullOrWhiteSpace(selectedTarget)
+            && !verificationOffer.AvailableVersion.Equals(selectedTarget, StringComparison.Ordinal))
+            verificationOffer = new UpgradablePackage
+            {
+                Id = verificationOffer.Id,
+                Name = verificationOffer.Name,
+                Source = verificationOffer.Source,
+                CurrentVersion = verificationOffer.CurrentVersion,
+                AvailableVersion = selectedTarget,
+                Publisher = verificationOffer.Publisher,
+                Description = verificationOffer.Description,
+                AvailableVersions = verificationOffer.AvailableVersions,
+                WinProvisionApiAvailableVersion = verificationOffer.WinProvisionApiAvailableVersion,
+                IsWinProvisionApiUpdate = verificationOffer.IsWinProvisionApiUpdate,
+                InstalledRegistryId = verificationOffer.InstalledRegistryId,
+                InstalledPublisher = verificationOffer.InstalledPublisher,
+                InstalledScope = verificationOffer.InstalledScope,
+                InstalledArchitecture = verificationOffer.InstalledArchitecture,
+                InstalledInstallerType = verificationOffer.InstalledInstallerType
+            };
+        bool requiresCli = RequiresCliForUpdateOptions(updateOptions);
+        if (method == PackageUpdateMethod.Automatic && requiresCli)
+            method = PackageUpdateMethod.WingetCli;
+        if (method == PackageUpdateMethod.ComApi && requiresCli)
+            return new WingetExecutionResult
+            {
+                Success = false, ExitCode = -1,
+                Output = "A API COM não aceita a versão específica, argumentos personalizados ou a opção de ignorar hash solicitados para esta atualização.",
+                FailureReason = WingetFailureReason.NoApplicableUpgrade
+            };
+        if (method == PackageUpdateMethod.WinProvisionApi && RequiresCliForApiUpdateOptions(updateOptions))
+            return new WingetExecutionResult
+            {
+                Success = false, ExitCode = -1,
+                Output = "A WinProvision API exige hash verificado e não oferece modo interativo, pasta ou argumentos personalizados para atualização.",
+                FailureReason = WingetFailureReason.NoApplicableUpgrade
+            };
+
+        var result = method switch
+        {
+            PackageUpdateMethod.ComApi => await RunInstallOrUpgradeAsync(
+                ComOperationKind.Upgrade, packageId, onLogReceived, cancellationToken, null, onProgress,
+                source, forceComOnly: true, options: updateOptions).ConfigureAwait(false),
+            PackageUpdateMethod.WinProvisionApi => await TryApiUpdateThenCliAsync(
+                packageId, onLogReceived, onProgress, cancellationToken, source,
+                "método WinProvision API selecionado", options: updateOptions,
+                fallbackToCli: false).ConfigureAwait(false),
+            PackageUpdateMethod.WingetCli => await RunCliUpdateFallbackAsync(
+                packageId, onLogReceived, onProgress, cancellationToken, source,
+                ResolveExecutionScope(null), updateOptions).ConfigureAwait(false),
+            _ => await RunInstallOrUpgradeAsync(
+                ComOperationKind.Upgrade, packageId, onLogReceived, cancellationToken, null, onProgress,
+                source, options: updateOptions).ConfigureAwait(false)
+        };
+        if (result.Success && !string.IsNullOrWhiteSpace(result.ApiUpdateTargetVersion)
+            && verificationOffer is not null)
+        {
+            verificationOffer = new UpgradablePackage
+            {
+                Id = verificationOffer.Id,
+                Name = verificationOffer.Name,
+                Source = verificationOffer.Source,
+                CurrentVersion = verificationOffer.CurrentVersion,
+                AvailableVersion = result.ApiUpdateTargetVersion,
+                Publisher = verificationOffer.Publisher,
+                Description = verificationOffer.Description,
+                AvailableVersions = verificationOffer.AvailableVersions,
+                WinProvisionApiAvailableVersion = verificationOffer.WinProvisionApiAvailableVersion,
+                IsWinProvisionApiUpdate = verificationOffer.IsWinProvisionApiUpdate,
+                InstalledRegistryId = verificationOffer.InstalledRegistryId,
+                InstalledPublisher = verificationOffer.InstalledPublisher,
+                InstalledScope = verificationOffer.InstalledScope,
+                InstalledArchitecture = verificationOffer.InstalledArchitecture,
+                InstalledInstallerType = verificationOffer.InstalledInstallerType
+            };
+        }
+        if (!result.Success || result.UpdateAlreadySatisfied || result.UpdateVersionVerified) return result;
+        return verificationOffer is null
+            ? MarkUpdateUnverified(result, "A operação terminou, mas não havia uma versão-alvo conhecida para conferir.")
+            : await VerifySuccessfulUpgradeAsync(verificationOffer, result, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static bool RequiresCliForUpdateOptions(PackageInstallOptions? options) => options is not null
+        && (!string.IsNullOrWhiteSpace(options.Version)
+            || !string.IsNullOrWhiteSpace(options.CustomArguments)
+            || options.IgnoreSecurityHash);
+
+    internal static UpgradablePackage? ResolveCurrentUpdateInstallation(UpgradablePackage offered,
+        IReadOnlyList<UpgradablePackage> inventory)
+    {
+        bool SameInstallation(UpgradablePackage item) =>
+            (offered.InstalledScope is null || offered.InstalledScope.Equals(item.InstalledScope, StringComparison.OrdinalIgnoreCase))
+            && (offered.InstalledArchitecture is null || offered.InstalledArchitecture.Equals(item.InstalledArchitecture, StringComparison.OrdinalIgnoreCase));
+        string identity = offered.InstalledRegistryId ?? offered.Id;
+        var exact = inventory.Where(item => SameInstallation(item)
+            && ((item.InstalledRegistryId ?? item.Id).Equals(identity, StringComparison.OrdinalIgnoreCase)
+                || item.Id.Equals(offered.Id, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (exact.Count > 0) return WinProvisionApiService.SelectUpdateInstallation(exact);
+
+        string publisher = offered.InstalledPublisher ?? offered.Publisher;
+        string name = WinProvisionApiService.NormalizeInstalledName(offered.Name, offered.CurrentVersion);
+        var byName = inventory.Where(item => SameInstallation(item)
+            && WinProvisionApiService.NormalizeInstalledName(item.Name, item.CurrentVersion) == name
+            && (string.IsNullOrWhiteSpace(publisher) || string.IsNullOrWhiteSpace(item.Publisher)
+                || WinProvisionApiService.NormalizeForMatching(item.Publisher) == WinProvisionApiService.NormalizeForMatching(publisher))).ToList();
+        return WinProvisionApiService.SelectUpdateInstallation(byName);
+    }
+
+    internal static bool IsUpdateSatisfied(string installedVersion, string targetVersion) =>
+        WinProvisionApiService.NumericVersionsEqual(installedVersion, targetVersion)
+        || WinProvisionApiService.IsStrictlyNewerNumericVersion(targetVersion, installedVersion);
+
+    private static WingetExecutionResult AlreadyUpdated(string installedVersion, string targetVersion, Action<string>? log)
+    {
+        string message = $"O aplicativo já está atualizado (instalado: {installedVersion}; alvo: {targetVersion}). Nenhum instalador foi executado.";
+        log?.Invoke(message);
+        return new WingetExecutionResult { Success = true, UpdateAlreadySatisfied = true, Output = message };
+    }
+
+    private sealed class AlreadyUpdatedException(string installedVersion, string targetVersion) : InvalidOperationException
+    {
+        public string InstalledVersion { get; } = installedVersion;
+        public string TargetVersion { get; } = targetVersion;
+    }
+
+    internal static bool RequiresCliForApiUpdateOptions(PackageInstallOptions? options) => options is not null
+        && (options.Interactive
+            || !string.IsNullOrWhiteSpace(options.InstallLocation)
+            || !string.IsNullOrWhiteSpace(options.CustomArguments)
+            || options.IgnoreSecurityHash);
+
+    /// <summary>Worker elevado: executa somente a COM; o processo chamador confere a versão ofertada.</summary>
+    public Task<WingetExecutionResult> UpdateComOnlyAsync(
+        string packageId,
+        Action<string>? onLogReceived = null,
+        CancellationToken cancellationToken = default,
+        Action<InstallProgressUpdate>? onProgress = null,
+        string source = "winget") =>
+        RunInstallOrUpgradeAsync(ComOperationKind.Upgrade, packageId, onLogReceived,
+            cancellationToken, null, onProgress, source, forceComOnly: true);
+
+    public async Task<WingetExecutionResult> VerifySuccessfulUpgradeAsync(
+        UpgradablePackage offered, WingetExecutionResult result, CancellationToken cancellationToken)
+    {
+        if (!result.Success || result.UpdateAlreadySatisfied || result.UpdateVersionVerified) return result;
+        if (result.RebootRequired)
+            return MarkUpdateUnverified(result, "A atualização aguarda reinicialização; a versão instalada ainda não foi confirmada.");
+        // Conte sucessos reportados pelo motor mesmo quando a conferência abaixo revela
+        // que a versão não mudou. Sem isso, um motor que retorna sucesso sem atualizar
+        // poderia ser acionado indefinidamente a cada tentativa do usuário.
+        RecordSuccessfulUpgrade(offered, result);
+        if (string.IsNullOrWhiteSpace(offered.AvailableVersion))
+            return MarkUpdateUnverified(result, "A operação terminou, mas não havia uma versão-alvo conhecida para conferir.");
+
+        try
+        {
+            if (offered.IsWinProvisionApiUpdate || !string.IsNullOrWhiteSpace(result.ApiUpdateTargetVersion)
+                || _preferredUpdateMethod() == PackageUpdateMethod.WinProvisionApi)
+            {
+                // A bootstrapper may return before its final ARP registration is visible.
+                // Observe a bounded number of fresh snapshots; never rerun the installer.
+                for (int attempt = 0; ; attempt++)
+                {
+                    var inventory = await GetUpdateInventoryAsync(cancellationToken).ConfigureAwait(false);
+                    if (HasConfirmedApiVersion(offered, result, inventory))
+                        return ConfirmApiUpgradeResult(offered, result, inventory);
+                    if (attempt == 2) return ConfirmApiUpgradeResult(offered, result, inventory);
+                    await Task.Delay(TimeSpan.FromMilliseconds(attempt == 0 ? 250 : 750), cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            // A listagem é uma consulta nova pelo processo CLI. Não usamos o objeto COM
+            // da operação nem o inventário já carregado, que podem refletir cache anterior.
+            using var verifyTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            verifyTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+            var installed = await _wingetExecutor.ListInstalledPackagesAsync(
+                verifyTimeout.Token, NormalizeUpdateSource(offered.Source)).ConfigureAwait(false);
+            result = ConfirmUpgradeResult(offered, result, installed);
+            if (result.Success)
+                result = ConfirmKnownRuntimeVersion(offered, result);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return MarkUpdateUnverified(result,
+                $"Não foi possível confirmar a versão instalada ({exception.GetType().Name}).");
+        }
+
         return result;
+    }
+
+    internal static WingetExecutionResult ConfirmApiUpgradeResult(UpgradablePackage offered,
+        WingetExecutionResult result, IReadOnlyList<UpgradablePackage> inventory)
+    {
+        if (HasConfirmedApiVersion(offered, result, inventory))
+        {
+            result.UpdateVersionVerified = true;
+            return result;
+        }
+        string actual = string.Join(", ", inventory.Where(item =>
+            WinProvisionApiService.NormalizeInstalledName(item.Name, item.CurrentVersion)
+                == WinProvisionApiService.NormalizeInstalledName(offered.Name, offered.CurrentVersion))
+            .Select(item => $"{item.CurrentVersion} ({item.InstalledScope ?? "escopo desconhecido"}, {item.InstalledArchitecture ?? "arquitetura desconhecida"})"));
+        return MarkUpdateUnverified(result,
+            $"O inventário do Windows não confirmou uma instalação única na versão {offered.AvailableVersion} ou superior. Encontrada: {(actual.Length == 0 ? "não localizada" : actual)}.");
+    }
+
+    private static bool HasConfirmedApiVersion(UpgradablePackage offered, WingetExecutionResult result,
+        IReadOnlyList<UpgradablePackage> inventory)
+    {
+        string identity = offered.InstalledRegistryId ?? offered.Id;
+        var matches = inventory.Where(item =>
+            (item.InstalledRegistryId ?? item.Id).Equals(identity, StringComparison.OrdinalIgnoreCase)
+            && (offered.InstalledScope is null || item.InstalledScope == offered.InstalledScope)).ToArray();
+        if (matches.Length == 0 && !string.IsNullOrWhiteSpace(result.ApiUpdateProductCode))
+        {
+            matches = inventory.Where(item =>
+                item.Id.Equals(result.ApiUpdateProductCode, StringComparison.OrdinalIgnoreCase)
+                && (result.ApiUpdateProductCodeFromInstaller || offered.InstalledScope is null || item.InstalledScope == offered.InstalledScope)
+                && (offered.InstalledArchitecture is null || item.InstalledArchitecture == offered.InstalledArchitecture)).ToArray();
+        }
+        // MSI major upgrades can replace the ProductCode/uninstall key.
+        if (matches.Length == 0)
+            matches = inventory.Where(item =>
+                WinProvisionApiService.NormalizeInstalledName(item.Name, item.CurrentVersion) == WinProvisionApiService.NormalizeInstalledName(offered.Name, offered.CurrentVersion)
+                && (offered.InstalledScope is null || item.InstalledScope == offered.InstalledScope)
+                && (offered.InstalledArchitecture is null || item.InstalledArchitecture == offered.InstalledArchitecture)
+                && (string.IsNullOrWhiteSpace(offered.InstalledPublisher ?? offered.Publisher) || string.IsNullOrWhiteSpace(item.Publisher)
+                    || WinProvisionApiService.NormalizeForMatching(item.Publisher) == WinProvisionApiService.NormalizeForMatching(offered.InstalledPublisher ?? offered.Publisher))).ToArray();
+        return matches.Length == 1 && IsUpdateSatisfied(matches[0].CurrentVersion, offered.AvailableVersion);
+    }
+
+    internal static WingetExecutionResult ConfirmUpgradeResult(UpgradablePackage offered,
+        WingetExecutionResult result, IReadOnlyList<UpgradablePackage> installed)
+    {
+        var matches = installed.Where(item =>
+            item.Id.Equals(offered.Id, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length == 1 && VersionsMatch(matches[0].CurrentVersion, offered.AvailableVersion))
+            return result;
+
+        string actual = matches.Length switch
+        {
+            0 => "não encontrado",
+            1 => matches[0].CurrentVersion,
+            _ => "identidade ambígua no inventário"
+        };
+        return MarkUpdateUnverified(result,
+            $"A versão instalada não corresponde ao alvo {offered.AvailableVersion} (encontrada: {actual}).");
+    }
+
+    private static WingetExecutionResult ConfirmKnownRuntimeVersion(
+        UpgradablePackage offered, WingetExecutionResult result)
+    {
+        if (!offered.Id.Equals("Microsoft.PowerShell", StringComparison.OrdinalIgnoreCase))
+            return result;
+
+        string executable = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "PowerShell", "7", "pwsh.exe");
+        if (!File.Exists(executable)) return result;
+        try
+        {
+            var file = FileVersionInfo.GetVersionInfo(executable);
+            string runtimeVersion = $"{file.FileMajorPart}.{file.FileMinorPart}.{file.FileBuildPart}";
+            if (RuntimeVersionMatches(runtimeVersion, offered.AvailableVersion)) return result;
+            return MarkUpdateUnverified(result,
+                $"O executável principal ainda informa {runtimeVersion}, embora o inventário informe {offered.AvailableVersion}.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return MarkUpdateUnverified(result,
+                $"Não foi possível conferir o executável principal ({exception.GetType().Name}).");
+        }
+    }
+
+    internal static bool RuntimeVersionMatches(string? actual, string? target)
+    {
+        if (string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(target)) return false;
+        if (!TryNormalizeVersion(actual, out var normalizedActual)
+            || !TryNormalizeVersion(target, out var normalizedTarget)) return false;
+        return normalizedActual.Major == normalizedTarget.Major
+            && normalizedActual.Minor == normalizedTarget.Minor
+            && normalizedActual.Build == normalizedTarget.Build;
+    }
+
+    private static WingetExecutionResult MarkUpdateUnverified(WingetExecutionResult result, string reason)
+    {
+        result.Success = false;
+        result.InstallerStarted = true;
+        result.FailureReason = WingetFailureReason.InstallError;
+        result.Output = $"A atualização foi executada, mas não foi confirmada. {reason}";
+        return result;
+    }
+
+    internal static bool VersionsMatch(string? actual, string? target)
+    {
+        if (string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(target)) return false;
+        actual = actual.Trim().TrimStart('v', 'V');
+        target = target.Trim().TrimStart('v', 'V');
+        if (IsVersionPlaceholder(actual) || IsVersionPlaceholder(target)) return false;
+        if (TryNormalizeVersion(actual, out var normalizedActual)
+            && TryNormalizeVersion(target, out var normalizedTarget))
+            return normalizedActual.Equals(normalizedTarget);
+        return actual.Equals(target, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVersionPlaceholder(string value) => value.Trim() is "-" or "?"
+        || value.Contains("unknown", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("desconhec", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("n/a", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("na", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("not available", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("indispon", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryNormalizeVersion(string value, out Version version)
+    {
+        version = null!;
+        string[] parts = value.Split('.');
+        if (parts.Length is < 2 or > 4 || parts.Any(part => part.Length == 0 || !part.All(char.IsAsciiDigit)))
+            return false;
+        string normalized = string.Join('.', parts.Concat(Enumerable.Repeat("0", 4 - parts.Length)));
+        if (!Version.TryParse(normalized, out var parsed)) return false;
+        version = parsed;
+        return true;
     }
 
     internal void RecordSuccessfulUpgrade(UpgradablePackage package, WingetExecutionResult result)
@@ -476,128 +856,229 @@ public sealed partial class WinGetService
 
     private static string UpgradeKey(string source, string id) => NormalizeUpdateSource(source) + "\u001f" + id;
 
-    /// <summary>
-    /// Combina as atualizações do catálogo local COM do WinGet com a saída de winget upgrade.
-    /// O catálogo informa explicitamente IsUpdateAvailable e as versões; a CLI cobre itens que
-    /// o catálogo COM local não encontrou, inclusive quando a consulta COM falha.
-    /// </summary>
+    /// <summary>Consulta ofertas COM dos instalados e complementa com CLI e catálogo próprio.</summary>
     public async Task<List<UpgradablePackage>> GetUpgradablePackagesAsync(
         Action<string>? onLogReceived = null,
         CancellationToken cancellationToken = default)
     {
-        await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-
-        if (WinGetFactoryHelper.IsComDisabled)
+        var timer = Stopwatch.StartNew();
+        if (_preferredUpdateMethod() == PackageUpdateMethod.WinProvisionApi)
         {
-            PackageDiagnostics.Write(
-                $"UPDATE DISCOVERY fallback=CLI reason={WinGetFactoryHelper.DisabledReason}");
-            onLogReceived?.Invoke("Verificando atualizações pelo WinGet...");
-            await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-            return FilterUpgrades(
-                await _wingetExecutor.GetUpgradablePackagesAsync(null, cancellationToken).ConfigureAwait(false));
+            onLogReceived?.Invoke("Comparando aplicativos instalados com o catálogo WinProvision...");
+            var inventory = await GetUpdateInventoryAsync(cancellationToken).ConfigureAwait(false);
+            var ownUpdates = await _apiService.GetUpdatesAsync(inventory, cancellationToken).ConfigureAwait(false);
+            PackageDiagnostics.Write($"UPDATE DISCOVERY method=WinProvisionApi installed={inventory.Count} offers={ownUpdates.Count} elapsed={timer.Elapsed}");
+            return FilterUpgrades(ownUpdates);
         }
-
-        try
+        await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+        List<UpgradablePackage>? comPackages = null;
+        List<UpgradablePackage>? cliPackages = null;
+        var failures = new List<Exception>();
+        if (!WinGetFactoryHelper.IsComDisabled)
         {
-            onLogReceived?.Invoke("Consultando atualizações disponíveis...");
-            var manager = WinGetFactoryHelper.CreateResilientPackageManager();
-            // Correlate installed packages with remote versions; a local-only catalog cannot report upgrades.
-            var composite = WinGetFactoryHelper.CreateCompositePackageCatalogOptions();
-            composite.CompositeSearchBehavior = CompositeSearchBehavior.LocalCatalogs;
-            foreach (var source in new[] { PredefinedPackageCatalog.OpenWindowsCatalog, PredefinedPackageCatalog.MicrosoftStore })
-            {
-                var reference = manager.GetPredefinedPackageCatalog(source);
-                reference.AcceptSourceAgreements = true;
-                composite.Catalogs.Add(reference);
-            }
-            var catalogReference = manager.CreateCompositePackageCatalog(composite);
-
-            var connectResult = await catalogReference.ConnectAsync()
-                .AsTask(cancellationToken).ConfigureAwait(false);
-            if (connectResult.Status != ConnectResultStatus.Ok || connectResult.PackageCatalog is null)
-                throw new InvalidOperationException(
-                    $"Falha ao conectar ao catálogo de pacotes instalados: {connectResult.Status}.");
-
-            var options = WinGetFactoryHelper.CreateFindPackagesOptions();
-            var selector = WinGetFactoryHelper.CreatePackageMatchFilter();
-            selector.Field = PackageMatchField.Name;
-            selector.Option = PackageFieldMatchOption.ContainsCaseInsensitive;
-            selector.Value = string.Empty;
-            options.Selectors.Add(selector);
-
-            var findResult = await connectResult.PackageCatalog.FindPackagesAsync(options)
-                .AsTask(cancellationToken).ConfigureAwait(false);
-            var packages = new List<UpgradablePackage>();
-
-            foreach (var match in IndexedCollectionReader.Read(findResult.Matches, cancellationToken))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    var package = match.CatalogPackage;
-                    if (!package.IsUpdateAvailable)
-                        continue;
-
-                    var installed = package.InstalledVersion;
-                    var available = package.DefaultInstallVersion;
-                    if (installed is null || available is null || string.IsNullOrWhiteSpace(package.Id))
-                    {
-                        PackageDiagnostics.Write(
-                            $"UPDATE DISCOVERY COM skip id=\"{package.Id}\" installed={installed is not null} available={available is not null}");
-                        continue;
-                    }
-
-                    string source = available.PackageCatalog?.Info?.Name
-                        ?? installed.PackageCatalog?.Info?.Name
-                        ?? "winget";
-                    if (IsUsableLocalIdentifier(package.Id, installed.Id))
-                        _localIdentifiers[UpgradeKey(source, package.Id)] = installed.Id;
-                    packages.Add(new UpgradablePackage
-                    {
-                        Id = package.Id,
-                        Name = package.Name,
-                        CurrentVersion = installed.Version,
-                        AvailableVersion = available.Version,
-                        Source = NormalizeUpdateSource(source)
-                    });
-                }
-                catch (Exception ex)
-                {
-                    // Un pacote malformado no índice local não deve esconder as atualizações
-                    // dos demais; falha global ainda cai para o CLI no bloco externo.
-                    PackageDiagnostics.Write(
-                        $"UPDATE DISCOVERY COM package-skip {ex.GetType().Name}: {ex.Message}");
-                }
-            }
-
-            WinGetFactoryHelper.ReportComSuccess();
-            PackageDiagnostics.Write($"UPDATE DISCOVERY COM success count={packages.Count}");
-            if (!WinGetFactoryHelper.CliFallbackAllowed)
-                return FilterUpgrades(packages);
-
-            // The local COM catalog can be incomplete even when it connects successfully.
-            // Combine the native catalog with the CLI table so either view can contribute.
             try
             {
-                await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-                var cliPackages = await _wingetExecutor
-                    .GetUpgradablePackagesAsync(null, cancellationToken)
-                    .ConfigureAwait(false);
-                var merged = FilterUpgrades(packages.Concat(cliPackages));
-                PackageDiagnostics.Write(
-                    $"UPDATE DISCOVERY MERGED com={packages.Count} cli={cliPackages.Count} total={merged.Count}");
-                return merged;
+                onLogReceived?.Invoke("Consultando atualizações dos aplicativos instalados pela API COM...");
+                comPackages = await RunUpdateQueryAsync(GetComUpgradablePackagesAsync,
+                    UpdateQueryTimeout, cancellationToken).ConfigureAwait(false);
+                PackageDiagnostics.Write($"UPDATE DISCOVERY COM success count={comPackages.Count} elapsed={timer.Elapsed}");
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception)
             {
-                throw;
+                failures.Add(exception);
+                // Do not accumulate native RPCs if a getter ignores cancellation.
+                if (exception is TimeoutException || WinGetFactoryHelper.IsActivationFailure(exception))
+                    WinGetFactoryHelper.DisableComForSession(exception);
+                PackageDiagnostics.Error(exception, "WinGet.DiscoverUpdatesCOM");
             }
+        }
+        if (WinGetFactoryHelper.CliFallbackAllowed)
+        {
+            try
+            {
+                onLogReceived?.Invoke("Conferindo atualizações pelo WinGet...");
+                cliPackages = await RunUpdateQueryAsync(
+                    token => _wingetExecutor.GetUpgradablePackagesAsync(null, token),
+                    UpdateQueryTimeout, cancellationToken).ConfigureAwait(false);
+                PackageDiagnostics.Write($"UPDATE DISCOVERY CLI success count={cliPackages.Count} elapsed={timer.Elapsed}");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+                PackageDiagnostics.Error(exception, "WinGet.DiscoverUpdatesCLI");
+            }
+        }
+        if (comPackages is null && cliPackages is null)
+        {
+            try
+            {
+                var inventory = await GetUpdateInventoryAsync(cancellationToken).ConfigureAwait(false);
+                return FilterUpgrades(await _apiService.GetUpdatesAsync(inventory, cancellationToken).ConfigureAwait(false));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception) { failures.Add(exception); }
+            throw new InvalidOperationException("Nenhuma fonte concluiu a consulta de atualizações. Tente recarregar a lista.",
+                failures.Count == 0 ? null : new AggregateException(failures));
+        }
+        var packages = await MergeWinProvisionApiUpdatesAsync(
+            MergeUpdates(comPackages ?? [], cliPackages ?? []), onLogReceived, cancellationToken).ConfigureAwait(false);
+        PackageDiagnostics.Write($"UPDATE DISCOVERY completed count={packages.Count} elapsed={timer.Elapsed}");
+        return packages;
+    }
+
+    internal static async Task<List<UpgradablePackage>> RunUpdateQueryAsync(
+        Func<CancellationToken, Task<List<UpgradablePackage>>> query,
+        TimeSpan deadline,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(deadline);
+        CancellationToken queryToken = timeout.Token;
+        // Native activation and property getters are synchronous RPCs. Keep them off the
+        // dispatcher and bound the wait even if native code ignores cancellation.
+        Task<List<UpgradablePackage>> worker = Task.Run(() => query(queryToken), CancellationToken.None);
+        try { return await worker.WaitAsync(queryToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            _ = ObserveUpdateQueryAsync(worker);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"A fonte de atualizações não respondeu em {deadline.TotalSeconds:0} segundos.");
+        }
+    }
+
+    private static async Task ObserveUpdateQueryAsync(Task query)
+    {
+        try { await query.ConfigureAwait(false); }
+        catch (OperationCanceledException) { PackageDiagnostics.Write("UPDATE DISCOVERY worker cancelado."); }
+        catch (Exception exception) { PackageDiagnostics.Error(exception, "WinGet.DiscoverUpdatesLateCompletion"); }
+    }
+
+    private async Task<List<UpgradablePackage>> GetComUpgradablePackagesAsync(CancellationToken cancellationToken)
+    {
+        var timer = Stopwatch.StartNew();
+        var manager = WinGetFactoryHelper.CreateResilientPackageManager();
+        // LocalCatalogs maps to Repository::CompositeSearchBehavior::Installed.
+        // It correlates installed packages with the attached sources, as UniGetUI does.
+        // Searching all remote packages makes listing updates scan the entire catalog.
+        var composite = WinGetFactoryHelper.CreateCompositePackageCatalogOptions();
+        composite.CompositeSearchBehavior = CompositeSearchBehavior.LocalCatalogs;
+        foreach (var source in new[] { PredefinedPackageCatalog.OpenWindowsCatalog, PredefinedPackageCatalog.MicrosoftStore })
+        {
+            var reference = manager.GetPredefinedPackageCatalog(source);
+            reference.AcceptSourceAgreements = true;
+            composite.Catalogs.Add(reference);
+        }
+        var catalogReference = manager.CreateCompositePackageCatalog(composite);
+
+        var connectResult = await catalogReference.ConnectAsync()
+            .AsTask(cancellationToken).ConfigureAwait(false);
+        if (connectResult.Status != ConnectResultStatus.Ok || connectResult.PackageCatalog is null)
+            throw new InvalidOperationException(
+                $"Falha ao conectar ao catálogo de pacotes instalados: {connectResult.Status}.");
+
+        PackageDiagnostics.Write($"UPDATE DISCOVERY COM connected elapsed={timer.Elapsed}");
+        var options = WinGetFactoryHelper.CreateFindPackagesOptions();
+        var selector = WinGetFactoryHelper.CreatePackageMatchFilter();
+        selector.Field = PackageMatchField.Id;
+        selector.Option = PackageFieldMatchOption.StartsWithCaseInsensitive;
+        selector.Value = string.Empty;
+        options.Filters.Add(selector);
+
+        var findResult = await connectResult.PackageCatalog.FindPackagesAsync(options)
+            .AsTask(cancellationToken).ConfigureAwait(false);
+        if (findResult.Status != FindPackagesResultStatus.Ok)
+            throw new InvalidOperationException($"Consulta COM de atualizações falhou: {findResult.Status}.");
+        if (findResult.WasLimitExceeded)
+            throw new InvalidOperationException("O catálogo COM limitou a lista de atualizações; a consulta será repetida pela CLI.");
+        PackageDiagnostics.Write($"UPDATE DISCOVERY COM installed-matches={findResult.Matches.Count} elapsed={timer.Elapsed}");
+        var packages = new List<UpgradablePackage>();
+
+        foreach (var match in IndexedCollectionReader.Read(findResult.Matches, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var package = match.CatalogPackage;
+                if (!package.IsUpdateAvailable)
+                    continue;
+
+                var installed = package.InstalledVersion;
+                var available = package.DefaultInstallVersion;
+                if (installed is null || available is null || string.IsNullOrWhiteSpace(package.Id))
+                {
+                    PackageDiagnostics.Write(
+                        $"UPDATE DISCOVERY COM skip id=\"{package.Id}\" installed={installed is not null} available={available is not null}");
+                    continue;
+                }
+
+                string source = available.PackageCatalog?.Info?.Name
+                    ?? installed.PackageCatalog?.Info?.Name
+                    ?? "winget";
+                if (IsUsableLocalIdentifier(package.Id, installed.Id))
+                    _localIdentifiers[UpgradeKey(source, package.Id)] = installed.Id;
+                packages.Add(new UpgradablePackage
+                {
+                    Id = package.Id,
+                    Name = package.Name,
+                    CurrentVersion = installed.Version,
+                    AvailableVersion = available.Version,
+                    Source = NormalizeUpdateSource(source)
+                });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                // Un pacote malformado no índice local não deve esconder as atualizações
+                // dos demais; falha global ainda cai para o CLI no bloco externo.
                 PackageDiagnostics.Write(
-                    $"UPDATE DISCOVERY CLI merge indisponível; mantendo COM {ex.GetType().Name}: {ex.Message}");
-                return FilterUpgrades(packages);
+                    $"UPDATE DISCOVERY COM package-skip {ex.GetType().Name}: {ex.Message}");
             }
+        }
+
+        WinGetFactoryHelper.ReportComSuccess();
+        return packages;
+    }
+
+    private async Task<List<UpgradablePackage>> MergeWinProvisionApiUpdatesAsync(
+        List<UpgradablePackage> nativeUpdates,
+        Action<string>? onLogReceived,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            onLogReceived?.Invoke("Comparando instalações WinProvision com o catálogo verificado...");
+            var installed = await GetUpdateInventoryAsync(cancellationToken).ConfigureAwait(false);
+            var ownApiUpdates = await _apiService.GetUpdatesAsync(installed, cancellationToken)
+                .ConfigureAwait(false);
+            if (ownApiUpdates.Count == 0)
+                return FilterUpgrades(nativeUpdates);
+
+            nativeUpdates = DeduplicateUpdates(nativeUpdates);
+            var combined = nativeUpdates.ToDictionary(
+                package => UpgradeKey(package.Source, package.Id), StringComparer.OrdinalIgnoreCase);
+            foreach (var apiOffer in ownApiUpdates)
+            {
+                string key = UpgradeKey(apiOffer.Source, apiOffer.Id);
+                if (combined.TryGetValue(key, out var nativeOffer))
+                {
+                    nativeOffer.WinProvisionApiAvailableVersion = apiOffer.AvailableVersion;
+                    nativeOffer.InstalledScope ??= apiOffer.InstalledScope;
+                    nativeOffer.InstalledArchitecture ??= apiOffer.InstalledArchitecture;
+                    nativeOffer.InstalledInstallerType ??= apiOffer.InstalledInstallerType;
+                }
+                else
+                {
+                    apiOffer.WinProvisionApiAvailableVersion = apiOffer.AvailableVersion;
+                    combined.Add(key, apiOffer);
+                }
+            }
+
+            PackageDiagnostics.Write(
+                $"UPDATE DISCOVERY API-PROPRIA managed={ownApiUpdates.Count} native={nativeUpdates.Count} total={combined.Count}");
+            return FilterUpgrades(combined.Values);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -605,18 +1086,86 @@ public sealed partial class WinGetService
         }
         catch (Exception ex)
         {
-            WinGetFactoryHelper.DisableComForSession(ex);
-            PackageDiagnostics.Error(ex, "WinGet.DiscoverUpdatesCOM");
             PackageDiagnostics.Write(
-                $"UPDATE DISCOVERY COM failed; falling back to CLI: {ex.GetType().Name}: {ex.Message}");
-            if (!WinGetFactoryHelper.CliFallbackAllowed)
-                throw new InvalidOperationException($"A descoberta COM de atualizações falhou: {ex.Message}", ex);
-
-            onLogReceived?.Invoke("A consulta COM falhou; usando o WinGet para verificar atualizações...");
-            await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-            return FilterUpgrades(
-                await _wingetExecutor.GetUpgradablePackagesAsync(null, cancellationToken).ConfigureAwait(false));
+                $"UPDATE DISCOVERY API-PROPRIA indisponível; mantendo WinGet {ex.GetType().Name}: {ex.Message}");
+            return FilterUpgrades(nativeUpdates);
         }
+    }
+
+    private Task<List<UpgradablePackage>> GetUpdateInventoryAsync(CancellationToken token) => _apiInventory(token);
+
+    private static Task<List<UpgradablePackage>> ReadRegistryInventoryAsync(CancellationToken token) =>
+        Task.Run(() =>
+        {
+            token.ThrowIfCancellationRequested();
+            var inventory = InstalledAppsService.GetRegistryInventory(token);
+            token.ThrowIfCancellationRequested();
+            return inventory;
+        }, token);
+
+    internal static List<UpgradablePackage> MergeUpdateInventory(
+        IReadOnlyCollection<UpgradablePackage> identified, IReadOnlyCollection<UpgradablePackage> registry)
+    {
+        var result = identified.ToList();
+        foreach (var app in registry)
+        {
+            var matches = identified.Where(item => NormalizeUpdateSource(item.Source) == "winget"
+                && (item.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase)
+                    || (WinProvisionApiService.NormalizeForMatching(item.Name) == WinProvisionApiService.NormalizeForMatching(app.Name)
+                        && item.CurrentVersion == app.CurrentVersion))).ToArray();
+            int localMatches = registry.Count(item =>
+                WinProvisionApiService.NormalizeForMatching(item.Name) == WinProvisionApiService.NormalizeForMatching(app.Name)
+                && item.CurrentVersion == app.CurrentVersion);
+            if (matches.Length != 1 || localMatches != 1)
+            {
+                result.Add(app);
+                continue;
+            }
+            var match = matches[0];
+            match.InstalledScope ??= app.InstalledScope;
+            match.InstalledArchitecture ??= app.InstalledArchitecture;
+            match.InstalledInstallerType ??= app.InstalledInstallerType;
+        }
+        return result;
+    }
+
+    /// <summary>Mesmo preflight usado pela execução API; não baixa nem inicia instaladores.</summary>
+    public async Task<WinProvisionUpdatePlan> PrepareApiUpdateAsync(string packageId, string? requiredVersion = null,
+        CancellationToken token = default)
+    {
+        if (_offeredUpgrades.TryGetValue(UpgradeKey("winget", packageId), out var offered))
+        {
+            var fresh = await GetUpdateInventoryAsync(token).ConfigureAwait(false);
+            var current = ResolveCurrentUpdateInstallation(offered, fresh)
+                ?? throw new InvalidOperationException("O inventário atual não confirmou uma única instalação para atualizar. Recarregue a lista.");
+            string target = requiredVersion ?? offered.WinProvisionApiAvailableVersion;
+            if (string.IsNullOrWhiteSpace(target)) target = offered.AvailableVersion;
+            if (IsUpdateSatisfied(current.CurrentVersion, target)) throw new AlreadyUpdatedException(current.CurrentVersion, target);
+            var refreshed = new UpgradablePackage
+            {
+                Id = offered.Id, Name = offered.Name, Source = offered.Source,
+                CurrentVersion = current.CurrentVersion, AvailableVersion = offered.AvailableVersion,
+                Publisher = offered.Publisher, Description = offered.Description, IconUrl = offered.IconUrl,
+                WinProvisionApiAvailableVersion = offered.WinProvisionApiAvailableVersion, IsWinProvisionApiUpdate = offered.IsWinProvisionApiUpdate,
+                InstalledRegistryId = current.InstalledRegistryId ?? current.Id, InstalledPublisher = current.Publisher,
+                InstalledScope = current.InstalledScope, InstalledArchitecture = current.InstalledArchitecture,
+                InstalledInstallerType = current.InstalledInstallerType
+            };
+            return await _apiService.PrepareUpdateAsync(refreshed, requiredVersion, token).ConfigureAwait(false);
+        }
+
+        var inventory = await GetUpdateInventoryAsync(token).ConfigureAwait(false);
+        var matches = inventory.Where(item => item.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+            && item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length != 1)
+        {
+            var offers = await _apiService.GetUpdatesAsync(inventory, token, refreshRemote: false).ConfigureAwait(false);
+            var offer = offers.SingleOrDefault(item => item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+            if (offer is not null)
+                return await _apiService.PrepareUpdateAsync(offer, requiredVersion, token).ConfigureAwait(false);
+            throw new InvalidOperationException("Não foi encontrada uma única instalação com o ID solicitado. Recarregue o inventário antes de atualizar.");
+        }
+        return await _apiService.PrepareUpdateAsync(matches[0], requiredVersion, token).ConfigureAwait(false);
     }
 
     private static List<UpgradablePackage> DeduplicateUpdates(IEnumerable<UpgradablePackage> packages)
@@ -625,6 +1174,39 @@ public sealed partial class WinGetService
         return packages
             .Where(package => seen.Add($"{NormalizeUpdateSource(package.Source)}\u001f{package.Id}"))
             .ToList();
+    }
+
+    internal static List<UpgradablePackage> MergeUpdates(
+        IEnumerable<UpgradablePackage> comPackages,
+        IEnumerable<UpgradablePackage> cliPackages)
+    {
+        var combined = DeduplicateUpdates(comPackages).ToDictionary(
+            package => UpgradeKey(package.Source, package.Id), StringComparer.OrdinalIgnoreCase);
+        foreach (var cli in cliPackages)
+        {
+            string key = UpgradeKey(cli.Source, cli.Id);
+            if (!combined.TryGetValue(key, out var existing))
+            {
+                combined.Add(key, cli);
+                continue;
+            }
+
+            // COM may retain an older offer than CLI. Compare only versions of the
+            // same installed release; conflicting inventories cannot settle a target.
+            if (!VersionsMatch(existing.CurrentVersion, cli.CurrentVersion)
+                || !WinProvisionApiService.IsStrictlyNewerNumericVersion(existing.AvailableVersion, cli.AvailableVersion))
+                continue;
+
+            if (string.IsNullOrWhiteSpace(cli.Publisher)) cli.Publisher = existing.Publisher;
+            if (string.IsNullOrWhiteSpace(cli.Description)) cli.Description = existing.Description;
+            if (string.IsNullOrWhiteSpace(cli.IconUrl)) cli.IconUrl = existing.IconUrl;
+            cli.InstalledScope ??= existing.InstalledScope;
+            cli.InstalledArchitecture ??= existing.InstalledArchitecture;
+            cli.InstalledInstallerType ??= existing.InstalledInstallerType;
+            cli.InstalledRegistryId ??= existing.InstalledRegistryId;
+            combined[key] = cli;
+        }
+        return combined.Values.ToList();
     }
 
     private static string NormalizeUpdateSource(string source)
@@ -677,6 +1259,13 @@ public sealed partial class WinGetService
                 : $"A API COM do WinGet está indisponível: {WinGetFactoryHelper.DisabledReason}.";
             onLogReceived?.Invoke(reason);
             return new WingetExecutionResult { Success = false, ExitCode = -1, Output = reason, FailureReason = WingetFailureReason.InternalError };
+        }
+
+        if (cliOnly && opKind == ComOperationKind.Upgrade)
+        {
+            onLogReceived?.Invoke("Modo WinGet CLI explícito; atualizando diretamente pela CLI.");
+            return await RunCliUpdateFallbackAsync(packageId, onLogReceived, onProgress,
+                cancellationToken, source, ResolveExecutionScope(null), options).ConfigureAwait(false);
         }
 
         // SYSTEM, por si só, não desativa COM. Só pulamos uma operação COM após uma recusa
@@ -840,7 +1429,8 @@ public sealed partial class WinGetService
         PackageInstallOptions? options = null)
         => opKind == ComOperationKind.Install
             ? TryWinProvisionApiThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, installLocation, source, reason, preferences, options)
-            : TryApiUpdateThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, source, reason, preferences);
+            : TryApiUpdateThenCliAsync(packageId, onLogReceived, onProgress, cancellationToken, source, reason,
+                preferences, options);
 
     /// <summary>
     /// Tenta atualizar via <see cref="WinProvisionApiService.TryInstallAsync"/> (mesmo endpoint
@@ -855,10 +1445,65 @@ public sealed partial class WinGetService
         CancellationToken cancellationToken,
         string source,
         string reason,
-        InstallerPreferences? preferences = null)
+        InstallerPreferences? preferences = null,
+        PackageInstallOptions? options = null,
+        bool fallbackToCli = true)
     {
         InstallerPreferences? effectivePreferences = ResolveExecutionScope(preferences);
+        effectivePreferences = effectivePreferences is null
+            ? options is null ? null : new InstallerPreferences(options.Scope, options.Architecture,
+                options.RequiresElevation, ElevationProhibited: false)
+            : effectivePreferences with
+            {
+                Scope = options?.Scope ?? effectivePreferences.Scope,
+                Architecture = options?.Architecture ?? effectivePreferences.Architecture,
+                RequiresElevation = options?.RequiresElevation == true || effectivePreferences.RequiresElevation
+            };
         PackageDiagnostics.Write($"UPDATE API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
+
+        _offeredUpgrades.TryGetValue(UpgradeKey(source, packageId), out var offered);
+        string? requiredVersion = options?.Version;
+        if (string.IsNullOrWhiteSpace(requiredVersion)) requiredVersion = offered?.WinProvisionApiAvailableVersion;
+        if (string.IsNullOrWhiteSpace(requiredVersion) && fallbackToCli) requiredVersion = offered?.AvailableVersion;
+        WinProvisionUpdatePlan plan;
+        try
+        {
+            if (!source.Equals("winget", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("A WinProvision API só atualiza aplicativos clássicos do catálogo próprio.");
+            plan = await PrepareApiUpdateAsync(packageId, requiredVersion, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(options?.Scope)
+                && !options.Scope.Equals(plan.InstalledPackage.InstalledScope, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Uma atualização pela API deve preservar o escopo da instalação existente.");
+            if (!string.IsNullOrWhiteSpace(options?.Architecture)
+                && !options.Architecture.Equals(plan.Installer.Architecture, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("A arquitetura solicitada não corresponde ao instalador de atualização compatível com a instalação existente.");
+            effectivePreferences = new InstallerPreferences(plan.InstalledPackage.InstalledScope,
+                plan.InstalledPackage.InstalledArchitecture ?? plan.Installer.Architecture,
+                options?.RequiresElevation == true || plan.Installer.ElevationRequirement is "elevationRequired" or "elevatesSelf",
+                plan.Installer.ElevationRequirement == "elevationProhibited");
+            PackageDiagnostics.Write($"UPDATE API-PROPRIA preflight id={packageId} installed={plan.InstalledPackage.CurrentVersion} target={plan.Manifest.Version} scope={effectivePreferences.Scope} type={plan.Installer.Type} arch={effectivePreferences.Architecture}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (AlreadyUpdatedException exception)
+        {
+            return AlreadyUpdated(exception.InstalledVersion, exception.TargetVersion, onLogReceived);
+        }
+        catch (Exception exception)
+        {
+            PackageDiagnostics.Warning(exception, "PrepareWinProvisionApiUpdate");
+            if (fallbackToCli)
+            {
+                onLogReceived?.Invoke($"A WinProvision API não oferece uma atualização compatível ({exception.Message}); usando WinGet.");
+                return await RunCliUpdateFallbackAsync(packageId, onLogReceived, onProgress,
+                    cancellationToken, source, effectivePreferences, options).ConfigureAwait(false);
+            }
+            return new WingetExecutionResult
+            {
+                Success = false, ExitCode = -1, Output = exception.Message,
+                FailureReason = exception is HttpRequestException ? WingetFailureReason.DownloadError : WingetFailureReason.NoApplicableUpgrade
+            };
+        }
+        string targetVersion = plan.Manifest.Version;
 
         WinProvisionInstallResult apiResult;
         try
@@ -874,8 +1519,11 @@ public sealed partial class WinGetService
                 effectivePreferences?.Scope,
                 onProgress,
                 source,
-                requiresElevation: effectivePreferences?.RequiresElevation ?? false,
-                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+                requiresElevation: options?.RequiresElevation == true || (effectivePreferences?.RequiresElevation ?? false),
+                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false,
+                suppliedManifest: plan.Manifest,
+                requestedVersion: targetVersion,
+                recordInstall: false).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -883,13 +1531,13 @@ public sealed partial class WinGetService
         }
         catch (Exception ex)
         {
-            // A API própria nunca deve derrubar o pipeline: qualquer exceção inesperada (rede
-            // fora do ar, R2 indisponível, etc.) é tratada como "não resolveu" e cai pro
-            // winget.exe normalmente, igual a um WinProvisionInstallOutcome de falha.
+            // Uma exceção inesperada pode ocorrer depois de o instalador ter começado. O
+            // estado é incerto, portanto não despachamos a mesma atualização pelo CLI.
             PackageDiagnostics.Write(
                 $"UPDATE API-PROPRIA exceção packageId=\"{packageId}\" {ex.GetType().Name}: {ex.Message}");
             apiResult = new WinProvisionInstallResult(
-                WinProvisionInstallOutcome.DownloadFailed, Message: ex.Message);
+                WinProvisionInstallOutcome.InstallProcessFailed,
+                Message: $"Falha inesperada com estado do instalador desconhecido: {ex.Message}", InstallerStarted: true);
         }
 
         if (apiResult.Outcome == WinProvisionInstallOutcome.Success)
@@ -901,7 +1549,11 @@ public sealed partial class WinGetService
             {
                 Success = true,
                 ExitCode = apiResult.ExitCode ?? 0,
-                Output = "Atualizado via API própria da WinProvision Store."
+                Output = "Atualizado via API própria da WinProvision Store.",
+                ApiUpdateTargetVersion = targetVersion,
+                ApiUpdateProductCode = apiResult.VerifiedProductCode ?? plan.Installer.ProductCode,
+                ApiUpdateProductCodeFromInstaller = !string.IsNullOrWhiteSpace(apiResult.VerifiedProductCode),
+                InstallerStarted = apiResult.InstallerStarted
             };
         }
 
@@ -917,37 +1569,105 @@ public sealed partial class WinGetService
             };
         }
 
+        if (!CanFallbackAfterApiUpdate(apiResult))
+        {
+            string message = apiResult.Message
+                ?? "A API própria iniciou o instalador e falhou; não será iniciada outra tentativa automaticamente.";
+            PackageDiagnostics.Write(
+                $"UPDATE API-PROPRIA falhou após iniciar instalador packageId=\"{packageId}\" outcome={apiResult.Outcome} " +
+                $"exitCode={apiResult.ExitCode?.ToString() ?? "indisponível"}; sem fallback para CLI");
+            onLogReceived?.Invoke(message);
+            return new WingetExecutionResult
+            {
+                Success = false,
+                ExitCode = apiResult.ExitCode ?? -1,
+                Output = message,
+                FailureReason = InstallerExitCodes.Classify(apiResult.ExitCode ?? -1) is var nativeFailure && nativeFailure != WingetFailureReason.Unknown
+                    ? nativeFailure : WingetFailureReason.InstallError,
+                InstallerStarted = true
+            };
+        }
+
+        if (!fallbackToCli)
+        {
+            string message = apiResult.Message ?? $"A WinProvision API não concluiu a atualização: {apiResult.Outcome}.";
+            WingetFailureReason failureReason = WingetErrorTranslator.Classify(apiResult.ExitCode ?? -1, message);
+            if (failureReason == WingetFailureReason.Unknown)
+                failureReason = apiResult.Outcome switch
+                {
+                    WinProvisionInstallOutcome.PackageNotFound => WingetFailureReason.PackageNotInCatalog,
+                    WinProvisionInstallOutcome.NoCompatibleInstaller => WingetFailureReason.NoApplicableInstallers,
+                    WinProvisionInstallOutcome.DownloadFailed => WingetFailureReason.DownloadError,
+                    WinProvisionInstallOutcome.HashMismatch => WingetFailureReason.InstallerHashMismatch,
+                    _ => WingetFailureReason.InstallError
+                };
+            return new WingetExecutionResult
+            {
+                Success = false,
+                ExitCode = apiResult.ExitCode ?? -1,
+                Output = message,
+                FailureReason = failureReason,
+                InstallerStarted = apiResult.InstallerStarted
+            };
+        }
         PackageDiagnostics.Write(
             $"UPDATE API-PROPRIA falhou packageId=\"{packageId}\" outcome={apiResult.Outcome} " +
             $"msg=\"{apiResult.Message}\" — caindo pro winget.exe (nível 3)");
         onLogReceived?.Invoke(
             $"API própria não conseguiu atualizar ({apiResult.Outcome}); usando winget.exe como último recurso.");
 
+        return await RunCliUpdateFallbackAsync(packageId, onLogReceived, onProgress,
+            cancellationToken, source, effectivePreferences, options).ConfigureAwait(false);
+    }
+
+    private async Task<WingetExecutionResult> RunCliUpdateFallbackAsync(
+        string packageId,
+        Action<string>? onLogReceived,
+        Action<InstallProgressUpdate>? onProgress,
+        CancellationToken cancellationToken,
+        string source,
+        InstallerPreferences? effectivePreferences,
+        PackageInstallOptions? options = null)
+    {
+
         // Envia progresso inicial para definir o método como WingetExe
         onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
 
         await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+        string? targetVersion = options?.Version
+            ?? (_offeredUpgrades.TryGetValue(UpgradeKey(source, packageId), out var targetOffer)
+                ? targetOffer.AvailableVersion : null);
         var cliResult = await _wingetExecutor.UpdateAppAsync(
             packageId,
             onLogReceived,
             cancellationToken,
             source,
-            effectivePreferences?.Scope,
-            effectivePreferences?.Architecture,
-            effectivePreferences?.RequiresElevation ?? false,
-            effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+            options?.Scope ?? effectivePreferences?.Scope,
+            options?.Architecture ?? effectivePreferences?.Architecture,
+            options?.RequiresElevation == true || (effectivePreferences?.RequiresElevation ?? false),
+            effectivePreferences?.ElevationProhibited ?? false,
+            interactive: options?.Interactive ?? false,
+            ignoreSecurityHash: options?.IgnoreSecurityHash ?? false,
+            version: targetVersion).ConfigureAwait(false);
         if (_localIdentifiers.TryGetValue(UpgradeKey(source, packageId), out var localId)
             && CanRetryLocalIdentifier(cliResult, packageId, localId, cancellationToken))
         {
             onLogReceived?.Invoke($"O ID do catálogo não localizou a instalação; tentando o identificador local {localId}.");
             return await _wingetExecutor.UpdateAppAsync(localId, onLogReceived, cancellationToken,
-                source: string.Empty, scope: effectivePreferences?.Scope,
-                architecture: effectivePreferences?.Architecture,
-                requiresElevation: effectivePreferences?.RequiresElevation ?? false,
-                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false).ConfigureAwait(false);
+                source: string.Empty, scope: options?.Scope ?? effectivePreferences?.Scope,
+                architecture: options?.Architecture ?? effectivePreferences?.Architecture,
+                requiresElevation: options?.RequiresElevation == true || (effectivePreferences?.RequiresElevation ?? false),
+                elevationProhibited: effectivePreferences?.ElevationProhibited ?? false,
+                interactive: options?.Interactive ?? false,
+                ignoreSecurityHash: options?.IgnoreSecurityHash ?? false,
+                version: targetVersion).ConfigureAwait(false);
         }
         return cliResult;
     }
+
+    internal static bool CanFallbackAfterApiUpdate(WinProvisionInstallResult result) =>
+        !result.InstallerStarted && result.Outcome is not (WinProvisionInstallOutcome.Success
+            or WinProvisionInstallOutcome.ElevationCanceled);
 
     internal static bool CanRetryLocalIdentifier(WingetExecutionResult result, string catalogId,
         string? localId, CancellationToken token) =>
@@ -1283,6 +2003,9 @@ public sealed partial class WinGetService
             var findStarted = stopwatch.Elapsed;
             var findResult = await packageCatalog.FindPackagesAsync(findOptions)
                 .AsTask(cancellationToken).ConfigureAwait(false);
+            if (findResult.Status != FindPackagesResultStatus.Ok)
+                throw new WinGetComPreflightException(
+                    $"A consulta COM do pacote falhou antes da atualização: {findResult.Status}.");
             matchedPackage = IndexedCollectionReader.Read(findResult.Matches, cancellationToken).FirstOrDefault()?.CatalogPackage;
             PackageDiagnostics.Write(
                 $"{comTag} stage=package-lookup-completed catalog={kind} found={matchedPackage is not null} " +
@@ -1301,6 +2024,47 @@ public sealed partial class WinGetService
             // Não é falha de instalação: o índice COM pode estar defasado. Deixa o chamador decidir
             // (modo auto tenta o CLI; modo COM-only mostra este erro).
             throw new WinGetComPreflightException($"Pacote não encontrado no catálogo COM: {packageId}");
+        }
+
+        if (opKind == ComOperationKind.Upgrade)
+        {
+            // UpgradePackageAsync exige a oferta remota associada à instalação local.
+            var composite = WinGetFactoryHelper.CreateCompositePackageCatalogOptions();
+            composite.CompositeSearchBehavior = CompositeSearchBehavior.RemotePackagesFromAllCatalogs;
+            foreach (var kind in catalogKinds)
+            {
+                var reference = packageManager.GetPredefinedPackageCatalog(kind);
+                reference.AcceptSourceAgreements = true;
+                composite.Catalogs.Add(reference);
+            }
+            var compositeReference = packageManager.CreateCompositePackageCatalog(composite);
+            var compositeConnection = await compositeReference.ConnectAsync()
+                .AsTask(cancellationToken).ConfigureAwait(false);
+            if (compositeConnection.Status != ConnectResultStatus.Ok || compositeConnection.PackageCatalog is null)
+                throw new WinGetComPreflightException(
+                    $"Não foi possível correlacionar a instalação com o catálogo COM: {compositeConnection.Status}.");
+
+            var compositeFind = WinGetFactoryHelper.CreateFindPackagesOptions();
+            var compositeFilter = WinGetFactoryHelper.CreatePackageMatchFilter();
+            compositeFilter.Field = PackageMatchField.Id;
+            compositeFilter.Option = PackageFieldMatchOption.Equals;
+            compositeFilter.Value = packageId;
+            compositeFind.Filters.Add(compositeFilter);
+            var compositeMatches = await compositeConnection.PackageCatalog.FindPackagesAsync(compositeFind)
+                .AsTask(cancellationToken).ConfigureAwait(false);
+            if (compositeMatches.Status != FindPackagesResultStatus.Ok)
+                throw new WinGetComPreflightException(
+                    $"A correlação COM entre pacote instalado e oferta remota falhou: {compositeMatches.Status}.");
+            if (compositeMatches.WasLimitExceeded)
+                throw new WinGetComPreflightException("A correlação COM foi limitada antes de identificar a instalação.");
+            matchedPackage = IndexedCollectionReader.Read(compositeMatches.Matches, cancellationToken)
+                .Select(match => match.CatalogPackage)
+                .FirstOrDefault(package => package.InstalledVersion is not null
+                    && package.DefaultInstallVersion is not null
+                    && package.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+            if (matchedPackage is null)
+                throw new WinGetComPreflightException(
+                    $"O pacote {packageId} não possui versão instalada correlacionada no catálogo COM.");
         }
 
         var installOptions = WinGetFactoryHelper.CreateInstallOptions();
@@ -1354,7 +2118,7 @@ public sealed partial class WinGetService
                         "O catálogo indicou instalador somente para usuário, mas o processo é SYSTEM; tentando os níveis seguintes em escopo de máquina.");
                     return await RunApiThenCliFallbackAsync(
                         opKind, packageId, onLogReceived, onProgress, cancellationToken,
-                        installLocation, source, "SYSTEM-requer-escopo-machine", machinePreferences)
+                        installLocation, source, "SYSTEM-requer-escopo-machine", machinePreferences, options)
                         .ConfigureAwait(false);
                 }
 
@@ -1410,7 +2174,7 @@ public sealed partial class WinGetService
                 onLogReceived?.Invoke("O host COM elevado falhou antes de iniciar o instalador; usando a API própria da WinProvision Store.");
                 return await RunApiThenCliFallbackAsync(opKind, packageId, onLogReceived, onProgress,
                     cancellationToken, installLocation, source, "host-COM-elevado-inicializacao",
-                    attemptState.Preferences).ConfigureAwait(false);
+                    attemptState.Preferences, options).ConfigureAwait(false);
             }
             return elevatedResult;
         }
@@ -1601,8 +2365,13 @@ public sealed partial class WinGetService
 
             // O instalador chegou a rodar e devolveu o próprio código de erro: repetir por outro
             // caminho executaria o mesmo instalador de novo (risco de instalação dupla/parcial).
-            bool installerFailedItself = attemptState.InstallerStarted
-                || installerErrorCode != 0 && !requiresElevation;
+            // O WinGet classifica opções inválidas e ausência de instalador aplicável
+            // antes de executar o instalador (PackageManager.cpp/GetPackageVersion).
+            // Um callback pode informar Installing antes desse HRESULT, mas nenhum instalador
+            // foi iniciado; só neste caso é seguro continuar pela cadeia de fallback.
+            bool preExecutionComFailure = IsPreExecutionComFailure(installerErrorCode, extendedErrorCode);
+            bool installerFailedItself = !preExecutionComFailure && (attemptState.InstallerStarted
+                || installerErrorCode != 0 && !requiresElevation);
 
             // Política bloqueando o pacote: contornar pela API própria seria burlar a política.
             bool blockedByPolicy = installResult.Status == InstallResultStatus.BlockedByPolicy;
@@ -1624,7 +2393,7 @@ public sealed partial class WinGetService
             // Qualquer outra falha da COM (download, dependências do pacote, catálogo, erro
             // interno, sem instalador aplicável...) cai pra API própria e depois pro winget.exe.
             // Antes só a elevação caía; o resto voltava como falha final, sem fallback.
-            if (WinGetFactoryHelper.CliFallbackAllowed && !installerFailedItself && !blockedByPolicy)
+            if (!forceComOnly && WinGetFactoryHelper.CliFallbackAllowed && !installerFailedItself && !blockedByPolicy)
             {
                 string reason = requiresElevation
                     ? "COM-requer-elevação"
@@ -1644,10 +2413,13 @@ public sealed partial class WinGetService
                     installLocation,
                     source,
                     reason,
-                    attemptState.Preferences).ConfigureAwait(false);
+                    attemptState.Preferences, options).ConfigureAwait(false);
             }
 
-            var failureReason = MapInstallFailure(installResult.Status);
+            int failureCode = GetComFailureExitCode(installerErrorCode, extendedErrorCode);
+            var failureReason = InstallerExitCodes.Classify(failureCode);
+            if (failureReason == WingetFailureReason.Unknown)
+                failureReason = MapInstallFailure(installResult.Status);
             if (installResult.InstallerErrorCode == 0 && installResult.ExtendedErrorCode is { } extendedError)
             {
                 output += $" Erro estendido: {extendedError.Message}";
@@ -1657,10 +2429,10 @@ public sealed partial class WinGetService
             return new WingetExecutionResult
             {
                 Success = false,
-                ExitCode = installerErrorCode,
+                ExitCode = failureCode,
                 Output = output,
                 FailureReason = failureReason,
-                InstallerStarted = attemptState.InstallerStarted || installerErrorCode != 0 && !requiresElevation
+                InstallerStarted = !preExecutionComFailure && (attemptState.InstallerStarted || installerErrorCode != 0 && !requiresElevation)
             };
         }
 
@@ -1705,6 +2477,7 @@ public sealed partial class WinGetService
         }
         catch (OperationCanceledException)
         {
+            PackageDiagnostics.Write($"COM watchdog cancelado após {stopwatch.Elapsed}.");
         }
     }
 
@@ -1730,6 +2503,7 @@ public sealed partial class WinGetService
         }
         catch (OperationCanceledException)
         {
+            PackageDiagnostics.Write($"{comTag} heartbeat cancelado após {stopwatch.Elapsed}.");
         }
     }
 
@@ -1746,6 +2520,12 @@ public sealed partial class WinGetService
             InstallResultStatus.InternalError => WingetFailureReason.InternalError,
             _ => WingetFailureReason.Unknown
         };
+
+    internal static bool IsPreExecutionComFailure(int installerErrorCode, int extendedErrorCode) =>
+        installerErrorCode == 0 && unchecked((uint)extendedErrorCode) is 0x8A150002 or 0x8A150010;
+
+    internal static int GetComFailureExitCode(int installerErrorCode, int extendedErrorCode) =>
+        installerErrorCode != 0 ? installerErrorCode : extendedErrorCode;
 
     private static string? ReadInstallerArchitecture(PackageInstallerInfo installerInfo)
     {
@@ -1797,6 +2577,21 @@ public sealed partial class WinGetService
         options ??= new PackageInstallOptions(InstallLocation: installLocation);
         InstallerPreferences? effectivePreferences = ResolveExecutionScope(preferences);
         PackageDiagnostics.Write($"INSTALL API-PROPRIA tentativa packageId=\"{packageId}\" motivo={reason}");
+
+        if (RequiresWingetCliForApiInstallOptions(options))
+        {
+            onLogReceived?.Invoke("A API própria não oferece suporte a todas as opções solicitadas; preservando-as pelo WinGet CLI.");
+            onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.WingetExe));
+            await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
+            var constrainedOptionsResult = await _wingetExecutor.InstallAppAsync(packageId, onLogReceived, cancellationToken,
+                installLocation, source, options.Scope ?? effectivePreferences?.Scope,
+                options.Architecture ?? effectivePreferences?.Architecture,
+                options.RequiresElevation || (effectivePreferences?.RequiresElevation ?? false),
+                effectivePreferences?.ElevationProhibited ?? false, options.Interactive,
+                options.IgnoreSecurityHash, options.Version, options.CustomArguments).ConfigureAwait(false);
+            if (!constrainedOptionsResult.Success) constrainedOptionsResult.InstallerStarted = true;
+            return constrainedOptionsResult;
+        }
 
         WinProvisionInstallResult apiResult;
         try

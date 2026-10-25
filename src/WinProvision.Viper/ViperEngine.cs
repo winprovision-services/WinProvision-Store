@@ -335,7 +335,7 @@ public sealed class ViperEngine : IAsyncDisposable
     private sealed class RangeUnavailableException : Exception;
     private async Task<string> DownloadPieceAsync(ViperRequest request, Probe probe, SafeFileHandle file, long start, int size, Action<int> onBytes, CancellationToken token)
     {
-        using var lease = await _transport.SendAsync(request, start, start + size - 1, probe.ETag, token).ConfigureAwait(false);
+        using var lease = await _transport.SendAsync(request, start, start + size - 1, probe.ETag, token, probe.FinalUri).ConfigureAwait(false);
         if (lease.Response.StatusCode == HttpStatusCode.OK) throw new RangeUnavailableException();
         var range = lease.Response.Content.Headers.ContentRange;
         if (lease.Response.StatusCode != HttpStatusCode.PartialContent || range?.Unit != "bytes" || range.From != start || range.To != start + size - 1
@@ -366,7 +366,7 @@ public sealed class ViperEngine : IAsyncDisposable
     private async Task DownloadSingleAsync(ViperRequest request, Probe probe, string part, IProgress<ViperProgress>? progress, Stopwatch watch, CancellationToken token)
         => await _transport.RetryAsync(async () =>
         {
-            using var lease = await _transport.SendAsync(request, null, null, null, token).ConfigureAwait(false);
+            using var lease = await _transport.SendAsync(request, null, null, null, token, probe.FinalUri).ConfigureAwait(false);
             if (lease.Response.StatusCode != HttpStatusCode.OK) throw new ViperProtocolException("O servidor retornou uma resposta parcial inesperada.");
             long? expected = lease.Response.Content.Headers.ContentLength;
             if (expected > _options.MaxFileSize || probe.Length is { } originalLength && expected is { } currentLength && currentLength != originalLength

@@ -57,15 +57,6 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
         catch (Exception exception) { ReportError(exception); }
     }
     public Task EnsureLoadedAsync() => _loaded ? Task.CompletedTask : RefreshCommand.ExecutionTask is { IsCompleted: false } task ? task : RefreshCommand.ExecuteAsync(null);
-    public async Task ReleaseCatalogMemoryAsync(CancellationToken cancellationToken = default)
-    {
-        _catalog = [];
-        _loaded = false;
-        Apps.Clear();
-        HasMore = false;
-        await _store.ReleaseCatalogMemoryAsync(cancellationToken);
-        await Task.Run(() => GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true), cancellationToken);
-    }
     private async Task LoadAsync(bool force, CancellationToken token)
     {
         IsBusy = true; HasError = false;

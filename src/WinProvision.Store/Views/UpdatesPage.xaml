@@ -140,6 +140,11 @@
                                     <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
+                            <MenuFlyoutItem AutomationProperties.AutomationId="ContextMenuUpdateIgnoreHash" Click="ContextMenuUpdateIgnoreHash_Click" Text="Atualizar ignorando o hash (menos seguro)">
+                                <MenuFlyoutItem.Icon>
+                                    <ic:FluentIcon Icon="ShieldError" IconVariant="Regular" IconSize="Size16" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem Click="ContextMenuDetails_Click" Text="Detalhes do pacote">
                                 <MenuFlyoutItem.Icon>
@@ -192,12 +197,12 @@
                         </StackPanel>
                         <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,6,0">
                             <Grid Width="18" Height="18" Margin="0,0,6,0">
-                                <ic:FluentIcon Style="{StaticResource WingetSourceIconStyle}" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=winget}" />
-                                <ic:FluentIcon Style="{StaticResource MsStoreSourceIconStyle}" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=msstore}" />
-                                <ic:FluentIcon Style="{StaticResource LocalSourceIconStyle}" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=local}" />
-                                <ic:FluentIcon Style="{StaticResource GenericSourceIconStyle}" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=other}" />
+                                <ic:FluentIcon Style="{StaticResource WingetSourceIconStyle}" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=winget}" />
+                                <ic:FluentIcon Style="{StaticResource MsStoreSourceIconStyle}" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=msstore}" />
+                                <ic:FluentIcon Style="{StaticResource LocalSourceIconStyle}" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=local}" />
+                                <ic:FluentIcon Style="{StaticResource GenericSourceIconStyle}" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=other}" />
                             </Grid>
-                            <TextBlock Text="{Binding SourceLabel}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding SourceLabel}" ToolTipService.ToolTip="{Binding SourceLabel}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -219,6 +224,11 @@
                             <MenuFlyoutItem Click="ContextMenuUpdateInteractive_Click" Text="Atualização interativa">
                                 <MenuFlyoutItem.Icon>
                                     <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem AutomationProperties.AutomationId="ContextMenuUpdateIgnoreHash" Click="ContextMenuUpdateIgnoreHash_Click" Text="Atualizar ignorando o hash (menos seguro)">
+                                <MenuFlyoutItem.Icon>
+                                    <ic:FluentIcon Icon="ShieldError" IconVariant="Regular" IconSize="Size16" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator />
@@ -265,12 +275,12 @@
                                 <Border Background="{ThemeResource AppBorderSubtleBrush}" CornerRadius="{StaticResource ControlCornerRadius}" Padding="6,2" Margin="2,4" HorizontalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
                                         <Grid Width="14" Height="14" Margin="0,0,4,0">
-                                            <ic:FluentIcon Style="{StaticResource WingetSourceIconStyle}" FontSize="14" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=winget}" />
-                                            <ic:FluentIcon Style="{StaticResource MsStoreSourceIconStyle}" FontSize="14" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=msstore}" />
-                                            <ic:FluentIcon Style="{StaticResource LocalSourceIconStyle}" FontSize="14" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=local}" />
-                                            <ic:FluentIcon Style="{StaticResource GenericSourceIconStyle}" FontSize="14" Visibility="{Binding Source, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=other}" />
+                                            <ic:FluentIcon Style="{StaticResource WingetSourceIconStyle}" FontSize="14" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=winget}" />
+                                            <ic:FluentIcon Style="{StaticResource MsStoreSourceIconStyle}" FontSize="14" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=msstore}" />
+                                            <ic:FluentIcon Style="{StaticResource LocalSourceIconStyle}" FontSize="14" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=local}" />
+                                            <ic:FluentIcon Style="{StaticResource GenericSourceIconStyle}" FontSize="14" Visibility="{Binding UpdateSource, Converter={StaticResource UpdateSourceVisibility}, ConverterParameter=other}" />
                                         </Grid>
-                                        <TextBlock Text="{Binding SourceLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding SourceLabel}" ToolTipService.ToolTip="{Binding SourceLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Border>
                                 <TextBlock FontSize="11" TextAlignment="Center" TextTrimming="CharacterEllipsis">
@@ -300,6 +310,11 @@
                             <MenuFlyoutItem Click="ContextMenuUpdateInteractive_Click" Text="Atualização interativa">
                                 <MenuFlyoutItem.Icon>
                                     <ic:FluentIcon Icon="Window" IconVariant="Regular" IconSize="Size16" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem AutomationProperties.AutomationId="ContextMenuUpdateIgnoreHash" Click="ContextMenuUpdateIgnoreHash_Click" Text="Atualizar ignorando o hash (menos seguro)">
+                                <MenuFlyoutItem.Icon>
+                                    <ic:FluentIcon Icon="ShieldError" IconVariant="Regular" IconSize="Size16" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator />
@@ -514,6 +529,15 @@
                                         <StackPanel Orientation="Horizontal">
                                             <ic:FluentIcon Icon="ArrowDownload" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             <TextBlock Text="WinGet" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <CheckBox.Resources>
+                                            <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+                                        </CheckBox.Resources>
+                                    </CheckBox>
+                                    <CheckBox x:Name="SourceWinProvisionCheck" AutomationProperties.AutomationId="SourceWinProvisionCheck" AutomationProperties.Name="WinProvision API" IsChecked="{Binding FilterWinProvision, Mode=TwoWay, UpdateSourceTrigger=Default}" IsThreeState="False" Click="SourceFilter_Changed" Margin="2,3">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ic:FluentIcon Icon="CloudArrowDown" IconVariant="Regular" IconSize="Size16" FontSize="16" Margin="0,0,8,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="WinProvision API" VerticalAlignment="Center" />
                                         </StackPanel>
                                         <CheckBox.Resources>
                                             <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>

@@ -37,12 +37,14 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         {
             OperationRunner.ConfigureInstallHandler(winGet.InstallPreferredAsync);
             OperationRunner.ConfigureUpdateHandler(winGet.UpdateAsync);
+            OperationRunner.ConfigureUpdateVerifier(winGet.VerifySuccessfulUpgradeAsync);
             OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => winGet.PrepareAsync(token, includeStore, log));
         }
         else
         {
             OperationRunner.ConfigureInstallHandler(engine.InstallPreferredAsync);
             OperationRunner.ConfigureUpdateHandler(engine.UpdateAsync);
+            OperationRunner.ConfigureUpdateVerifier(engine.VerifySuccessfulUpgradeAsync);
             OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => engine.PrepareAsync(token, includeStore, log));
         }
         OperationRunner.ConfigurePackageInstallOptionsProvider(options.Get);
@@ -52,12 +54,12 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
     public Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null) => app.IsSelf ? SelfManagementBlocked() : TrackAsync($"{app.Source}:{app.Id}", async token =>
     {
         token.ThrowIfCancellationRequested();
-        return await OperationRunner.RunInstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, installLocation: options?.InstallLocation, source: app.Source, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: options?.IgnoreSecurityHash == true, useSavedPackageOptions: options is null, requiresElevation: options?.RequiresElevation == true, version: options?.Version, customArguments: options?.CustomArguments);
+        return await OperationRunner.RunInstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, installLocation: options?.InstallLocation, source: app.Source, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: options?.IgnoreSecurityHash == true, useSavedPackageOptions: options is null, requiresElevation: options?.RequiresElevation == true, version: options?.Version, customArguments: options?.CustomArguments, preInstallScript: options?.PreInstallScript, postInstallScript: options?.PostInstallScript, runInstallHooks: options?.RunInstallHooks == true);
     });
     public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => ApplicationPackagePolicy.IsSelf(package.Id, package.Name) ? SelfManagementBlocked() : TrackAsync($"{package.Source}:{package.Id}", async token =>
     {
         token.ThrowIfCancellationRequested();
-        return await OperationRunner.RunUpdateAsync(_queue, _executor, package.Id, package.Name, package.IconUrl, source: package.Source, elevated: options?.RequiresElevation == true, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: options?.IgnoreSecurityHash == true, useSavedPackageOptions: options is null, version: options?.Version);
+        return await OperationRunner.RunUpdateAsync(_queue, _executor, package.Id, package.Name, package.IconUrl, source: package.Source, elevated: options?.RequiresElevation == true, interactive: options?.Interactive == true, scope: options?.Scope, architecture: options?.Architecture, ignoreSecurityHash: options?.IgnoreSecurityHash == true, useSavedPackageOptions: options is null, version: options?.Version, offeredPackage: package, packageOptions: options);
     });
     public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => app.IsSelf ? SelfManagementBlocked() : TrackAsync(InstalledPackagesService.IsOffice(app.Id, app.Name) ? "office:removeall" : $"{app.Source}:{app.Id}", async token =>
     {

@@ -2,9 +2,11 @@ using WinProvision.Core.Models;
 using WinProvision.Core.Services;
 using WinProvision.PackageManagement;
 namespace WinProvision.Cli;
-public sealed class ResilientCliBackend(Action<string> diagnostic, Func<PackageInstallMethod>? preferredMethod = null, Func<string, string?, PackageInstallOptions?>? updateOptions = null) : ICliPackageBackend, IAsyncDisposable
+public sealed class ResilientCliBackend(Action<string> diagnostic, Func<PackageInstallMethod>? preferredMethod = null,
+    Func<string, string?, PackageInstallOptions?>? updateOptions = null,
+    Func<PackageUpdateMethod>? preferredUpdateMethod = null) : ICliPackageBackend, IAsyncDisposable
 {
-    private readonly ApplicationEngine _engine = new(diagnostic, preferredMethod);
+    private readonly ApplicationEngine _engine = new(diagnostic, preferredMethod, preferredUpdateMethod);
     public Task<List<UpgradablePackage>> SearchAsync(InteractiveCliRequest request, CancellationToken token) => _engine.SearchAsync(request, token);
     public Task<List<UpgradablePackage>> ListAsync(string? source, CancellationToken token) => _engine.ListAsync(source, token);
     public Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token) => _engine.UpdatesAsync(log, token);

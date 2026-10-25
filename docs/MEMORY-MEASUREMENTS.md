@@ -1,5 +1,9 @@
 # Medições de memória da Store
 
+## Verificação de desenvolvimento — 24/10/2026
+
+Em um build Debug x64, `scripts/measure-memory.ps1` mediu a tela Descobrir com 10 segundos de aquecimento e 10 amostras de um segundo. A média de memória privada passou de 265,58 MiB antes das mudanças de ciclo de vida/criação sob demanda para 250,86 MiB depois; a média de working set passou de 343,19 para 328,83 MiB. Os registros estão em `artifacts/validation/memory-before.json` e `artifacts/validation/memory-after.json`. Uma execução por versão é apenas indicativa: ela não isola a criação sob demanda de outros fatores, não mede a janela minimizada e não substitui a série Release Native AOT abaixo.
+
 ## Ambiente e método
 
 - Data dos registros: 19/10/2026 (UTC, conforme timestamps dos CSVs).

@@ -2,6 +2,7 @@ using WinProvision.Core.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using WinProvision.Core.Models;
 
@@ -37,7 +38,9 @@ public sealed partial class PackageInstallOptionsService
     {
         if (!IsWinGet(source)) return null;
         lock (_sync)
-            return _options.GetValueOrDefault(GetKey(id)) is { } options ? options with { IgnoreSecurityHash = false } : null;
+            return _options.GetValueOrDefault(GetKey(id)) is { } options
+                ? options with { IgnoreSecurityHash = false, RunInstallHooks = false }
+                : null;
     }
 
     public void Save(string id, string? source, PackageInstallOptions options)
@@ -50,9 +53,13 @@ public sealed partial class PackageInstallOptionsService
         var normalized = options with
         {
             IgnoreSecurityHash = false,
+            RunInstallHooks = false,
             Scope = NormalizeScope(options.Scope),
             Architecture = NormalizeArchitecture(options.Architecture),
-            InstallLocation = string.IsNullOrWhiteSpace(options.InstallLocation) ? null : options.InstallLocation.Trim()
+            InstallLocation = string.IsNullOrWhiteSpace(options.InstallLocation) ? null : options.InstallLocation.Trim(),
+            CustomArguments = NormalizeArguments(options.CustomArguments),
+            PreInstallScript = NormalizeScript(options.PreInstallScript),
+            PostInstallScript = NormalizeScript(options.PostInstallScript)
         };
 
         lock (_sync)
@@ -99,4 +106,20 @@ public sealed partial class PackageInstallOptionsService
         "arm64" => "arm64",
         _ => null
     };
+
+    private static string? NormalizeScript(string? script)
+    {
+        if (string.IsNullOrWhiteSpace(script)) return null;
+        if (Encoding.UTF8.GetByteCount(script) > 32_768)
+            throw new ArgumentException("Cada script de instalação deve ter no máximo 32 KiB.", nameof(script));
+        return script.Trim();
+    }
+
+    private static string? NormalizeArguments(string? arguments)
+    {
+        if (string.IsNullOrWhiteSpace(arguments)) return null;
+        if (Encoding.UTF8.GetByteCount(arguments) > 4_096 || arguments.Any(char.IsControl))
+            throw new ArgumentException("Os argumentos adicionais são inválidos ou excedem 4 KiB.", nameof(arguments));
+        return arguments.Trim();
+    }
 }

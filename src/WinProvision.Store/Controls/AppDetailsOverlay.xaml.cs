@@ -307,6 +307,7 @@ public sealed partial class AppDetailsOverlay : UserControl
             Track(session, _model.LoadSelectedVersionScopeAsync(session.Source.Token));
     }
     private void CopyInstallCommandButton_Click(object sender, RoutedEventArgs args) => _model.CopyInstallCommand();
+    private void CopyInstallerSha256Button_Click(object sender, RoutedEventArgs args) => _model.CopyInstallerSha256();
     private async void SelectLocationButton_Click(object sender, RoutedEventArgs args) { if (await _presentation.PickFolderAsync() is { } location) _model.SetLocation(location); }
     private static MenuFlyoutItem MenuItem(string text, Action action, bool enabled = true)
     {

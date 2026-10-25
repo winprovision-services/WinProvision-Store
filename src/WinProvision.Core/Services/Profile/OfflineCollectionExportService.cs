@@ -131,6 +131,10 @@ public sealed class OfflineCollectionExportService(IOfflineCollectionSource sour
     {
         if (!string.IsNullOrEmpty(request.Source) && !request.Source.Equals("winget", StringComparison.OrdinalIgnoreCase))
             return "Esta origem não fornece um instalador exportável pelo catálogo WinGet.";
+        if (request.Options is { } hookOptions
+            && (!string.IsNullOrWhiteSpace(hookOptions.PreInstallScript)
+                || !string.IsNullOrWhiteSpace(hookOptions.PostInstallScript)))
+            return "Scripts pré/pós-instalação são locais e não podem ser incluídos no pacote offline.";
         if (request.Options is { } options && (options.Interactive || options.IgnoreSecurityHash
             || !string.IsNullOrWhiteSpace(options.CustomArguments) || !string.IsNullOrWhiteSpace(options.InstallLocation)
             || !string.IsNullOrWhiteSpace(options.Version)))

@@ -29,13 +29,20 @@ public sealed partial class InstalledPackagesService(
 {
     private readonly CancellationTokenSource _lifetime = new();
     private readonly object _comGate = new();
+    private readonly object _listGate = new();
+    private Task<IReadOnlyList<InstalledPackageInfo>>? _listTask;
+    private CancellationTokenSource? _listCancellation;
+    private int _listWaiters;
+    private bool _listAbandoned;
     private Task<IReadOnlyList<InstalledPackageInfo>>? _comTask;
-    private Task<IReadOnlyList<InstalledPackageInfo>> GetComTask(IReadOnlyList<AppEntry> catalog, CancellationToken token)
+    private CancellationToken _comTaskCallerToken;
+    private Task<IReadOnlyList<InstalledPackageInfo>> GetComTask(CatalogLookup catalog, CancellationToken token)
     {
         lock (_comGate)
         {
-            if (_comTask is null || _comTask.IsCompleted)
+            if (_comTask is null || _comTask.IsCompleted || _comTaskCallerToken.IsCancellationRequested)
             {
+                _comTaskCallerToken = token;
                 _comTask = Task.Run(async () =>
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token, _lifetime.Token);
@@ -56,6 +63,14 @@ public sealed partial class InstalledPackagesService(
         if (worker is not null)
             try { await worker.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
             catch (Exception exception) { WinProvisionLog.Warning(exception, "InstalledCOMShutdown"); }
+        lock (_listGate) worker = _listTask;
+        if (worker is not null)
+            try { await worker.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (OperationCanceledException exception) when (_lifetime.IsCancellationRequested)
+            {
+                WinProvisionLog.Write($"Installed inventory cancellation confirmed during shutdown: {exception.Message}");
+            }
+            catch (Exception exception) { WinProvisionLog.Warning(exception, "InstalledListShutdown"); }
         _lifetime.Dispose();
     }
 
@@ -71,7 +86,88 @@ public sealed partial class InstalledPackagesService(
 
     public async Task<IReadOnlyList<InstalledPackageInfo>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var catalog = store.GetAll();
+        cancellationToken.ThrowIfCancellationRequested();
+        Task<IReadOnlyList<InstalledPackageInfo>> scan;
+        CancellationTokenSource scanCancellation;
+        bool started = false;
+        lock (_listGate)
+        {
+            ObjectDisposedException.ThrowIf(_lifetime.IsCancellationRequested, this);
+            if (_listTask is null || _listAbandoned || _listCancellation?.IsCancellationRequested == true)
+            {
+                scanCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+                _listCancellation = scanCancellation;
+                scan = _listTask = ListCoreAsync(scanCancellation.Token);
+                _listWaiters = 0;
+                _listAbandoned = false;
+                started = true;
+            }
+            else
+            {
+                scan = _listTask;
+                scanCancellation = _listCancellation!;
+            }
+            _listWaiters++;
+        }
+
+        if (started)
+            _ = ObserveListTaskAsync(scan, scanCancellation);
+        try
+        {
+            return await scan.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CancellationTokenSource? cancel = null;
+            lock (_listGate)
+            {
+                if (ReferenceEquals(_listTask, scan) && --_listWaiters == 0 && !scan.IsCompleted)
+                {
+                    _listAbandoned = true;
+                    cancel = _listCancellation;
+                }
+            }
+            try { cancel?.Cancel(); }
+            catch (ObjectDisposedException exception)
+            {
+                WinProvisionLog.Write($"Installed inventory cancellation raced with completed scan cleanup: {exception.Message}");
+            }
+        }
+    }
+
+    private async Task ObserveListTaskAsync(
+        Task<IReadOnlyList<InstalledPackageInfo>> scan,
+        CancellationTokenSource scanCancellation)
+    {
+        try
+        {
+            await scan.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (scanCancellation.IsCancellationRequested)
+        {
+            WinProvisionLog.Write("Installed inventory scan canceled after all callers left or service shutdown.");
+        }
+        catch (Exception exception)
+        {
+            WinProvisionLog.Warning(exception, "InstalledPackagesService.ListScan");
+        }
+        finally
+        {
+            lock (_listGate)
+                if (ReferenceEquals(_listTask, scan) && ReferenceEquals(_listCancellation, scanCancellation))
+                {
+                    _listTask = null;
+                    _listWaiters = 0;
+                    _listCancellation = null;
+                    _listAbandoned = false;
+                }
+            scanCancellation.Dispose();
+        }
+    }
+
+    private async Task<IReadOnlyList<InstalledPackageInfo>> ListCoreAsync(CancellationToken cancellationToken)
+    {
+        var catalog = new CatalogLookup(store.GetAll());
         var packages = new List<InstalledPackageInfo>();
         var failures = new List<Exception>();
         bool hasSuccessfulSource = false;
@@ -105,7 +201,7 @@ public sealed partial class InstalledPackagesService(
                     WinProvisionLog.Write($"INSTALLED LIST CLI source={source ?? "all"} count={cli.Count}");
                     foreach (var package in cli)
                     {
-                        var app = catalog.FirstOrDefault(item => item.Id.Equals(package.Id, StringComparison.OrdinalIgnoreCase));
+                        var app = catalog.FindById(package.Id);
                         Merge(packages, new InstalledPackageInfo(package.Name, package.Id, package.CurrentVersion,
                             string.IsNullOrWhiteSpace(package.Source) ? source ?? (package.Id.StartsWith("MSIX\\", StringComparison.OrdinalIgnoreCase) ? "msstore" : "local") : package.Source,
                             app?.IconUrl ?? "", "", "", "", IsSystemComponent(package.Name, package.Id)));
@@ -131,9 +227,7 @@ public sealed partial class InstalledPackagesService(
             hasSuccessfulSource = true;
             foreach (var app in installedApps.GetAllInstalledApps())
             {
-                var catalogApp = catalog.FirstOrDefault(item =>
-                    string.Equals(item.Id, app.Id, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(item.Name, app.DisplayName, StringComparison.OrdinalIgnoreCase));
+                var catalogApp = catalog.FindByIdOrName(app.Id, app.DisplayName);
                 Merge(packages, new InstalledPackageInfo(
                     app.DisplayName,
                     app.Id,
@@ -209,7 +303,7 @@ public sealed partial class InstalledPackagesService(
     }
 
     private static async Task<IReadOnlyList<InstalledPackageInfo>> ListFromComAsync(
-        IReadOnlyList<AppEntry> catalog,
+        CatalogLookup catalog,
         CancellationToken cancellationToken)
     {
         var manager = WinGetFactoryHelper.CreateResilientPackageManager();
@@ -236,9 +330,7 @@ public sealed partial class InstalledPackagesService(
                 continue;
 
             string source = installed.PackageCatalog?.Info?.Name ?? string.Empty;
-            var catalogApp = catalog.FirstOrDefault(item =>
-                string.Equals(item.Id, package.Id, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(item.Name, package.Name, StringComparison.OrdinalIgnoreCase));
+            var catalogApp = catalog.FindByIdOrName(package.Id, package.Name);
             packages.Add(new InstalledPackageInfo(
                 package.Name,
                 package.Id,
@@ -273,6 +365,38 @@ public sealed partial class InstalledPackagesService(
         packages.Any(package =>
             string.Equals(package.Id, id, StringComparison.OrdinalIgnoreCase)
             || string.Equals(package.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    private sealed class CatalogLookup
+    {
+        private readonly Dictionary<string, (AppEntry Entry, int Index)> _byId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (AppEntry Entry, int Index)> _byName = new(StringComparer.OrdinalIgnoreCase);
+
+        public CatalogLookup(IEnumerable<AppEntry> entries)
+        {
+            int index = 0;
+            foreach (AppEntry entry in entries)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Id))
+                    _byId.TryAdd(entry.Id, (entry, index));
+                if (!string.IsNullOrWhiteSpace(entry.Name))
+                    _byName.TryAdd(entry.Name, (entry, index));
+                index++;
+            }
+        }
+
+        public AppEntry? FindById(string? id) =>
+            !string.IsNullOrWhiteSpace(id) && _byId.TryGetValue(id, out var match) ? match.Entry : null;
+
+        public AppEntry? FindByIdOrName(string? id, string? name)
+        {
+            (AppEntry Entry, int Index) idMatch = default;
+            (AppEntry Entry, int Index) nameMatch = default;
+            bool hasId = !string.IsNullOrWhiteSpace(id) && _byId.TryGetValue(id, out idMatch);
+            bool hasName = !string.IsNullOrWhiteSpace(name) && _byName.TryGetValue(name, out nameMatch);
+            return hasId && (!hasName || idMatch.Index <= nameMatch.Index) ? idMatch.Entry
+                : hasName ? nameMatch.Entry : null;
+        }
+    }
 
     private static readonly string[] InboxAppFamilyPrefixes =
     [

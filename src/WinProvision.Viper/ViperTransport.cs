@@ -34,9 +34,12 @@ internal sealed class ViperTransport : IDisposable
             || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Fragment))
             throw new ArgumentException("Use uma URL HTTPS sem credenciais ou fragmento; HTTP exige autorização explícita.");
     }
-    public async Task<ResponseLease> SendAsync(ViperRequest download, long? from, long? to, string? etag, CancellationToken token)
+    public async Task<ResponseLease> SendAsync(ViperRequest download, long? from, long? to, string? etag, CancellationToken token,
+        Uri? resolvedUri = null)
     {
-        Uri uri = download.Source;
+        // Keep the original request identity for credential isolation even when the
+        // probe has resolved a mirror or a signed URL for this transfer.
+        Uri uri = resolvedUri ?? download.Source;
         for (int redirect = 0; redirect <= 5; redirect++)
         {
             ValidateUri(uri);
@@ -62,8 +65,7 @@ internal sealed class ViperTransport : IDisposable
                 {
                     if (redirect == 5 || response.Headers.Location is not { } location) throw new ViperProtocolException("Redirecionamento inválido ou excessivo.");
                     Uri next = location.IsAbsoluteUri ? location : new Uri(uri, location);
-                    if (uri.Scheme == "https" && next.Scheme != "https") throw new ViperProtocolException("O redirecionamento reduz a segurança da conexão.");
-                    uri = next; continue;
+                    uri = RequireSecureRedirect(uri, next); continue;
                 }
                 if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.RequestedRangeNotSatisfiable)
                 {
@@ -91,7 +93,14 @@ internal sealed class ViperTransport : IDisposable
         for (int attempt = 1; ; attempt++)
         {
             token.ThrowIfCancellationRequested();
-            try { return await action().ConfigureAwait(false); }
+            try
+            {
+                try { return await action().ConfigureAwait(false); }
+                catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+                {
+                    throw new TimeoutException("O transporte interrompeu a transferência sem cancelamento do solicitante.", ex);
+                }
+            }
             catch (Exception ex) when (attempt < _options.MaxAttempts && IsTransient(ex) && !token.IsCancellationRequested)
             {
                 TimeSpan delay = ex is ViperHttpException { RetryAfter: { } requested }
@@ -100,6 +109,15 @@ internal sealed class ViperTransport : IDisposable
                 await Task.Delay(delay < TimeSpan.Zero ? TimeSpan.Zero : delay, token).ConfigureAwait(false);
             }
         }
+    }
+    internal static Uri RequireSecureRedirect(Uri current, Uri next)
+    {
+        if (current.Scheme != "https" || next.Scheme == "https") return next;
+        // Mirror selectors can advertise HTTP even when the mirror supports TLS.
+        // Contact only its HTTPS endpoint; never send a request over plain HTTP.
+        if (next.Scheme == "http" && next.IsDefaultPort)
+            return new UriBuilder(next) { Scheme = "https", Port = -1 }.Uri;
+        throw new ViperProtocolException("O redirecionamento não oferece um destino HTTPS seguro.");
     }
     private static bool IsTransient(Exception ex) => ex switch
     {

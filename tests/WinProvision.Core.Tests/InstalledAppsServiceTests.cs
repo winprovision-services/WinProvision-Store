@@ -6,6 +6,23 @@ namespace WinProvision.Core.Tests;
 
 public sealed class InstalledAppsServiceTests
 {
+    [Theory]
+    [InlineData(false, "uninstall.exe", null)]
+    [InlineData(true, "uninstall.exe", "msi")]
+    [InlineData(false, "MsiExec.exe /X{product-code}", "msi")]
+    public void InventoryKeepsUnknownPublisherAndInstallerTechnologyAbsent(bool windowsInstaller, string uninstall, string? expectedType)
+    {
+        var app = InstalledAppsService.ToUpdateInventoryEntry(new InstalledAppDetail
+        {
+            Id = "registry-key", DisplayName = "App", DisplayVersion = "23.10", Scope = "user",
+            UninstallString = uninstall, IsWindowsInstaller = windowsInstaller
+        });
+        Assert.Empty(app.Publisher);
+        Assert.Equal(expectedType, app.InstalledInstallerType);
+        Assert.Equal("registry-key", app.InstalledRegistryId);
+        Assert.Equal("user", app.InstalledScope);
+    }
+
     [Fact]
     public void RegistryLocationsCoverBothHivesAndViewsWithoutHardcodedWow6432Node()
     {

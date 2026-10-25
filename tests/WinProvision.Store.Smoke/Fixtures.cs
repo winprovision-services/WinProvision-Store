@@ -39,6 +39,8 @@ internal sealed partial class SmokeAccountBackupService : IAccountBackupService
 internal sealed partial class SmokePackageBackend : IPackageBackend
 {
     public Func<AppEntry, Task<WingetExecutionResult>>? InstallHandler { get; set; }
+    public Func<UpgradablePackage, PackageInstallOptions?, Task<WingetExecutionResult>>? UpdateHandler { get; set; }
+    public PackageInstallOptions? LastUpdateOptions { get; private set; }
     public int InstallCount { get; set; }
     public Task ShutdownAsync() => Task.CompletedTask;
     public void CancelAll() { }
@@ -47,12 +49,20 @@ internal sealed partial class SmokePackageBackend : IPackageBackend
         InstallCount++;
         return InstallHandler?.Invoke(app) ?? throw new NotSupportedException();
     }
-    public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null) => throw new NotSupportedException();
+    public Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null)
+    {
+        LastUpdateOptions = options;
+        return UpdateHandler?.Invoke(package, options) ?? throw new NotSupportedException();
+    }
     public Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false) => throw new NotSupportedException();
     public Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        return Task.FromResult(new List<UpgradablePackage> { new() { Id = "Test.Package", Name = "Aplicativo de teste", CurrentVersion = "1", AvailableVersion = "2", Source = "winget" } });
+        return Task.FromResult(new List<UpgradablePackage>
+        {
+            new() { Id = "Test.Package", Name = "Aplicativo de teste", CurrentVersion = "1", AvailableVersion = "2", Source = "winget" },
+            new() { Id = "Test.Api", Name = "Aplicativo da API", CurrentVersion = "1.0", AvailableVersion = "2.0", Source = "winget", IsWinProvisionApiUpdate = true }
+        });
     }
     internal sealed partial class SmokeOfficeCollectionInstaller : IOfficeCollectionInstaller
     {

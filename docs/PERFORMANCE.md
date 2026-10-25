@@ -7,7 +7,7 @@ O cliente utiliza carregamento sob demanda e limites de cache para controlar o u
 - As páginas são criadas conforme a navegação.
 - ViewModels preservam o estado necessário sem manter páginas anteriores.
 - Listas utilizam os recursos de virtualização disponíveis.
-- Detalhes e imagens são carregados conforme o uso.
+- O painel de detalhes e seu ViewModel são criados na primeira abertura; imagens são carregadas conforme o uso.
 - Animações respeitam a preferência de movimento do Windows.
 
 ## Caches

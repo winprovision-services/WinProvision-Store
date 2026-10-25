@@ -42,6 +42,7 @@ public enum WingetFailureReason
     OperationCanceled,
     BlockedByPolicy,
     NoApplicableInstallers,
+    NoApplicableUpgrade,
     PackageAgreementsNotAccepted,
     DownloadError,
     InstallerHashMismatch,
@@ -71,17 +72,6 @@ public static class WingetErrorTranslator
     // (ex.: 0x8A150014 vale tanto pra "pacote não existe no catálogo" quanto pra "pacote
     // não está instalado").
     private const int NoApplicationsFound = unchecked((int)0x8A150014);
-    private const int NoApplicableInstaller = unchecked((int)0x8A150010);
-    private const int DownloadFailed = unchecked((int)0x8A150008);
-    private const int InstallerHashMismatch = unchecked((int)0x8A150011);
-    private const int PackageAgreementsNotAcceptedCode = unchecked((int)0x8A150041);
-    private const int InternalErrorCode = unchecked((int)0x8A150001);
-    private const int SourceDataMissing = unchecked((int)0x8A15000F);
-    private const int SourceOpenFailed = unchecked((int)0x8A150045);
-    private const int InstallerNeedsElevation = unchecked((int)0x8A150019);
-    private const int StorePackageNeedsElevation = unchecked((int)0x80073D28);
-    private const int UninstallNeedsElevation = unchecked((int)0x8A150030);
-    private const int InstallerProhibitsElevation = unchecked((int)0x8A150056);
 
     /// <summary>
     /// Classifica usando o texto E o exit code do winget. Prefira esta sobrecarga: o texto
@@ -91,26 +81,18 @@ public static class WingetErrorTranslator
     {
         if (InstallerExitCodes.IsWingetSuccess(exitCode))
             return WingetFailureReason.Unknown;
+
+        // O mesmo código é usado quando o pacote não existe no catálogo e
+        // quando nenhum pacote instalado corresponde ao critério.
+        if (exitCode == NoApplicationsFound)
+            return Classify(output) == WingetFailureReason.NoPackageFound
+                ? WingetFailureReason.NoPackageFound : WingetFailureReason.PackageNotInCatalog;
+
         WingetFailureReason mapped = InstallerExitCodes.Classify(exitCode);
         if (mapped != WingetFailureReason.Unknown)
             return mapped;
 
-        WingetFailureReason byCode = exitCode switch
-        {
-            NoApplicationsFound => Classify(output) == WingetFailureReason.NoPackageFound
-                ? WingetFailureReason.NoPackageFound : WingetFailureReason.PackageNotInCatalog,
-            NoApplicableInstaller => WingetFailureReason.NoApplicableInstallers,
-            DownloadFailed => WingetFailureReason.DownloadError,
-            InstallerHashMismatch => WingetFailureReason.InstallerHashMismatch,
-            PackageAgreementsNotAcceptedCode => WingetFailureReason.PackageAgreementsNotAccepted,
-            SourceDataMissing or SourceOpenFailed => WingetFailureReason.CatalogError,
-            InstallerNeedsElevation or StorePackageNeedsElevation => WingetFailureReason.ElevationRequired,
-            UninstallNeedsElevation => WingetFailureReason.UninstallCommandFailed,
-            InstallerProhibitsElevation => WingetFailureReason.ElevationProhibited,
-            InternalErrorCode => WingetFailureReason.InternalError,
-            _ => WingetFailureReason.Unknown,
-        };
-        return byCode != WingetFailureReason.Unknown ? byCode : Classify(output);
+        return Classify(output);
     }
 
     public static WingetFailureReason Classify(string? output)
@@ -194,6 +176,9 @@ public static class WingetErrorTranslator
 
         WingetFailureReason.NoApplicableInstallers =>
             $"Não há instalador compatível com este computador para \"{appName}\".",
+
+        WingetFailureReason.NoApplicableUpgrade =>
+            $"A atualização disponível de \"{appName}\" não se aplica à instalação atual.",
 
         WingetFailureReason.PackageAgreementsNotAccepted =>
             $"Aceite os termos de \"{appName}\" e tente novamente.",

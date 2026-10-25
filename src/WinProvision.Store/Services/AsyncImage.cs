@@ -778,6 +778,7 @@ public sealed partial class AsyncImage : DependencyObject
 
     private sealed partial class BitmapMemoryCache(long maxBytes)
     {
+        private static readonly TimeSpan IdleRetention = TimeSpan.FromMinutes(5);
         private readonly Lock _gate = new();
         private readonly Dictionary<string, LinkedListNode<Entry>> _entries = new(StringComparer.Ordinal);
         private readonly LinkedList<Entry> _leastRecentlyUsed = new();
@@ -788,6 +789,7 @@ public sealed partial class AsyncImage : DependencyObject
         {
             lock (_gate)
             {
+                TrimIdle(DateTime.UtcNow - IdleRetention);
                 if (_entries.TryGetValue(key, out LinkedListNode<Entry>? node))
                 {
                     _leastRecentlyUsed.Remove(node);
@@ -808,6 +810,7 @@ public sealed partial class AsyncImage : DependencyObject
             SetBudget(GetEffectiveMemoryBudget());
             lock (_gate)
             {
+                TrimIdle(DateTime.UtcNow - IdleRetention);
                 if (size > _maxBytes)
                     return;
                 if (_entries.Remove(key, out LinkedListNode<Entry>? existing))
@@ -857,11 +860,18 @@ public sealed partial class AsyncImage : DependencyObject
         {
             lock (_gate)
             {
-                DateTime expiredBefore = DateTime.UtcNow.AddMinutes(-5);
-                while (_leastRecentlyUsed.Last is { } last && last.Value.LastAccessUtc < expiredBefore)
-                    Remove(last);
+                TrimIdle(DateTime.UtcNow - IdleRetention);
                 return (_entries.Count, _currentBytes, _maxBytes);
             }
+        }
+
+        // Entries expire on ordinary cache traffic as well as when the settings
+        // page asks for statistics, so browsing away from images releases old
+        // decoded bitmaps as soon as image loading resumes.
+        private void TrimIdle(DateTime expiredBefore)
+        {
+            while (_leastRecentlyUsed.Last is { } last && last.Value.LastAccessUtc < expiredBefore)
+                Remove(last);
         }
 
         private void Remove(LinkedListNode<Entry> node)

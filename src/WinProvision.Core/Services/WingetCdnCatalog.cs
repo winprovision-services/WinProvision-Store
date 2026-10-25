@@ -16,7 +16,7 @@ public static class WingetCdnCatalog
     public sealed record Version(string Number, string DetailPath, string Sha256, List<string> Architectures);
     public sealed record App(AppEntry Entry, List<Version> Versions);
 
-    public static async Task<Snapshot> LoadIndexAsync(HttpClient http, CancellationToken token)
+    public static async Task<Snapshot> LoadIndexAsync(HttpClient http, CancellationToken token, Snapshot? cached = null)
     {
         byte[] catalogBytes = await ReadAsync(http, "catalog.json", token);
         using var catalogDocument = JsonDocument.Parse(catalogBytes);
@@ -27,7 +27,9 @@ public static class WingetCdnCatalog
         string hash = Required(catalog, "searchIndexSha256");
         if (!IsSha256(hash) || indexPath != "winget/v1/search/" + hash + ".json")
             throw new InvalidDataException("Referência do índice WinGet inválida.");
-        byte[] indexBytes = await ReadAsync(http, indexPath["winget/v1/".Length..], token, hash);
+        byte[] indexBytes = cached is not null && cached.IndexSha256.Equals(hash, StringComparison.OrdinalIgnoreCase)
+            ? cached.IndexBytes
+            : await ReadAsync(http, indexPath["winget/v1/".Length..], token, hash);
         return ParseSnapshot(catalogBytes, indexBytes);
     }
 
@@ -84,12 +86,14 @@ public static class WingetCdnCatalog
             generated, apps, catalogBytes, indexBytes);
     }
 
-    public static async Task<App> LoadAppAsync(HttpClient http, AppEntry summary, CancellationToken token)
+    public static async Task<App> LoadAppAsync(HttpClient http, AppEntry summary, CancellationToken token,
+        string? cacheDirectory = null)
     {
         string path = summary.CatalogDetailPath ?? "";
         if (!SafePath(path, "manifests/", "/app.json"))
             throw new InvalidDataException("Caminho do aplicativo WinGet inválido.");
-        using var document = JsonDocument.Parse(await ReadAsync(http, path, token, summary.CatalogDetailSha256));
+        using var document = JsonDocument.Parse(await ReadCachedOrRemoteAsync(
+            http, path, token, summary.CatalogDetailSha256, cacheDirectory));
         JsonElement root = document.RootElement;
         if (Int(root, "schemaVersion") != 1 || Required(root, "id") != summary.Id
             || Required(root, "source") != "winget")
@@ -108,8 +112,10 @@ public static class WingetCdnCatalog
             versions.Add(new Version(number, detailPath, hash, Strings(item, "architectures")));
         }
         string latest = Required(root, "latestVersion");
-        if (versions.Count == 0 || !versions.Any(item => item.Number == latest))
-            throw new InvalidDataException("A versão mais recente não está na lista do aplicativo.");
+        if (versions.Count == 0 || !versions.Any(item => item.Number == latest)
+            || !string.IsNullOrWhiteSpace(summary.Version)
+                && !latest.Equals(summary.Version, StringComparison.Ordinal))
+            throw new InvalidDataException("A versão mais recente não corresponde ao índice ou não está na lista do aplicativo.");
         if (!root.TryGetProperty("package", out JsonElement package) || package.ValueKind != JsonValueKind.Object)
             throw new InvalidDataException("Metadados do aplicativo WinGet ausentes.");
         var app = new AppEntry
@@ -130,13 +136,14 @@ public static class WingetCdnCatalog
     }
 
     public static async Task<PackageManifest> LoadVersionAsync(HttpClient http, App app,
-        string? requestedVersion, CancellationToken token)
+        string? requestedVersion, CancellationToken token, string? cacheDirectory = null)
     {
         string version = string.IsNullOrWhiteSpace(requestedVersion) ? app.Entry.Version : requestedVersion;
         Version reference = app.Versions.FirstOrDefault(item => item.Number == version)
             ?? throw new InvalidDataException("A versão solicitada não consta no catálogo publicado.");
         string basePath = app.Entry.CatalogDetailPath![..^"app.json".Length];
-        byte[] bytes = await ReadAsync(http, basePath + reference.DetailPath, token, reference.Sha256);
+        byte[] bytes = await ReadCachedOrRemoteAsync(
+            http, basePath + reference.DetailPath, token, reference.Sha256, cacheDirectory);
         using var document = JsonDocument.Parse(bytes);
         JsonElement root = document.RootElement;
         if (Int(root, "schemaVersion") != 1 || Required(root, "id") != app.Entry.Id
@@ -157,6 +164,8 @@ public static class WingetCdnCatalog
             var installer = new CatalogInstaller
             {
                 Architecture = Optional(item, "architecture"), Type = Optional(item, "type"),
+                NestedType = Optional(item, "nestedType"), NestedInstallerFile = Optional(item, "nestedInstallerFile"),
+                PortableCommandAlias = Optional(item, "portableCommandAlias"),
                 Scope = Optional(item, "scope"), ElevationRequirement = Optional(item, "elevationRequirement"),
                 ProductCode = Optional(item, "productCode"), Url = Required(item, "url"),
                 Sha256 = Required(item, "sha256"), SilentArgs = Optional(silent, "arguments"),
@@ -166,6 +175,48 @@ public static class WingetCdnCatalog
             result.Installers.Add(installer);
         }
         return result;
+    }
+
+    private static async Task<byte[]> ReadCachedOrRemoteAsync(
+        HttpClient http, string path, CancellationToken token, string? sha256, string? cacheDirectory)
+    {
+        if (cacheDirectory is null || !IsSha256(sha256 ?? string.Empty))
+            return await ReadAsync(http, path, token, sha256);
+
+        string cacheRoot = Path.Combine(cacheDirectory, "winget-v1-details");
+        string cachePath = Path.Combine(cacheRoot, sha256![..2], sha256 + ".json");
+        try
+        {
+            if (File.Exists(cachePath))
+            {
+                var attributes = File.GetAttributes(cachePath);
+                var info = new FileInfo(cachePath);
+                if ((attributes & FileAttributes.ReparsePoint) == 0 && info.Length is > 0 and <= MaximumJsonBytes)
+                {
+                    byte[] cached = await File.ReadAllBytesAsync(cachePath, token);
+                    if (SHA256.HashData(cached).AsSpan().SequenceEqual(Convert.FromHexString(sha256)))
+                        return cached;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Cache local inválido/inacessível não impede consulta remota.
+            CoreLog.Warning(ex, "ReadWingetCatalogDetailCache");
+        }
+
+        byte[] remote = await ReadAsync(http, path, token, sha256);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+            await AtomicFile.WriteAllBytesAsync(cachePath, remote, token);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A resposta já foi íntegra; falha de persistência só reduz o desempenho futuro.
+            CoreLog.Warning(ex, "WriteWingetCatalogDetailCache");
+        }
+        return remote;
     }
 
     public static void ApplyVersionMetadata(AppEntry entry, JsonElement detail)

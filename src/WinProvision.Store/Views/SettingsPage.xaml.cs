@@ -21,7 +21,7 @@ public sealed partial class SettingsPage : Page
             ["Interface"] = ("Interface e inicialização", "Personalize o tema e a inicialização do aplicativo.", PanelInterface),
             ["Operations"] = ("Armazenamento e cache", "Atualize o catálogo e gerencie o espaço usado pelos caches.", PanelOperations)
         };
-        _targets = new() { ["notification-categories"] = NotificationCategoriesCard, ["concurrency"] = ConcurrencyCard, ["installer-downloads"] = InstallerDownloadsCard, ["scheduled-maintenance"] = ScheduledMaintenanceCard, ["elevation-cache"] = ElevationCacheCard, ["install-method"] = InstallMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["provisioning-menu"] = ProvisioningMenuCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
+        _targets = new() { ["notification-categories"] = NotificationCategoriesCard, ["concurrency"] = ConcurrencyCard, ["installer-downloads"] = InstallerDownloadsCard, ["scheduled-maintenance"] = ScheduledMaintenanceCard, ["elevation-cache"] = ElevationCacheCard, ["install-method"] = InstallMethodCard, ["update-method"] = UpdateMethodCard, ["check-updates"] = AppUpdateCard, ["open-logs"] = PrivacyCard, ["reset-preferences"] = PrivacyCard, ["theme"] = ThemeCard, ["startup"] = StartupCard, ["startup-page"] = StartupPageCard, ["provisioning-menu"] = ProvisioningMenuCard, ["clear-cache"] = CacheCard, ["refresh-catalog"] = CatalogRefreshCard };
         Loaded += OnLoaded; Unloaded += OnUnloaded;
         SizeChanged += (_, _) => SettingsSearchBox.Width = Math.Min(320, Math.Max(160, ActualWidth - 160));
     }

@@ -21,6 +21,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     private readonly IconService _icons;
     private AppEntry? _app;
     private string? _availableUpdateVersion;
+    private string? _currentUpdateVersion;
     private string? _installLocation;
     private bool _forcePerUserInstall;
     private bool _updatingScope;
@@ -56,6 +57,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool IsInstallerUrlLinkVisible { get; set; } = false;
     [ObservableProperty] public partial string? InstallerUrlLinkTag { get; set; } = null;
     [ObservableProperty] public partial string Sha256Text { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool IsSha256CopyEnabled { get; set; }
     [ObservableProperty] public partial string DependenciesText { get; set; } = string.Empty;
     [ObservableProperty] public partial string ReleaseNotesText { get; set; } = string.Empty;
     [ObservableProperty] public partial bool IsUpdateVersionPanelVisible { get; set; } = false;
@@ -100,6 +102,11 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool IsOptionsBodyPanelVisible { get; set; } = false;
     [ObservableProperty] public partial bool PersistPackageOptionsCheckBoxIsEnabled { get; set; } = true;
     [ObservableProperty] public partial string PersistPackageOptionsHintText { get; set; } = string.Empty;
+    [ObservableProperty] public partial string PreInstallScript { get; set; } = string.Empty;
+    [ObservableProperty] public partial string PostInstallScript { get; set; } = string.Empty;
+    [ObservableProperty] public partial string CustomArguments { get; set; } = string.Empty;
+    [ObservableProperty] public partial bool RunInstallHooks { get; set; }
+    [ObservableProperty] public partial bool IsInstallHooksOptionsVisible { get; set; }
     [ObservableProperty] public partial bool InstallButtonIsEnabled { get; set; } = true;
     [ObservableProperty] public partial bool InstallChevronButtonIsEnabled { get; set; } = true;
     [ObservableProperty] public partial bool UpdateButtonIsEnabled { get; set; } = true;
@@ -142,8 +149,11 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         SelfInstalledVersionText = app.IsSelf ? $"Instalado — versão {AppUpdateService.GetCurrentVersion().ToString(3)}" : string.Empty;
         if (app.IsSelf) app.IsInstalled = true;
         ShowManagementOptions = !app.IsSelf;
+        IsInstallHooksOptionsVisible = string.Equals(app.Source?.Trim(), "winget", StringComparison.OrdinalIgnoreCase)
+            || app.Source?.Trim().StartsWith("WinGet:", StringComparison.OrdinalIgnoreCase) == true;
         OnPropertyChanged(nameof(App));
         OnPropertyChanged(nameof(IconUrl));
+        _currentUpdateVersion = currentVersion;
         _availableUpdateVersion = availableVersion;
 
         InstallButtonIsEnabled = InstallChevronButtonIsEnabled = UpdateButtonIsEnabled = UninstallButtonIsEnabled = true;
@@ -174,7 +184,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         PackageIdText = app.Id;
 
         // Manifesto URL
-        SetupManifestUrl(app.Id, app.Source, app.WingetManifestAvailable
+        SetupManifestUrl(app.Id, app.Source ?? string.Empty, app.WingetManifestAvailable
             ?? (string.Equals(app.CatalogOrigin, "curated", StringComparison.OrdinalIgnoreCase) ? false : null));
 
         // Página Inicial
@@ -197,6 +207,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         IsInstallerUrlLinkVisible = false;
         InstallerUrlLinkTag = null;
         Sha256Text = isOfficeStoreOffer ? "Não aplicável" : "Carregando...";
+        IsSha256CopyEnabled = false;
 
         // Tamanho do instalador
         SetupSize(app.InstallerSizeBytes);
@@ -336,6 +347,13 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
     }
     public void CopyInstallCommand()
     { StatusText = _clipboard.TrySetText(InstallCommandPreviewTextBox) ? "Comando WinGet copiado para a área de transferência." : "Não foi possível copiar o comando WinGet."; }
+    public void CopyInstallerSha256()
+    {
+        if (!IsSha256CopyEnabled || string.IsNullOrWhiteSpace(Sha256Text)) return;
+        StatusText = _clipboard.TrySetText(Sha256Text)
+            ? "SHA-256 do instalador copiado para a área de transferência."
+            : "Não foi possível copiar o SHA-256 do instalador.";
+    }
     private void UpdateInstallActionsVisibility()
     {
         if (_app is null) return;
@@ -485,6 +503,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
                 Sha256Text = !string.IsNullOrWhiteSpace(info.Sha256)
                     ? info.Sha256.ToUpperInvariant()
                     : "Não especificado";
+                IsSha256CopyEnabled = !string.IsNullOrWhiteSpace(info.Sha256);
 
                 if (!string.IsNullOrWhiteSpace(info.Dependencies))
                     DependenciesText = info.Dependencies;
@@ -552,6 +571,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         IsInstallerUrlLinkVisible = IsDownloadInstallerLinkVisible =
             Uri.TryCreate(installer?.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
         Sha256Text = string.IsNullOrWhiteSpace(installer?.Sha256) ? "Não disponível" : installer.Sha256.ToUpperInvariant();
+        IsSha256CopyEnabled = !string.IsNullOrWhiteSpace(installer?.Sha256);
         ReleaseNotesText = string.IsNullOrWhiteSpace(app.ReleaseNotes) ? "Não disponível" : app.ReleaseNotes;
     }
     public void SaveOptions()
@@ -568,7 +588,10 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
                         InstallAllUsersCheckBoxIsChecked == true ? "machine" : _forcePerUserInstall ? "user" : null,
                         architecture == "Automática" ? null : architecture,
                         false,
-                        _installLocation));
+                        _installLocation,
+                        CustomArguments: CustomArguments,
+                        PreInstallScript: PreInstallScript,
+                        PostInstallScript: PostInstallScript));
                     StatusText = "Opções salvas para este pacote e futuras instalações e atualizações.";
                 }
                 else
@@ -621,6 +644,10 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             SelectedArchitecture = "Automática";
 
         _installLocation = saved?.InstallLocation;
+        PreInstallScript = saved?.PreInstallScript ?? string.Empty;
+        PostInstallScript = saved?.PostInstallScript ?? string.Empty;
+        CustomArguments = saved?.CustomArguments ?? string.Empty;
+        RunInstallHooks = false;
         SelectedLocationText = string.IsNullOrWhiteSpace(_installLocation)
             ? "Local padrão do sistema"
             : _installLocation;
@@ -673,7 +700,9 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             }
             else if (_app == app)
             {
-                StatusText = WingetErrorTranslator.ToMessage(result.FailureReason, "instalar", app.Name);
+                StatusText = result.InstallHookFailed
+                    ? result.Output
+                    : WingetErrorTranslator.ToMessage(result.FailureReason, "instalar", app.Name);
             }
         }
         catch (Exception recoveryException)
@@ -699,13 +728,23 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _installedPackagesViewModel.UpdateAsync(new UpgradablePackage { Id = app.Id, Name = app.Name, IconUrl = app.IconUrl, Source = app.Source }, CurrentOptions());
+            var result = await _installedPackagesViewModel.UpdateAsync(new UpgradablePackage
+            {
+                Id = app.Id,
+                Name = app.Name,
+                IconUrl = app.IconUrl,
+                Source = app.Source,
+                CurrentVersion = _currentUpdateVersion ?? string.Empty,
+                AvailableVersion = _availableUpdateVersion ?? string.Empty
+            }, CurrentOptions());
 
             if (_app == app)
             {
                 StatusText = result.Success
                     ? $"{app.Name} atualizado."
-                    : WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", app.Name);
+                    : result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
+                        ? result.Output
+                        : WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", app.Name);
             }
         }
         catch (Exception recoveryException)
@@ -819,7 +858,11 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
         IsWinGetVersionOptionsVisible && IgnoreSecurityHashCheckBoxIsChecked,
         _installLocation,
         Version: IsWinGetVersionOptionsVisible && !string.IsNullOrWhiteSpace(SelectedInstallVersion)
-            && SelectedInstallVersion != "Mais recente" ? SelectedInstallVersion : null);
+            && SelectedInstallVersion != "Mais recente" ? SelectedInstallVersion : null,
+        CustomArguments: CustomArguments,
+        PreInstallScript: PreInstallScript,
+        PostInstallScript: PostInstallScript,
+        RunInstallHooks: RunInstallHooks);
     public void Dispose() => Clear();
 
 }

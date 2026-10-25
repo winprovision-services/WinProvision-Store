@@ -41,6 +41,23 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
     }
 
     [Fact]
+    public void StartupPagePersistsAndLegacyPortableSettingsDefaultToDiscover()
+    {
+        Assert.Equal(ApplicationStartupPage.Discover, _preferences.StartupPage);
+        _preferences.SetStartupPage(ApplicationStartupPage.Installed);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.Equal(ApplicationStartupPage.Installed, reloaded.StartupPage);
+
+        var portable = reloaded.ExportPortablePreferences();
+        Assert.Equal(ApplicationStartupPage.Installed, portable.StartupPage);
+        reloaded.ImportPortablePreferences(portable with { StartupPage = ApplicationStartupPage.Updates });
+        Assert.Equal(ApplicationStartupPage.Updates, new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false).StartupPage);
+
+        File.WriteAllText(Path.Combine(_folder, "legacy-startup-page.json"), "{\"Theme\":0}");
+        Assert.Equal(ApplicationStartupPage.Discover, new ApplicationPreferencesService(Path.Combine(_folder, "legacy-startup-page.json"), false).StartupPage);
+    }
+
+    [Fact]
     public void IntervalPreferencesRoundTripAndOldFilesKeepDefaults()
     {
         _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.SelectedPackagesOnly,
@@ -136,6 +153,38 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
     }
 
     [Fact]
+    public async Task AutoUpdateRetriesOnceOnlyWhenFailureHappenedBeforeInstallerStart()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        _backend.FailBeforeStartCount = 1;
+
+        Assert.Equal(0, await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }));
+
+        Assert.Equal(new[] { "One", "One", "Two" }, _backend.Executed);
+    }
+
+    [Theory]
+    [InlineData(WingetFailureReason.DownloadError, false, false, true)]
+    [InlineData(WingetFailureReason.CatalogError, false, false, true)]
+    [InlineData(WingetFailureReason.Unknown, false, false, false)]
+    [InlineData(WingetFailureReason.InternalError, false, false, false)]
+    [InlineData(WingetFailureReason.DownloadError, true, false, false)]
+    [InlineData(WingetFailureReason.DownloadError, false, true, false)]
+    public void AutoUpdateRetryPolicyOnlyAllowsSafeTransientFailures(
+        WingetFailureReason reason, bool wasElevated, bool installerStarted, bool expected)
+    {
+        var result = new WingetExecutionResult
+        {
+            Success = false,
+            FailureReason = reason,
+            WasElevated = wasElevated,
+            InstallerStarted = installerStarted
+        };
+
+        Assert.Equal(expected, BackgroundUpdateApplication.ShouldRetryUpdate(result, 1, default));
+    }
+
+    [Fact]
     public async Task CanceledBatchDoesNotStartAnotherPackage()
     {
         _preferences.SetLaunchAtStartup(true);
@@ -159,6 +208,7 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
              new() { Id = "Two", Name = "Two", Source = "winget", AvailableVersion = "2" }];
         public List<string> Executed { get; } = [];
         public bool RefuseElevation { get; set; }
+        public int FailBeforeStartCount { get; set; }
         public Action? AfterExecution { get; set; }
         public Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token) => Task.FromResult(Packages);
         public Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
@@ -167,6 +217,12 @@ public sealed class BackgroundUpdateApplicationTests : IDisposable
             Executed.Add(package.Id);
             if (RefuseElevation) WinProvisionElevationState.MarkFailed();
             AfterExecution?.Invoke();
+            if (FailBeforeStartCount > 0)
+            {
+                FailBeforeStartCount--;
+                return Task.FromResult(new WingetExecutionResult
+                    { Success = false, FailureReason = WingetFailureReason.DownloadError });
+            }
             return Task.FromResult(new WingetExecutionResult { Success = !RefuseElevation });
         }
         public Task<List<UpgradablePackage>> SearchAsync(InteractiveCliRequest request, CancellationToken token) => throw new NotSupportedException();

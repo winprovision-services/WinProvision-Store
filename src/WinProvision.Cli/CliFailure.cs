@@ -54,6 +54,7 @@ public static class CliFailure
         WingetFailureReason.OperationCanceled => "A operação foi cancelada pelo instalador ou pelo Windows.",
         WingetFailureReason.BlockedByPolicy => "A operação foi bloqueada por uma política do sistema.",
         WingetFailureReason.NoApplicableInstallers => "Não há instalador compatível com este computador.",
+        WingetFailureReason.NoApplicableUpgrade => "A atualização não se aplica à instalação atual.",
         WingetFailureReason.PackageAgreementsNotAccepted => "Os termos do pacote não foram aceitos.",
         WingetFailureReason.DownloadError => "Falha ao baixar o instalador.",
         WingetFailureReason.InstallerHashMismatch => "O hash do instalador não corresponde ao esperado.",
