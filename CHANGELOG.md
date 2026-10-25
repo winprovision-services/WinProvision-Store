@@ -2,6 +2,8 @@
 
 ## Não lançado
 
+## 1.0.15 - 25 de outubro de 2026
+
 - Corrigidos falsos erros na confirmação de atualização do Anki e de outras migrações MSI: o cliente lê ProductCode e ProductVersion do instalador com SHA-256 validado, em modo somente leitura, sem depender de um ProductCode incorreto no catálogo. Se a chave antiga desapareceu, a identidade comprovada do MSI pode confirmar o novo registro mesmo em outro escopo, preservando a arquitetura e exigindo versão igual ou superior ao alvo. Formatos como `26.9.3` e `26.09.3` são equivalentes. A confirmação observa até três snapshots do Registro e não executa novamente o instalador; um resultado já confirmado não repete a conferência nem incrementa outra vez o contador de tentativas.
 
 - Corrigido o download segmentado de instaladores com seleção de espelhos, como VLC: as partes reutilizam o destino resolvido pela sondagem, sem consultar novamente o seletor a cada requisição e sem encaminhar credenciais a outra origem. Espelhos anunciados em HTTP na porta padrão são tentados exclusivamente pelo endpoint HTTPS correspondente, mantendo validação TLS e SHA-256. Cancelamentos internos do transporte sem cancelamento do solicitante passam por repetição limitada e são reportados como timeout; a API classifica esse timeout antes do instalador como falha de download.
