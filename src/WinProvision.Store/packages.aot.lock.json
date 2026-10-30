@@ -360,7 +360,7 @@
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "System.Drawing.Common": "[10.0.12, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
-          "WinProvision.Viper": "[0.1.0, )",
+          "WinProvision.Viper": "[1.0.16, )",
           "WixToolset.Dtf.Compression.Cab": "[5.0.2, )",
           "YamlDotNet": "[16.3.0, )"
         }
@@ -370,7 +370,7 @@
         "dependencies": {
           "Microsoft.Windows.CsWinRT": "[2.3.1, )",
           "Microsoft.WindowsPackageManager.ComInterop": "[1.29.380, )",
-          "WinProvision.Core": "[1.0.0, )"
+          "WinProvision.Core": "[1.0.16, )"
         }
       },
       "winprovision.viper": {
