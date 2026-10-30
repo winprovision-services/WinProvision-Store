@@ -100,6 +100,11 @@ public sealed class OperationConcurrencyLimiter(Func<int> limit)
 
 public static class OperationLimits
 {
-    public static OperationConcurrencyLimiter Packages { get; } = new(() => new OperationPreferencesService().Load().ParallelOperations);
-    public static OperationConcurrencyLimiter Downloads { get; } = new(() => new OperationPreferencesService().Load().ParallelDownloads);
+    private static readonly OperationPreferencesService Preferences = new();
+
+    public static OperationConcurrencyLimiter Packages { get; } =
+        new(() => Preferences.Load().ParallelOperations);
+
+    public static OperationConcurrencyLimiter Downloads { get; } =
+        new(() => Preferences.Load().ParallelDownloads);
 }

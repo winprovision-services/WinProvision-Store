@@ -2,12 +2,12 @@ using System.Collections.Frozen;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Códigos Win32/MSI e HRESULTs publicados pelo WinGet; outros CLIs mantêm seu contrato próprio.</summary>
+/// <summary>Códigos Win32/MSI e HRESULTs publicados pelo gerenciador de pacotes; outros CLIs mantêm seu contrato próprio.</summary>
 public static class InstallerExitCodes
 {
-    // Exit codes Win32/MSI e HRESULTs WinGet. Os códigos WinGet abaixo são
+    // Exit codes Win32/MSI e HRESULTs gerenciador de pacotes. Os códigos gerenciador de pacotes abaixo são
     // confirmados pelo AppInstallerErrors.h mantido no projeto e/ou pelo
-    // tratamento do WinGet no UniGetUI local.
+    // tratamento do gerenciador de pacotes no outras interfaces local.
     public static bool IsSuccess(int code) => code is 0 or 3010 or 1641;
     public static bool IsWingetSuccess(int code) => IsSuccess(code)
         || unchecked((uint)code) is 0x8A150109 or 0x8A15010B;
@@ -45,8 +45,8 @@ public static class InstallerExitCodes
             [1638] = WingetFailureReason.InstallError,
             [0x80070643] = WingetFailureReason.InstallError,
 
-            // WinGet CLI: HRESULTs conhecidos com interpretação explícita
-            // no código local do WinGet ou do UniGetUI.
+            // gerenciador de pacotes CLI: HRESULTs conhecidos com interpretação explícita
+            // no código local do gerenciador de pacotes ou do outras interfaces.
             [0x8A150001] = WingetFailureReason.InternalError,
             // COM InstallResult uses this HRESULT for InvalidOptions (pre-execution).
             [0x8A150002] = WingetFailureReason.InternalError,

@@ -27,10 +27,10 @@ public sealed class ProfileDocumentReader : IDisposable
         {
             string id = uri.AbsolutePath.Split('/').FirstOrDefault(segment => segment.Length is >= 20 and <= 40 && segment.All(char.IsAsciiHexDigit))
                 ?? throw new ArgumentException("O endereço não contém um identificador de Gist válido.");
-            uri = new Uri($"https://api.github.com/gists/{id}");
+            uri = new Uri($"{NetworkEndpoints.GitHubApiBaseUrl}/gists/{id}");
         }
         string text = await DownloadAsync(uri, token).ConfigureAwait(false);
-        // A Gist API envelope is transport metadata, never an installation plan.
+        // O envelope da API de backup contém metadados de transporte, nunca um plano de instalação.
         if (uri.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase) && uri.AbsolutePath.StartsWith("/gists/", StringComparison.Ordinal))
         {
             using var gist = JsonDocument.Parse(text);

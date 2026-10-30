@@ -115,23 +115,23 @@ public partial class GitHubBackupService
         finally { _syncLock.Release(); }
     }
 
-    public async Task<GitHubBackupDownloadResult> DownloadBackupFileAsync(string fileName, CancellationToken ct = default)
+    public async Task<CloudBackupDownloadResult> DownloadBackupFileAsync(string fileName, CancellationToken ct = default)
     {
         if (!IsBackupJsonFileName(fileName))
-            return GitHubBackupDownloadResult.Fail("Nome de arquivo JSON inválido.");
+            return CloudBackupDownloadResult.Fail("Nome de arquivo JSON inválido.");
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var gist = await GetOwnedBackupGistAsync(ct).ConfigureAwait(false);
             if (gist?.Files?.TryGetValue(fileName, out var file) != true)
-                return GitHubBackupDownloadResult.Fail("O arquivo selecionado não está mais no Gist.");
+                return CloudBackupDownloadResult.Fail("O arquivo selecionado não está mais no Gist.");
             string content = await ReadGistFileContentAsync(file!, ct).ConfigureAwait(false);
-            return GitHubBackupDownloadResult.Ok(ProfileDocumentService.Parse(content, Path.GetFileNameWithoutExtension(fileName)));
+            return CloudBackupDownloadResult.Ok(ProfileDocumentService.Parse(content, Path.GetFileNameWithoutExtension(fileName)));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or HttpRequestException)
         {
-            return GitHubBackupDownloadResult.Fail($"Não foi possível ler o JSON selecionado: {exception.Message}");
+            return CloudBackupDownloadResult.Fail($"Não foi possível ler o JSON selecionado: {exception.Message}");
         }
         finally { _syncLock.Release(); }
     }

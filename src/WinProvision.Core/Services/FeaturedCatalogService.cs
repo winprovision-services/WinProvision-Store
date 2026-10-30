@@ -38,7 +38,8 @@ public sealed class FeaturedCategory
 public sealed class FeaturedCatalogService : IAsyncDisposable
 {
     private const string CatalogUrl = CatalogEndpoints.FeaturedUrl;
-    private static readonly HttpClient Http = new(new RequestRateLimitHandler(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })) { Timeout = TimeSpan.FromSeconds(12) };
+    private static readonly HttpClient Http = NetworkClientFactory.Create(
+        TimeSpan.FromSeconds(12), pooledConnectionLifetime: TimeSpan.FromMinutes(5));
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(15);
@@ -46,7 +47,9 @@ public sealed class FeaturedCatalogService : IAsyncDisposable
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly System.Threading.Lock _lifecycleGate = new();
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly System.Threading.Lock _loadSync = new();
     private Task? _refreshTask;
+    private Task<FeaturedCatalogDocument?>? _loadTask;
     private bool _disposed;
     private FeaturedCatalogDocument? _current;
     private DateTimeOffset _lastRefreshAttemptUtc;
@@ -65,7 +68,13 @@ public sealed class FeaturedCatalogService : IAsyncDisposable
     {
         if (_current is null)
         {
-            _current = await ReadCacheAsync(cancellationToken).ConfigureAwait(false);
+            Task<FeaturedCatalogDocument?> loadTask;
+            lock (_loadSync)
+            {
+                loadTask = _loadTask ??= ReadCacheAsync(_lifetime.Token);
+            }
+
+            _current = await loadTask.ConfigureAwait(false);
             try
             {
                 if (File.Exists(_cachePath))
@@ -85,12 +94,17 @@ public sealed class FeaturedCatalogService : IAsyncDisposable
         try
         {
             if (!File.Exists(_cachePath)) return null;
-            string json = await File.ReadAllTextAsync(_cachePath, cancellationToken).ConfigureAwait(false);
-            return DeserializeValid(json);
+            await using FileStream stream = new(
+                _cachePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 64 * 1024, options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            FeaturedCatalogDocument? document = await WinProvision.Core.Services.AotJson
+                .DeserializeAsync<FeaturedCatalogDocument>(stream, JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return Validate(document);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[FeaturedCatalog] Cache local indisponível: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[FeaturedCatalog] Cache local indisponível: {ex.Message}");
             return null;
         }
     }
@@ -114,12 +128,24 @@ public sealed class FeaturedCatalogService : IAsyncDisposable
             using HttpResponseMessage response = await Http.GetAsync(CatalogUrl, HttpCompletionOption.ResponseHeadersRead, _lifetime.Token)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            string json = await response.Content.ReadAsStringAsync(_lifetime.Token).ConfigureAwait(false);
-            FeaturedCatalogDocument? document = DeserializeValid(json);
+            await using Stream stream = await response.Content.ReadAsStreamAsync(_lifetime.Token).ConfigureAwait(false);
+            FeaturedCatalogDocument? document = await WinProvision.Core.Services.AotJson
+                .DeserializeAsync<FeaturedCatalogDocument>(stream, JsonOptions, _lifetime.Token)
+                .ConfigureAwait(false);
             if (document is null) return;
 
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
-            await AtomicFile.WriteAllTextAsync(_cachePath, json, _lifetime.Token).ConfigureAwait(false);
+            await AtomicFile.WriteAsync(
+                _cachePath,
+                async (cacheStream, token) =>
+                {
+                    await JsonSerializer.SerializeAsync(
+                        cacheStream,
+                        document,
+                        WinProvision.Core.Services.AotJson.TypeInfo<FeaturedCatalogDocument>(JsonOptions),
+                        token).ConfigureAwait(false);
+                },
+                _lifetime.Token).ConfigureAwait(false);
             _current = document;
             Updated?.Invoke(document);
         }
@@ -134,9 +160,8 @@ public sealed class FeaturedCatalogService : IAsyncDisposable
         }
     }
 
-    private static FeaturedCatalogDocument? DeserializeValid(string json)
+    private static FeaturedCatalogDocument? Validate(FeaturedCatalogDocument? document)
     {
-        FeaturedCatalogDocument? document = WinProvision.Core.Services.AotJson.Deserialize<FeaturedCatalogDocument>(json, JsonOptions);
         if (document is not { SchemaVersion: 1, MetricWindowDays: > 0 }
             || document.Hero is null || document.Popular is null || document.Categories is null)
             return null;

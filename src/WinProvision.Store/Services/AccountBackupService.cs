@@ -10,32 +10,32 @@ public interface IAccountBackupService
     string? AvatarUrl { get; }
     DateTime? LastSyncUtc { get; }
     DateTime? LastBackupUtc { get; }
-    Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null);
+    Task<CloudConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null);
     void Disconnect();
     Task SaveLocalAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken);
     Task<ProfileBackupSet?> LoadLatestLocalAsync(CancellationToken cancellationToken);
-    Task<GitHubBackupUploadResult> UploadCloudAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken);
-    Task<GitHubBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken);
+    Task<CloudBackupUploadResult> UploadCloudAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken);
+    Task<CloudBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<CloudBackupFile>> ListCloudFilesAsync(CancellationToken cancellationToken);
-    Task<GitHubBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken);
+    Task<CloudBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken);
     Task<(bool Success, string? Error)> DeleteCloudFileAsync(string fileName, CancellationToken cancellationToken);
     Task<(int DeletedCount, int TotalCount, string? Error)> DeleteAllAppGistsAsync(CancellationToken cancellationToken);
 }
 
 public sealed partial class AccountBackupService(
     LocalBackupService localBackup,
-    GitHubBackupService githubBackup) : IAccountBackupService
+    ICloudBackupProvider cloudBackup) : IAccountBackupService
 {
-    public bool IsConnected => githubBackup.IsConnected;
-    public string? ConnectedLogin => githubBackup.ConnectedLogin;
-    public string? AvatarUrl => githubBackup.ConnectedAvatarUrl;
-    public DateTime? LastSyncUtc => githubBackup.LastSyncUtc;
+    public bool IsConnected => cloudBackup.IsConnected;
+    public string? ConnectedLogin => cloudBackup.ConnectedLogin;
+    public string? AvatarUrl => cloudBackup.ConnectedAvatarUrl;
+    public DateTime? LastSyncUtc => cloudBackup.LastSyncUtc;
     public DateTime? LastBackupUtc => localBackup.LastBackupUtc;
 
-    public Task<GitHubConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null) =>
-        githubBackup.ConnectAsync(token, cancellationToken, refreshToken);
+    public Task<CloudConnectResult> ConnectAsync(string token, CancellationToken cancellationToken, string? refreshToken = null) =>
+        cloudBackup.ConnectAsync(token, cancellationToken, refreshToken);
 
-    public void Disconnect() => githubBackup.Disconnect();
+    public void Disconnect() => cloudBackup.Disconnect();
 
     public Task SaveLocalAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken) =>
         localBackup.SaveAsync(backupSet, cancellationToken);
@@ -43,21 +43,21 @@ public sealed partial class AccountBackupService(
     public Task<ProfileBackupSet?> LoadLatestLocalAsync(CancellationToken cancellationToken) =>
         localBackup.TryLoadLatestAsync(cancellationToken);
 
-    public Task<GitHubBackupUploadResult> UploadCloudAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken) =>
-        githubBackup.UploadProfileAsync(backupSet, cancellationToken);
+    public Task<CloudBackupUploadResult> UploadCloudAsync(ProfileBackupSet backupSet, CancellationToken cancellationToken) =>
+        cloudBackup.UploadProfileAsync(backupSet, cancellationToken);
 
-    public Task<GitHubBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken) =>
-        githubBackup.DownloadProfileAsync(cancellationToken);
+    public Task<CloudBackupDownloadResult> DownloadCloudAsync(CancellationToken cancellationToken) =>
+        cloudBackup.DownloadProfileAsync(cancellationToken);
 
     public Task<IReadOnlyList<CloudBackupFile>> ListCloudFilesAsync(CancellationToken cancellationToken) =>
-        githubBackup.ListBackupFilesAsync(cancellationToken);
+        cloudBackup.ListBackupFilesAsync(cancellationToken);
 
-    public Task<GitHubBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken) =>
-        githubBackup.DownloadBackupFileAsync(fileName, cancellationToken);
+    public Task<CloudBackupDownloadResult> DownloadCloudFileAsync(string fileName, CancellationToken cancellationToken) =>
+        cloudBackup.DownloadBackupFileAsync(fileName, cancellationToken);
 
     public Task<(bool Success, string? Error)> DeleteCloudFileAsync(string fileName, CancellationToken cancellationToken) =>
-        githubBackup.DeleteBackupFileAsync(fileName, cancellationToken);
+        cloudBackup.DeleteBackupFileAsync(fileName, cancellationToken);
 
     public Task<(int DeletedCount, int TotalCount, string? Error)> DeleteAllAppGistsAsync(CancellationToken cancellationToken) =>
-        githubBackup.DeleteAllAppGistsAsync(cancellationToken);
+        cloudBackup.DeleteAllAppGistsAsync(cancellationToken);
 }

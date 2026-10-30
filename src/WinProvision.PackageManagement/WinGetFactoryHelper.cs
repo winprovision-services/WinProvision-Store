@@ -7,7 +7,7 @@ using WinRT;
 
 namespace WinProvision.PackageManagement;
 
-// Ativação resiliente do PackageManager do WinGet, incluindo o caso de
+// Ativação resiliente do PackageManager do gerenciador de pacotes, incluindo o caso de
 // processo elevado sem MSIX (RegFree-WinRT), que crasha tanto no
 // StandardFactory quanto, às vezes, no ElevatedFactory.
 public static partial class WinGetFactoryHelper
@@ -25,7 +25,7 @@ public static partial class WinGetFactoryHelper
 
     // Estado da COM = circuit breaker com recuperação (antes era uma flag permanente por sessão:
     // uma única falha de ativação, por exemplo o App Installer ainda não provisionado no primeiro
-    // logon / Windows Sandbox, mantinha TODAS as instalações no winget.exe até fechar o app).
+    // logon / Windows Sandbox, mantinha TODAS as instalações no cliente de pacotes até fechar o app).
     // Agora a COM só fica indisponível por um período curto e crescente (30s, 60s, 2min... até 5min),
     // é reavaliada sozinha e qualquer sucesso zera o estado.
     private static readonly TimeSpan BreakerBaseCooldown = TimeSpan.FromSeconds(30);
@@ -38,7 +38,7 @@ public static partial class WinGetFactoryHelper
     // Estratégias de ativação da COM. LowerTrust vem primeiro porque é a que já foi validada neste app
     // (instalações via COM funcionando sem elevação, build Debug x64) e é a única que funciona com o
     // processo elevado. Packaged (CLSCTX_LOCAL_SERVER puro, igual ao WindowsPackageManagerStandardFactory
-    // da Microsoft) fica como reserva, caso a flag
+    // da plataforma do sistema) fica como reserva, caso a flag
     // lower-trust seja recusada em algum contexto. A estratégia que conectar ao catálogo é fixada para a
     // sessão inteira: PackageManager, InstallOptions, FindPackagesOptions etc. precisam usar a mesma.
     private static readonly System.Threading.Lock StrategyGate = new();
@@ -66,12 +66,12 @@ public static partial class WinGetFactoryHelper
     // CLSID/IID do PackageManager (runtime class + interface nativa), não de
     // uma "fábrica" COM à parte, essa não existe. Confirmados via stack trace
     // real de falha de ativação COM:
-    // "WinGet COM activation failed for CLSID c53a4f16-787e-42a4-b304-29effb4bf597
+    // "gerenciador de pacotes COM activation failed for CLSID c53a4f16-787e-42a4-b304-29effb4bf597
     //  (IID b375e3b9-f2e0-5c93-87a7-b67497f7e593, AllowLowerTrustRegistration=True)"
     private static readonly Guid ClsidPackageManager = new("C53A4F16-787E-42A4-B304-29EFFB4BF597");
     private static readonly Guid IidPackageManager = new("B375E3B9-F2E0-5C93-87A7-B67497F7E593");
 
-    // Release CLSIDs: microsoft/winget-cli ComClsids.h,
+    // Os identificadores de ativação são mantidos conforme o contrato COM utilizado pelo sistema,
     // commit 5b62860167520b1503b3880d5a026809eb07c6f4.
     // The interface IIDs are the CsWinRT projections generated from PackageManager.idl;
     // Esta associação CLSID/IID também é usada pela projeção CsWinRT do PackageManager.
@@ -86,10 +86,10 @@ public static partial class WinGetFactoryHelper
     private static readonly Guid ClsidUninstallOptions = new("E1D9A11E-9F85-4D87-9C17-2B93143ADB8D");
     private static readonly Guid IidUninstallOptions = new("3EBC67F0-8339-594B-8A42-F90B69D02BBE");
 
-    /// <summary>Modo de operação (env WINPROVISION_WINGET_MODE ou argumento /winget-mode=auto|com|cli).</summary>
+    /// <summary>Modo de operação definido pela variável de ambiente ou pelo argumento de inicialização correspondente.</summary>
     public static WinGetMode Mode => _mode;
 
-    /// <summary>False no modo COM-only: nenhuma falha da COM pode cair silenciosamente no winget.exe.</summary>
+    /// <summary>False no modo COM-only: nenhuma falha da COM pode cair silenciosamente no cliente de pacotes.</summary>
     public static bool CliFallbackAllowed => _mode != WinGetMode.ComOnly;
 
     /// <summary>True quando as operações devem usar o CLI (modo cli, ou COM temporariamente indisponível).</summary>
@@ -265,7 +265,7 @@ public static partial class WinGetFactoryHelper
     }
 
     /// <summary>
-    /// Chamado quando o winget acabou de ser provisionado nesta sessão: qualquer falha de COM
+    /// Chamado quando o gerenciador de pacotes acabou de ser provisionado nesta sessão: qualquer falha de COM
     /// registrada ANTES disso (ex.: 0x80040154 "classe não registrada" do autoteste da
     /// abertura, que roda sem o App Installer) deixou de valer. Zera o breaker e, se nenhuma
     /// estratégia de ativação chegou a conectar, volta à primeira.
@@ -373,7 +373,7 @@ public static partial class WinGetFactoryHelper
                     }
                     catch (Exception ex)
                     {
-                        // O catálogo da Store é opcional para pacotes WinGet comuns; uma
+                        // O catálogo visual é opcional para pacotes comuns; uma
                         // falha aqui não invalida a conexão COM principal.
                         PackageDiagnostics.Write(
                             $"COM PROBE store-catalog falhou {ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message}");
@@ -487,7 +487,7 @@ public static partial class WinGetFactoryHelper
     }
 }
 
-/// <summary>Como o processo ativa as classes COM do WinGet (ver comentário em WinGetFactoryHelper).</summary>
+/// <summary>Como o processo ativa as classes COM do gerenciador de pacotes (ver comentário em WinGetFactoryHelper).</summary>
 public enum WinGetComStrategy
 {
     /// <summary>Registro COM empacotado do App Installer (CLSCTX_LOCAL_SERVER).</summary>
@@ -502,7 +502,7 @@ public enum WinGetMode
     /// <summary>Padrão: COM primeiro; CLI só quando a COM não puder cumprir a operação.</summary>
     Auto,
 
-    /// <summary>Diagnóstico: nunca usa o winget.exe; falhas da COM aparecem com o erro real.</summary>
+    /// <summary>Diagnóstico: nunca usa o cliente de pacotes; falhas da COM aparecem com o erro real.</summary>
     ComOnly,
 
     /// <summary>Contorno: nunca usa a COM.</summary>

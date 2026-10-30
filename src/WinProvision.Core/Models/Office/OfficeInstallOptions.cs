@@ -5,13 +5,13 @@ namespace WinProvision.Core.Models.Office;
 /// <summary>
 /// Snapshot serializável de tudo que é preciso para refazer um <see cref="OfficeInstallRequest"/>
 /// mais tarde — anexado a um <see cref="AppEntry"/> (via <see cref="AppEntry.Office"/>) quando o
-/// item representa um plano de Office em vez de um pacote winget comum.
+/// item representa um plano de Office em vez de um pacote do gerenciador de pacotes comum.
 ///
 /// Não referencia <see cref="OfficePlan"/> diretamente (o record tem membros não
 /// triviais de serializar/round-tripar) — guarda só o <see cref="ProductId"/> estável,
 /// resolvido de volta via <see cref="OfficePlanCatalog.ByProductId"/> no momento de
 /// instalar. Isso é o que permite o mesmo AppEntry (e o mesmo .json de perfil) valer
-/// tanto pra um app winget comum (Office == null) quanto pra um plano de Office
+/// tanto pra um aplicativo comum do gerenciador de pacotes (Office == null) quanto pra um plano de Office
 /// (Office preenchido), sem depender do catálogo remoto de apps pra reconstruir nada.
 /// </summary>
 public class OfficeInstallOptions

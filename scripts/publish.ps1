@@ -77,7 +77,7 @@ if (-not $Jit) {
         if (Test-Path -LiteralPath (Join-Path $taskStaging $taskManagedFile)) { throw "A publicação AOT contém um componente gerenciado inesperado: $taskManagedFile" }
     }
 }
-# Swap only validated output; a fresh staging directory prevents stale JIT files in AOT releases.
+# Swap only validated output; a fresh diretório temporário prevents stale JIT files in AOT releases.
 $taskAbsoluteOutput = [IO.Path]::GetFullPath($taskOutput)
 $taskAbsoluteStaging = [IO.Path]::GetFullPath($taskStaging)
 $taskAllowedRoot = [IO.Path]::GetFullPath($taskPublishRoot) + [IO.Path]::DirectorySeparatorChar

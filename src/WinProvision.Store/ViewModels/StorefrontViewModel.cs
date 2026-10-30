@@ -21,7 +21,7 @@ public sealed partial class StorefrontViewModel : INotifyPropertyChanged, IDispo
     private readonly IPackageBackend _backend;
     private bool _preview;
     private readonly WinProvision.Core.Services.Indexing.MsStoreCatalogService _msStoreCatalogService;
-    private readonly StoreService _storeService;
+    private readonly IStoreCatalog _storeService;
     private readonly WinGetService _winGetService;
     private readonly IconService _iconService;
     private readonly WingetExecutor _wingetExecutor;
@@ -190,7 +190,7 @@ public sealed partial class FeaturedCategoryShelf
         OperationsQueueService queueService, InstalledAppsService installedAppsService,
         FeaturedCatalogService featuredCatalogService,
         WinProvision.Core.Services.Indexing.MsStoreCatalogService msStoreCatalogService,
-        IconService iconService, StoreService storeService, WinGetService winGetService, IUiDispatcher dispatcher, IPackageBackend backend,
+        IconService iconService, IStoreCatalog storeService, WinGetService winGetService, IUiDispatcher dispatcher, IPackageBackend backend,
         ApplicationPreferencesService preferences)
     {
         _msStoreCatalogService = msStoreCatalogService;
@@ -435,6 +435,9 @@ public sealed partial class FeaturedCategoryShelf
         PopularApps.Clear();
         StoreHighlights.Clear();
         FeaturedCategories.Clear();
+        _featuredCatalog = null;
+        StoreHighlights.Clear();
+        FeaturedCategories.Clear();
         StatusText = "Cache limpo. O catálogo será atualizado ao abrir esta tela.";
     }
 
@@ -493,12 +496,12 @@ public sealed partial class FeaturedCategoryShelf
             _navigationCancellation = null;
             operation?.Dispose();
         }
+        ReleasePageVisualReferences();
+        AsyncImage.ReleasePageMemory();
     }
 
-    public void ReleaseCatalogMemory()
+    private void ReleasePageVisualReferences()
     {
-        _catalogLoaded = false;
-        _allApps = [];
         _liveSearchResults = [];
         _liveSearchQuery = null;
         _searchQueryInFlight = null;
@@ -514,6 +517,14 @@ public sealed partial class FeaturedCategoryShelf
         PopularApps.Clear();
         StoreHighlights.Clear();
         FeaturedCategories.Clear();
+        _featuredCatalog = null;
+    }
+
+    public void ReleaseCatalogMemory()
+    {
+        _catalogLoaded = false;
+        _allApps = [];
+        ReleasePageVisualReferences();
         CatalogSyncText = "Catálogo em pausa para liberar memória.";
         StatusText = "A vitrine será recarregada ao retornar ao aplicativo.";
     }
@@ -590,7 +601,7 @@ public sealed partial class FeaturedCategoryShelf
             if (_preferences.SearchOnDemand)
                 return;
 
-            // Editorial content must not wait for the potentially slow WinGet inventory.
+            // Editorial content must not wait for the potentially slow gerenciador de pacotes inventory.
             Task inventoryTask = _installedAppsService.EnsureLoadedAsync(cancellationToken);
             await LoadStoreBannersAsync(cancellationToken: cancellationToken);
             App.MemoryLog?.RecordOnce("editorial_banners_loaded");
@@ -660,7 +671,7 @@ public sealed partial class FeaturedCategoryShelf
                 .ToList();
 
             // Render the best candidates already available before issuing the slower
-            // supplemental Display Catalog searches. The final list is refreshed below.
+            // supplemental catálogo visual searches. The final list is refreshed below.
             List<AppEntry> initialCandidates = availableStoreApps
                 .DistinctBy(GetProductIdentityKey, StringComparer.OrdinalIgnoreCase)
                 .OrderByDescending(app => app.StoreRatingCount ?? 0)
@@ -938,7 +949,7 @@ public sealed partial class FeaturedCategoryShelf
     private static string GetProductIdentityKey(AppEntry app)
     {
         // Títulos editoriais da Store, como "Spotify - Música e podcasts", não
-        // precisam repetir o mesmo produto já disponível pelo WinGet. Para marcas
+        // precisam repetir o mesmo produto já disponível pelo gerenciador de pacotes. Para marcas
         // conhecidas, a identidade usa o nome canônico; nos demais casos, mantém a
         // combinação nome + publicador, que evita juntar aplicativos diferentes.
         if (GetFamiliarProductKey(app.Name) is { } familiarKey)
@@ -960,7 +971,7 @@ public sealed partial class FeaturedCategoryShelf
         if (store is null || ReferenceEquals(primary, store))
             return primary;
 
-        // Mantém o ID e a origem de instalação WinGet, mas usa as mídias oficiais da Store.
+        // Mantém o ID e a origem de instalação gerenciador de pacotes, mas usa as mídias oficiais da Store.
         if (!string.IsNullOrWhiteSpace(store.StoreBannerUrl))
             primary.StoreBannerUrl = store.StoreBannerUrl;
         if (store.StoreScreenshotUrls is { Count: > 0 })
@@ -1317,8 +1328,8 @@ public sealed partial class FeaturedCategoryShelf
                 ? _catalogLoaded ? $"Nenhum resultado para \"{query}\"" : $"Carregando catálogo para \"{query}\"..."
                 : results.Count == 1 ? "1 resultado." : $"Resultados: {results.Count}";
 
-        // O WinGet inclui a origem msstore, mas não fornece os metadados visuais da
-        // Store. A Display Catalog completa os resultados em tempo real, como no UniGetUI.
+        // O gerenciador de pacotes inclui a origem msstore, mas não fornece os metadados visuais da
+        // Store. A catálogo visual completa os resultados em tempo real, como no outras interfaces.
         if (!string.IsNullOrWhiteSpace(query)
             && !string.Equals(_liveSearchQuery, query, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(_searchQueryInFlight, query, StringComparison.OrdinalIgnoreCase))
@@ -1411,7 +1422,7 @@ public sealed partial class FeaturedCategoryShelf
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[HomePage] Uma das fontes de busca falhou: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[HomePage] Uma das fontes de busca falhou: {ex.Message}");
             }
 
             var matches = winGetSearchTask.IsCompletedSuccessfully
@@ -1440,8 +1451,8 @@ public sealed partial class FeaturedCategoryShelf
                 catch (Exception ex)
                 {
                     // A busca direta da Store já trouxe resultados úteis. Falhar ao
-                    // enriquecer IDs retornados pelo WinGet não deve descartá-los.
-                    System.Diagnostics.Debug.WriteLine($"[HomePage] Falha ao enriquecer resultados da Store: {ex.Message}");
+                    // enriquecer IDs retornados pelo gerenciador de pacotes não deve descartá-los.
+                    WinProvision.Core.Services.CoreLog.Debug($"[HomePage] Falha ao enriquecer resultados da Store: {ex.Message}");
                 }
             }
             var storeEntries = directStoreEntries.Concat(resolvedStoreEntries).ToArray();
@@ -1494,7 +1505,7 @@ public sealed partial class FeaturedCategoryShelf
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[HomePage] Falha na busca ao vivo: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[HomePage] Falha na busca ao vivo: {ex.Message}");
             if (string.Equals(SearchText.Trim(), query, StringComparison.OrdinalIgnoreCase))
             {
                 _liveSearchResults = [];

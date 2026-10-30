@@ -10,9 +10,9 @@ namespace WinProvision.Core.Services.Office;
 /// desinstalação — sem precisar reinstalar nada só para descobrir isso.
 ///
 /// Só lê chaves de estado de instalação documentadas publicamente
-/// (learn.microsoft.com/microsoft-365-apps/deploy/click-to-run-registry-values):
+/// (documentação do instalador/click-to-run-registry-values):
 /// ProductReleaseIds, *.ExcludedApps, VersionToReport, Platform e ClientCulture, todas
-/// sob HKLM\SOFTWARE\Microsoft\Office\ClickToRun\Configuration. Não lê nem grava nada
+/// sob HKLM\SOFTWARE\plataforma do sistema\Office\ClickToRun\Configuration. Não lê nem grava nada
 /// relacionado a licenciamento/ativação — isso é fora do escopo deste serviço.
 /// </summary>
 [SupportedOSPlatform("windows")]

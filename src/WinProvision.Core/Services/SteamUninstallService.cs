@@ -4,7 +4,7 @@ using Microsoft.Win32;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Tracks the game's registration, never the lifetime of the shared Steam client.</summary>
+/// <summary>Acompanha o registro do aplicativo, sem controlar a duração do processo compartilhado.</summary>
 public static class SteamUninstallService
 {
     public static bool IsGameUninstall(string command) => TryGetCommand(command, out _, out _, out _);
@@ -31,7 +31,7 @@ public static class SteamUninstallService
             UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Normal
         });
-        // Steam may forward to an existing process, or remain open after removing the game.
+        // O aplicativo pode reutilizar um processo existente ou permanecer aberto após a remoção.
         return await WaitForRemovalAsync(() => IsRegistered(appId), TimeSpan.FromMinutes(30),
             TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
     }

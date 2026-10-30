@@ -54,6 +54,7 @@ public class LocalBackupService
             await WriteAllTextUtf8NoBomAsync(snapshotPath, json, ct);
 
             PruneOldSnapshots();
+            CoreLog.Information("LocalBackup.Save", $"guias={backupSet.Tabs.Count} caminho={_latestPath}");
         }
         finally
         {
@@ -70,10 +71,14 @@ public class LocalBackupService
         try
         {
             string json = await File.ReadAllTextAsync(_latestPath, ct);
-            return WinProvision.Core.Services.AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile);
+            var backup = WinProvision.Core.Services.AotJson.Deserialize<ProfileBackupSet>(json, WinProvisionJsonOptions.Profile);
+            if (backup is not null)
+                CoreLog.Debug("LocalBackup.Load", $"guias={backup.Tabs.Count} caminho={_latestPath}");
+            return backup;
         }
         catch (JsonException)
         {
+            CoreLog.Warning(new InvalidDataException("O backup local contém JSON inválido."), "LocalBackup.Load");
             return null;
         }
     }

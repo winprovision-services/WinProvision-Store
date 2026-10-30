@@ -6,7 +6,7 @@ using WinProvision.Core.Models;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Persists the last successful install/update method for each WinGet package.</summary>
+/// <summary>Persists the last successful install/update method for each gerenciador de pacotes package.</summary>
 public static class InstalledPackageMethodHistory
 {
     private static readonly System.Threading.Lock Gate = new();

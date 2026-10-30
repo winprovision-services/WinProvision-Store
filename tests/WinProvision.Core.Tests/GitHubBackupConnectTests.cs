@@ -17,7 +17,7 @@ public class GitHubBackupConnectTests
         string folder = Path.Combine(Path.GetTempPath(), "WinProvision-backup-test-" + Guid.NewGuid().ToString("N"));
         using var backup = new GitHubBackupService(folder, http, raw);
 
-        GitHubConnectResult result = await backup.ConnectAsync("test-token");
+        CloudConnectResult result = await backup.ConnectAsync("test-token");
 
         Assert.False(result.Success);
         Assert.False(backup.IsConnected);

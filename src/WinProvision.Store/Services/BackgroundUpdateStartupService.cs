@@ -13,9 +13,24 @@ public sealed partial class BackgroundUpdateStartupService(
     public void Dispose() => _scheduleGate.Dispose();
     private const string LegacyTaskName = @"\WinProvisionStoreWinUI3\AutoUpdate";
     private const string ScheduledTaskName = @"\WinProvisionStoreWinUI3BackgroundUpdate";
+    private const string ApplicationStartupTaskName = @"\WinProvisionStoreWinUI3Startup";
     private const string LegacyScriptPath = @"WinProvisionStoreWinUI3\AutoUpdate.vbs";
 
     public bool IsEnabled => preferences.AutoUpdateAtStartup;
+
+    public async Task<(bool Success, string? Message)> ConfigureApplicationStartupAsync(
+        bool enabled, CancellationToken token = default)
+    {
+        await _scheduleGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            return enabled
+                ? await CreateApplicationStartupTaskAsync(token).ConfigureAwait(false)
+                : await RemoveApplicationStartupTaskAsync(token).ConfigureAwait(false);
+        }
+        finally { _scheduleGate.Release(); }
+    }
 
     public async Task<string?> MigrateLegacyTaskAsync(CancellationToken cancellationToken = default)
     {
@@ -123,7 +138,7 @@ public sealed partial class BackgroundUpdateStartupService(
 
     private async Task<(bool Success, string? Message)> ApplyScheduleCoreAsync(bool enabled, CancellationToken cancellationToken)
     {
-        if (!enabled || preferences.UpdateSchedule == BackgroundUpdateSchedule.AtLogon)
+        if (!enabled)
         {
             string? error = await RemoveScheduledTaskAsync(cancellationToken);
             return error is null ? (true, null) : (false, error);
@@ -144,12 +159,22 @@ public sealed partial class BackgroundUpdateStartupService(
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        foreach (string argument in new[]
+        var arguments = new List<string>
         {
-            "/Create", "/TN", ScheduledTaskName, "/SC", scheduleType,
-            "/ST", preferences.UpdateSchedule == BackgroundUpdateSchedule.Interval ? DateTime.Now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : preferences.UpdateScheduleTime,
+            "/Create", "/TN", ScheduledTaskName, "/SC",
+            preferences.UpdateSchedule == BackgroundUpdateSchedule.AtLogon ? "ONLOGON" : scheduleType,
             "/TR", command, "/IT", "/F"
-        })
+        };
+        if (preferences.UpdateSchedule == BackgroundUpdateSchedule.AtLogon)
+            arguments.AddRange(new[] { "/RL", "HIGHEST" });
+        else
+            arguments.AddRange(new[]
+            {
+                "/ST", preferences.UpdateSchedule == BackgroundUpdateSchedule.Interval
+                    ? DateTime.Now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+                    : preferences.UpdateScheduleTime
+            });
+        foreach (string argument in arguments)
             startInfo.ArgumentList.Add(argument);
         if (preferences.UpdateSchedule == BackgroundUpdateSchedule.Interval)
         {
@@ -166,6 +191,39 @@ public sealed partial class BackgroundUpdateStartupService(
             ? (true, null)
             : (false, string.IsNullOrWhiteSpace(result.Output)
                 ? $"schtasks.exe retornou código {result.ExitCode}." : result.Output.Trim());
+    }
+
+    private async Task<(bool Success, string? Message)> CreateApplicationStartupTaskAsync(CancellationToken token)
+    {
+        string command = BackgroundUpdateCommand.StartupForDirectory(AppContext.BaseDirectory);
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "schtasks.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        var result = await RunSchtasksAsync(startInfo, token, new[]
+        {
+            "/Create", "/TN", ApplicationStartupTaskName, "/SC", "ONLOGON",
+            "/TR", command, "/RL", "HIGHEST", "/IT", "/F"
+        }).ConfigureAwait(false);
+        return result.ExitCode == 0
+            ? (true, null)
+            : (false, string.IsNullOrWhiteSpace(result.Output)
+                ? $"Não foi possível criar a tarefa elevada de inicialização (código {result.ExitCode})."
+                : result.Output.Trim());
+    }
+
+    private async Task<(bool Success, string? Message)> RemoveApplicationStartupTaskAsync(CancellationToken token)
+    {
+        var result = await RunSchtasksAsync($"/delete /tn \"{ApplicationStartupTaskName}\" /f", token).ConfigureAwait(false);
+        return result.ExitCode == 0 || result.Output.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
+            ? (true, null)
+            : (false, string.IsNullOrWhiteSpace(result.Output)
+                ? $"Não foi possível remover a tarefa de inicialização (código {result.ExitCode})."
+                : result.Output.Trim());
     }
 
     public async Task<int> RunNowAsync(CancellationToken token = default)
@@ -263,8 +321,11 @@ public sealed partial class BackgroundUpdateStartupService(
 
     private async Task<(int ExitCode, string Output)> RunSchtasksAsync(
         ProcessStartInfo startInfo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<string>? arguments = null)
     {
+        if (arguments is not null)
+            foreach (string argument in arguments) startInfo.ArgumentList.Add(argument);
         cancellationToken.ThrowIfCancellationRequested();
         try
         {

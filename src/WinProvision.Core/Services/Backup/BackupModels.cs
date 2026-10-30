@@ -2,18 +2,18 @@ using WinProvision.Core.Models;
 
 namespace WinProvision.Core.Services.Backup;
 
-/// <summary>Resultado de <see cref="GitHubBackupService.ConnectAsync"/>.</summary>
-public record GitHubConnectResult(bool Success, string? ErrorMessage = null, string? Login = null)
+/// <summary>Resultado da conexão com o provedor de backup remoto.</summary>
+public record CloudConnectResult(bool Success, string? ErrorMessage = null, string? Login = null)
 {
-    public static GitHubConnectResult Ok(string login) => new(true, null, login);
-    public static GitHubConnectResult Fail(string message) => new(false, message);
+    public static CloudConnectResult Ok(string login) => new(true, null, login);
+    public static CloudConnectResult Fail(string message) => new(false, message);
 }
 
-/// <summary>Resultado da publicação do bootstrap e do perfil em um Gist.</summary>
-public record GitHubBootstrapPublishResult(bool Success, string? RawUrl = null, string? ErrorMessage = null)
+/// <summary>Resultado da publicação do bootstrap e do perfil no armazenamento remoto.</summary>
+public record CloudBootstrapPublishResult(bool Success, string? RawUrl = null, string? ErrorMessage = null)
 {
-    public static GitHubBootstrapPublishResult Ok(string rawUrl) => new(true, rawUrl);
-    public static GitHubBootstrapPublishResult Fail(string message) => new(false, null, message);
+    public static CloudBootstrapPublishResult Ok(string rawUrl) => new(true, rawUrl);
+    public static CloudBootstrapPublishResult Fail(string message) => new(false, null, message);
 }
 
 public enum BootstrapDisplayMode
@@ -28,23 +28,23 @@ public enum BootstrapLogMode
     Cloud
 }
 
-public record GitHubBackupUploadResult(bool Success, string? ErrorMessage = null)
+public record CloudBackupUploadResult(bool Success, string? ErrorMessage = null)
 {
-    public static GitHubBackupUploadResult Ok() => new(true);
-    public static GitHubBackupUploadResult Fail(string message) => new(false, message);
+    public static CloudBackupUploadResult Ok() => new(true);
+    public static CloudBackupUploadResult Fail(string message) => new(false, message);
 }
 
-public record GitHubBackupDownloadResult(ProfileBackupSet? BackupSet, string? ErrorMessage = null)
+public record CloudBackupDownloadResult(ProfileBackupSet? BackupSet, string? ErrorMessage = null)
 {
     public bool Success => BackupSet is not null;
-    public static GitHubBackupDownloadResult Ok(ProfileBackupSet backupSet) => new(backupSet);
-    public static GitHubBackupDownloadResult NotFound() => new(null!);
-    public static GitHubBackupDownloadResult Fail(string message) => new(null!, message);
+    public static CloudBackupDownloadResult Ok(ProfileBackupSet backupSet) => new(backupSet);
+    public static CloudBackupDownloadResult NotFound() => new(null!);
+    public static CloudBackupDownloadResult Fail(string message) => new(null!, message);
 }
 
 /// <summary>
 /// Metadados persistidos em disco (texto puro, não sensível) sobre a conexão com o
-/// GitHub: login, id do Gist secreto usado como backup e a última sincronização
+/// serviço remoto: identidade, identificador do arquivo privado usado como backup e a última sincronização
 /// bem-sucedida. O Personal Access Token em si NUNCA fica aqui — ele vive
 /// separadamente, protegido via <see cref="SecureTokenStore"/> (DPAPI).
 /// </summary>

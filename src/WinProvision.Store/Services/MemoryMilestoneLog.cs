@@ -29,7 +29,7 @@ internal sealed partial class MemoryMilestoneLog
         try { return new MemoryMilestoneLog(value == "2" ? 2 : 1); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            System.Diagnostics.Debug.WriteLine($"Memory milestone log unavailable: {exception.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"Memory milestone log unavailable: {exception.Message}");
             return null;
         }
     }
@@ -63,7 +63,7 @@ internal sealed partial class MemoryMilestoneLog
             }
             catch (Exception exception) when (exception is Win32Exception or IOException or UnauthorizedAccessException or InvalidOperationException or DllNotFoundException or EntryPointNotFoundException)
             {
-                System.Diagnostics.Debug.WriteLine($"Memory milestone sample failed: {exception.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"Memory milestone sample failed: {exception.Message}");
             }
         }
     }

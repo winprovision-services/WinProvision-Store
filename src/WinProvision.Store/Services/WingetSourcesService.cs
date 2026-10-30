@@ -47,7 +47,7 @@ public sealed class WingetSourcesService
                     new AggregateException(lastFailure, verificationFailure));
             }
 
-            // A falha do processo pode ocorrer depois de o WinGet registrar a fonte.
+            // A falha do processo pode ocorrer depois de o gerenciador de pacotes registrar a fonte.
             // Só tentamos o formato alternativo após confirmar que a fonte não existe.
             if (WingetSourceTypeRetry.IsListed(sources, normalizedName)) return;
         }

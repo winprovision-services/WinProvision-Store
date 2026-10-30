@@ -49,8 +49,8 @@ public class InstalledAppsService
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
-            // O inventário do winget permite comparar PackageIdentifier exato. O export
-            // pode omitir um pacote que winget list e o Registro ainda reconhecem;
+            // O inventário do gerenciador de pacotes permite comparar PackageIdentifier exato. O export
+            // pode omitir um pacote que gerenciador de pacotes list e o Registro ainda reconhecem;
             // nesses casos o nome registrado complementa o inventário.
             Task<List<InstalledAppDetail>> registryTask = Task.Run(() => GetDesktopAppsFromRegistry(cancellationToken), cancellationToken);
             Task<(bool Succeeded, List<string> PackageIds)>? wingetTask = _wingetExecutor is null
@@ -197,7 +197,7 @@ public class InstalledAppsService
 
     /// <summary>
     /// Motor de varredura profunda no Registro para capturar apenas EXE e MSI.
-    /// Executa em milissegundos sem depender de processos externos ou do WinGet.
+    /// Executa em milissegundos sem depender de processos externos ou do gerenciador de pacotes.
     /// </summary>
     public static List<InstalledAppDetail> GetDesktopAppsFromRegistry(CancellationToken cancellationToken = default)
         => ReadRegistryApps(includeSystemComponents: false, cancellationToken);
@@ -308,7 +308,7 @@ public class InstalledAppsService
             .Select(ToUpdateInventoryEntry).ToList();
     }
 
-    // Same precedence as WinGet ARPHelper::DetermineVersion; keep unknown versions unknown.
+    // Same precedence as gerenciador de pacotes ARPHelper::DetermineVersion; keep unknown versions unknown.
     internal static string DetermineRegistryVersion(Func<string, object?> read)
     {
         if (read("DisplayVersion") is string display && !string.IsNullOrWhiteSpace(display)) return display.Trim();

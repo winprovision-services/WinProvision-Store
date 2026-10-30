@@ -14,10 +14,11 @@ namespace WinProvision.Store.ViewModels;
 public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
     public enum SortField { Name, Id, Version, NewVersion, Source }
-    private readonly StoreService _storeService;
+    private readonly IStoreCatalog _storeService;
     private readonly IBackgroundUpdateStartupService _backgroundUpdateStartupService;
     private readonly ApplicationPreferencesService _applicationPreferences;
     private readonly IUpdatesIgnoreStore _ignoredUpdatesService;
+    private readonly OperationPreferencesService _operationPreferences;
 
     private readonly IPackageBackend _backend;
     private readonly PackageInstallOptionsService _packageOptions;
@@ -79,14 +80,16 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
     public bool ExactSearch { get; set => Set(ref field, value); } = false;
     public bool SearchName { get; set => Set(ref field, value); } = false;
     public bool SearchId { get; set => Set(ref field, value); } = false;
-    public UpdatesViewModel(IPackageBackend backend, StoreService store, IBackgroundUpdateStartupService startup,
+    public UpdatesViewModel(IPackageBackend backend, IStoreCatalog store, IBackgroundUpdateStartupService startup,
         ApplicationPreferencesService preferences, IUpdatesIgnoreStore ignored, PackageInstallOptionsService packageOptions,
-        WingetPackageDetailsService? wingetDetails = null, IPresentationService? presentation = null)
+        WingetPackageDetailsService? wingetDetails = null, IPresentationService? presentation = null,
+        OperationPreferencesService? operationPreferences = null)
     {
         _wingetDetails = wingetDetails;
         _presentation = presentation;
         _packageOptions = packageOptions; _backend = backend; _storeService = store; _backgroundUpdateStartupService = startup;
         _applicationPreferences = preferences; _ignoredUpdatesService = ignored;
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
         ScanCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(CheckUpdatesCoreAsync, () => !IsBusy);
         CancelScanCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(ScanCommand.Cancel);
         SelectAllCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => SelectAll(true));
@@ -492,7 +495,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
         int succeeded = 0, failed = 0;
         try
         {
-            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            using var batchGate = new SemaphoreSlim(_operationPreferences.Load().ParallelOperations);
             await Task.WhenAll(selected.Select(async package =>
             {
                 await batchGate.WaitAsync(token);
@@ -523,7 +526,7 @@ public sealed partial class UpdatesViewModel : CommunityToolkit.Mvvm.ComponentMo
 
     private async Task<List<UpgradablePackage>> ConfirmInstallerHostChangesAsync(List<UpgradablePackage> packages, CancellationToken token)
     {
-        if (!new OperationPreferencesService().Load().WarnInstallerHostChange || _wingetDetails is null || _presentation is null) return packages;
+        if (!_operationPreferences.Load().WarnInstallerHostChange || _wingetDetails is null || _presentation is null) return packages;
         var approved = new List<UpgradablePackage>(packages.Count);
         foreach (var package in packages)
         {

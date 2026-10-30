@@ -4,9 +4,9 @@ using System.Linq;
 namespace WinProvision.Core.Services;
 
 /// <summary>
-/// Registro central de TODA execução do winget.exe feita pelo app. A Store liga o <see cref="Sink"/>
+/// Registro central de TODA execução do cliente de pacotes feita pelo app. A Store liga o <see cref="Sink"/>
 /// ao log de diagnóstico; cada linha traz os argumentos e a cadeia de chamadores, o que responde
-/// "quem abriu esse winget.exe?" (instalação, listagem, atualização, checagem de versão...).
+/// "quem abriu esse cliente de pacotes?" (instalação, listagem, atualização, checagem de versão...).
 /// </summary>
 public static class WingetCliAudit
 {
@@ -50,7 +50,7 @@ public static class WingetCliAudit
     }
 
     /// <summary>
-    /// Fecha a linha aberta por <see cref="Launch"/>: sem isso, um "WINGET.EXE LAUNCH" sem
+    /// Fecha a linha aberta por <see cref="Launch"/>: sem isso, um "cliente de pacotes LAUNCH" sem
     /// resultado correspondente no log não deixa saber se aquele processo terminou bem ou
     /// mal — quem lê o log precisava ficar de olho na UI pra descobrir.
     /// </summary>

@@ -9,6 +9,7 @@ public interface IPackageBackend
     Task<WingetExecutionResult> InstallAsync(AppEntry app, PackageInstallOptions? options = null);
     Task<WingetExecutionResult> UpdateAsync(UpgradablePackage package, PackageInstallOptions? options = null);
     Task<WingetExecutionResult> UninstallAsync(AppEntry app, bool interactive = false, bool requiresElevation = false);
+    Task<WingetExecutionResult> DownloadAsync(string id, string? source, string directory, CancellationToken token);
     Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token);
     Task ShutdownAsync();
     void CancelAll();
@@ -18,10 +19,8 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
     public IDisposable BeginBatch() => _queue.BeginBatch();
     private readonly OperationsQueueService _queue;
     private readonly WingetExecutor _executor;
-    private readonly WinGetService _winGet;
     private readonly InstalledAppsService _installed;
-    private readonly UninstallerEngineService _uninstaller;
-    private readonly WinProvisionApiService _api;
+    private readonly WinProvision.PackageManagement.ApplicationEngine _engine;
     private readonly OfficeDeploymentToolService _office;
     private CancellationTokenSource _waiting = new();
     private readonly List<CancellationTokenSource> _retiredTokens = [];
@@ -29,24 +28,14 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
     private readonly HashSet<Task> _tasks = [];
     private readonly HashSet<string> _packages = new(StringComparer.OrdinalIgnoreCase);
     private bool _stopping;
-    public PackageBackend(OperationsQueueService queue, WingetExecutor executor, WinGetService winGet, InstalledAppsService installed, PackageInstallOptionsService options, UninstallerEngineService uninstaller, WinProvisionApiService api, OfficeDeploymentToolService office, WinProvision.PackageManagement.ApplicationEngine? engine = null)
+    public PackageBackend(OperationsQueueService queue, WingetExecutor executor, InstalledAppsService installed, PackageInstallOptionsService options, OfficeDeploymentToolService office, WinProvision.PackageManagement.ApplicationEngine engine)
     {
-        _queue = queue; _executor = executor; _winGet = winGet; _installed = installed;
-        _uninstaller = uninstaller; _api = api; _office = office;
-        if (engine is null)
-        {
-            OperationRunner.ConfigureInstallHandler(winGet.InstallPreferredAsync);
-            OperationRunner.ConfigureUpdateHandler(winGet.UpdateAsync);
-            OperationRunner.ConfigureUpdateVerifier(winGet.VerifySuccessfulUpgradeAsync);
-            OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => winGet.PrepareAsync(token, includeStore, log));
-        }
-        else
-        {
-            OperationRunner.ConfigureInstallHandler(engine.InstallPreferredAsync);
-            OperationRunner.ConfigureUpdateHandler(engine.UpdateAsync);
-            OperationRunner.ConfigureUpdateVerifier(engine.VerifySuccessfulUpgradeAsync);
-            OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => engine.PrepareAsync(token, includeStore, log));
-        }
+        _queue = queue; _executor = executor; _installed = installed;
+        _engine = engine; _office = office;
+        OperationRunner.ConfigureInstallHandler(engine.InstallPreferredAsync);
+        OperationRunner.ConfigureUpdateHandler(engine.UpdateAsync);
+        OperationRunner.ConfigureUpdateVerifier(engine.VerifySuccessfulUpgradeAsync);
+        OperationRunner.ConfigureInstallWarmupHandler((includeStore, log, token) => engine.PrepareAsync(token, includeStore, log));
         OperationRunner.ConfigurePackageInstallOptionsProvider(options.Get);
     }
     private static Task<WingetExecutionResult> SelfManagementBlocked() => Task.FromResult(new WingetExecutionResult
@@ -75,11 +64,15 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         }
         await _installed.EnsureLoadedAsync(token);
         var match = _installed.GetAllInstalledApps().FirstOrDefault(item => item.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase) || item.DisplayName.Equals(app.Name, StringComparison.OrdinalIgnoreCase));
-        string? installedVersion = string.IsNullOrWhiteSpace(match?.DisplayVersion) ? null : match.DisplayVersion;
-        if (interactive && !SteamUninstallService.IsGameUninstall(match?.UninstallString ?? ""))
-            return await OperationRunner.RunUninstallAsync(_queue, _executor, app.Id, app.Name, app.IconUrl, _installed, app.Source, installedVersion, interactive: true, requiresElevation: requiresElevation);
-        bool success = await OperationRunner.RunUninstallWithFallbackAsync(_queue, _executor, _uninstaller, app.Id, app.Name, app.IconUrl, match?.UninstallString ?? "", match?.QuietUninstallString ?? "", match?.InstallLocation ?? "", _installed, source: app.Source, installedVersion: installedVersion, apiService: _api, requiresElevation: requiresElevation);
-        return new WingetExecutionResult { Success = success };
+        if (match is null)
+            return await _engine.UninstallAsync(app.Id, app.Source, _ => { }, token, interactive, requiresElevation);
+
+        WingetExecutionResult result = await OperationRunner.RunUninstallWithHandlerAsync(
+                _queue,
+                match,
+                (log, ct) => _engine.UninstallAsync(app.Id, app.Source, log, ct, interactive, requiresElevation),
+                _installed);
+        return result;
 
     });
     private Task<WingetExecutionResult> TrackAsync(string key, Func<CancellationToken, Task<WingetExecutionResult>> action)
@@ -132,5 +125,9 @@ public sealed partial class PackageBackend : IPackageBackend, IAsyncDisposable
         _waiting.Dispose();
         foreach (var token in _retiredTokens) token.Dispose();
     }
-    public Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token) => _winGet.GetUpgradablePackagesAsync(cancellationToken: token);
+    public Task<WingetExecutionResult> DownloadAsync(string id, string? source, string directory, CancellationToken token) =>
+        _engine.DownloadInstallerAsync(id, source, directory, null, token);
+
+    public Task<List<UpgradablePackage>> ScanUpdatesAsync(CancellationToken token) =>
+        _engine.ScanUpdatesAsync(null, token);
 }

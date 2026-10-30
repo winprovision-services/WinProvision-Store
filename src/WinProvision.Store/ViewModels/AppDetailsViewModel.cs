@@ -383,7 +383,7 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // WinGet manifest no GitHub
+        // gerenciador de pacotes manifest no serviço remoto
         string firstChar = id.Length > 0 ? Uri.EscapeDataString(char.ToLowerInvariant(id[0]).ToString()) : "a";
         string parts = string.Join('/', id.Split('.').Select(Uri.EscapeDataString));
         string manifestUrl = $"https://github.com/microsoft/winget-pkgs/tree/master/manifests/{firstChar}/{parts}";

@@ -13,13 +13,13 @@ using WinProvision.Core.Services;
 namespace WinProvision.PackageManagement;
 
 /// <summary>
-/// Serviço para interação com o WinGet usando a API COM, com fallback para a CLI.
+/// Serviço para interação com o gerenciador de pacotes usando a API COM, com fallback para a CLI.
 /// </summary>
 public sealed partial class WinGetService
 {
     // Tempo máximo até o PRIMEIRO callback de progresso (o vigia é cancelado no primeiro callback).
     // A primeira ativação do servidor COM + atualização de fonte pode passar de 1 minuto em máquina
-    // recém-provisionada ou rede lenta; 60s cancelava a COM cedo demais e forçava o winget.exe.
+    // recém-provisionada ou rede lenta; 60s cancelava a COM cedo demais e forçava o cliente de pacotes.
     private static readonly TimeSpan ComProgressTimeout = TimeSpan.FromSeconds(180);
     private const int MaxPreflightAttempts = 3;
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
@@ -96,7 +96,7 @@ public sealed partial class WinGetService
     }
 
     /// <summary>
-    /// Provisiona o WinGet e aquece COM sob demanda. O fluxo de instalação automática não usa
+    /// Provisiona o gerenciador de pacotes e aquece COM sob demanda. O fluxo de instalação automática não usa
     /// esse método antes da primeira tentativa COM; chama-o somente quando precisar do CLI.
     /// </summary>
     public async Task PrepareAsync(
@@ -128,9 +128,9 @@ public sealed partial class WinGetService
     }
 
     /// <summary>
-    /// Provisiona o WinGet apenas quando pesquisa/preparação ou o CLI são necessários. Falha
+    /// Provisiona o gerenciador de pacotes apenas quando pesquisa/preparação ou o CLI são necessários. Falha
     /// NÃO aborta a API própria, e o que
-    /// exigir o winget de verdade (winget.exe, ODT via winget) falha com mensagem própria.
+    /// exigir o gerenciador de pacotes de verdade (cliente de pacotes, ODT via gerenciador de pacotes) falha com mensagem própria.
     /// </summary>
     private async Task<bool> EnsureWingetProvisionedAsync(Action<string>? onLog, CancellationToken cancellationToken)
     {
@@ -159,7 +159,7 @@ public sealed partial class WinGetService
 
         PackageDiagnostics.Write($"WINGET PROVISION status={result.Status} exe={WingetLocator.ExecutablePath}");
 
-        // Só na PRIMEIRA vez que o winget aparece nesta sessão: falhas de COM anteriores
+        // Só na PRIMEIRA vez que o gerenciador de pacotes aparece nesta sessão: falhas de COM anteriores
         // (App Installer ausente) deixam de valer, então a COM ganha uma tentativa limpa.
         if (result.Status == WingetBootstrapStatus.Bootstrapped &&
             Interlocked.Exchange(ref _postProvisionHandled, 1) == 0)
@@ -258,7 +258,7 @@ public sealed partial class WinGetService
                     $"SEARCH FALLBACK exception={ex.GetType().FullName} " +
                     $"hresult=0x{ex.HResult:X8} message=\"{ex.Message}\" stack={ex}");
                 PackageDiagnostics.Write("FALLBACK PARA CLI: motivo=COM search exception");
-                Trace.WriteLine($"WinGet COM search failed; falling back to winget.exe: {ex}");
+                WinProvision.Core.Services.CoreLog.Debug($"WinGet COM search failed; falling back to winget.exe: {ex}");
                 results = await SearchCliFallbackAsync(query, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -961,7 +961,7 @@ public sealed partial class WinGetService
         var timer = Stopwatch.StartNew();
         var manager = WinGetFactoryHelper.CreateResilientPackageManager();
         // LocalCatalogs maps to Repository::CompositeSearchBehavior::Installed.
-        // It correlates installed packages with the attached sources, as UniGetUI does.
+        // It correlates installed packages with the attached sources, as outras interfaces does.
         // Searching all remote packages makes listing updates scan the entire catalog.
         var composite = WinGetFactoryHelper.CreateCompositePackageCatalogOptions();
         composite.CompositeSearchBehavior = CompositeSearchBehavior.LocalCatalogs;
@@ -1219,7 +1219,7 @@ public sealed partial class WinGetService
 
     /// <summary>
     /// Corpo comum de <see cref="InstallAsync"/> e <see cref="UpdateAsync"/> — primeiro
-    /// provisiona o WinGet (necessário para registrar o servidor COM), depois tenta COM,
+    /// provisiona o gerenciador de pacotes (necessário para registrar o servidor COM), depois tenta COM,
     /// API própria e CLI como último recurso.
     /// </summary>
     private async Task<WingetExecutionResult> RunInstallOrUpgradeAsync(
@@ -1395,7 +1395,7 @@ public sealed partial class WinGetService
 
                 PackageDiagnostics.Write(
                     $"FALLBACK PARA API PRÓPRIA: motivo=COM {opKind} exception ({ex.GetType().Name} 0x{ex.HResult:X8})");
-                Trace.WriteLine($"WinGet COM {opKind} failed; falling back to WinProvision API: {ex}");
+                WinProvision.Core.Services.CoreLog.Debug($"WinGet COM {opKind} failed; falling back to WinProvision API: {ex}");
                 onLogReceived?.Invoke("API COM indisponível; usando a API própria da WinProvision Store.");
                 return await RunApiThenCliFallbackAsync(
                     opKind,
@@ -1413,8 +1413,8 @@ public sealed partial class WinGetService
 
     /// <summary>
     /// Nível 2 da cadeia de fallback, despachado por <paramref name="opKind"/>: instalação usa
-    /// <see cref="TryWinProvisionApiThenCliAsync"/> (fallback final winget.exe install);
-    /// atualização usa <see cref="TryApiUpdateThenCliAsync"/> (fallback final winget.exe update).
+    /// <see cref="TryWinProvisionApiThenCliAsync"/> (fallback final cliente de pacotes install);
+    /// atualização usa <see cref="TryApiUpdateThenCliAsync"/> (fallback final cliente de pacotes update).
     /// </summary>
     private Task<WingetExecutionResult> RunApiThenCliFallbackAsync(
         ComOperationKind opKind,
@@ -1435,7 +1435,7 @@ public sealed partial class WinGetService
     /// <summary>
     /// Tenta atualizar via <see cref="WinProvisionApiService.TryInstallAsync"/> (mesmo endpoint
     /// usado para instalar — ver comentário em <see cref="UpdateAsync"/>); só recorre ao
-    /// winget.exe (<see cref="_wingetExecutor"/>) se a API própria também não resolver. Mesmo
+    /// cliente de pacotes (<see cref="_wingetExecutor"/>) se a API própria também não resolver. Mesmo
     /// papel de <see cref="TryWinProvisionApiThenCliAsync"/>, só que pro lado da atualização.
     /// </summary>
     private async Task<WingetExecutionResult> TryApiUpdateThenCliAsync(
@@ -1684,7 +1684,7 @@ public sealed partial class WinGetService
         string query,
         CancellationToken cancellationToken)
     {
-        Trace.WriteLine("WinGet COM search: creating resilient PackageManager.");
+        WinProvision.Core.Services.CoreLog.Debug("WinGet COM search: creating resilient PackageManager.");
         var packageManager = WinGetFactoryHelper.CreateResilientPackageManager();
         var connectedCatalogs = new List<(PackageCatalog Catalog, string Source)>();
         Exception? lastConnectionError = null;
@@ -1710,13 +1710,13 @@ public sealed partial class WinGetService
                 {
                     lastConnectionError = new InvalidOperationException(
                         $"Não foi possível conectar à fonte {source}: {connected.Status}.");
-                    Trace.WriteLine($"WinGet COM search connection failed for {source}: {connected.Status}.");
+                    WinProvision.Core.Services.CoreLog.Debug($"WinGet COM search connection failed for {source}: {connected.Status}.");
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 lastConnectionError = ex;
-                Trace.WriteLine($"WinGet COM search could not connect to {source}: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"WinGet COM search could not connect to {source}: {ex.Message}");
             }
         }
 
@@ -1769,7 +1769,7 @@ public sealed partial class WinGetService
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                Trace.WriteLine($"WinGet COM search failed for {source}/{field}: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"WinGet COM search failed for {source}/{field}: {ex.Message}");
                 return [];
             }
         }
@@ -1894,7 +1894,7 @@ public sealed partial class WinGetService
             .ToArray();
         if (fields.Length < minimumColumns)
         {
-            Trace.WriteLine($"WinGet CLI row discarded: expected at least {minimumColumns} columns: {line}");
+            WinProvision.Core.Services.CoreLog.Debug($"WinGet CLI row discarded: expected at least {minimumColumns} columns: {line}");
             return null;
         }
 
@@ -1906,13 +1906,13 @@ public sealed partial class WinGetService
         // it is intentionally ignored because Source is always the final field.
         if (id.Contains(' ', StringComparison.Ordinal))
         {
-            Trace.WriteLine($"WinGet CLI row discarded: package ID contains spaces: {line}");
+            WinProvision.Core.Services.CoreLog.Debug($"WinGet CLI row discarded: package ID contains spaces: {line}");
             return null;
         }
 
         if (id.Contains('…', StringComparison.Ordinal) || id.Contains("...", StringComparison.Ordinal))
         {
-            Trace.WriteLine($"WinGet CLI row discarded: package ID is truncated: {line}");
+            WinProvision.Core.Services.CoreLog.Debug($"WinGet CLI row discarded: package ID is truncated: {line}");
             return null;
         }
 
@@ -1959,12 +1959,12 @@ public sealed partial class WinGetService
                 catch (Exception ex) { PackageDiagnostics.Write($"{comTag} onLog lançou {ex.GetType().Name}: {ex.Message}"); }
             };
         }
-        Trace.WriteLine("WinGet COM install: creating resilient PackageManager.");
+        WinProvision.Core.Services.CoreLog.Debug("WinGet COM install: creating resilient PackageManager.");
         var packageManager = WinGetFactoryHelper.CreateResilientPackageManager();
         PackageDiagnostics.Write($"{comTag} stage=packageManager-created elapsed={stopwatch.Elapsed}");
-        Trace.WriteLine($"WinGet COM install: PackageManager created in {stopwatch.Elapsed}.");
-        // OpenWindowsCatalog = fonte "winget". Apps da Microsoft Store (source=msstore) ficam no
-        // catálogo MicrosoftStore; se não achar lá, ainda tenta o catálogo winget.
+        WinProvision.Core.Services.CoreLog.Debug($"WinGet COM install: PackageManager created in {stopwatch.Elapsed}.");
+        // A fonte principal reúne os pacotes comuns. Aplicativos do catálogo visual (source=msstore) ficam no
+        // catálogo correspondente; se não achar lá, ainda tenta o catálogo de pacotes.
         var catalogKinds = string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)
             ? new[] { PredefinedPackageCatalog.MicrosoftStore, PredefinedPackageCatalog.OpenWindowsCatalog }
             : new[] { PredefinedPackageCatalog.OpenWindowsCatalog };
@@ -2068,8 +2068,8 @@ public sealed partial class WinGetService
         }
 
         var installOptions = WinGetFactoryHelper.CreateInstallOptions();
-        // Microsoft Store packages may require Store UI/consent and don't behave like
-        // conventional silent installers. Preserve silent mode for WinGet manifests.
+        // catálogo visual packages may require Store UI/consent and don't behave like
+        // conventional silent installers. Preserve silent mode for gerenciador de pacotes manifests.
         installOptions.PackageInstallMode = options.Interactive || string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)
             ? PackageInstallMode.Interactive
             : PackageInstallMode.Silent;
@@ -2155,13 +2155,13 @@ public sealed partial class WinGetService
         catch (Exception ex)
         {
             // A pré-consulta nunca deve impedir a instalação. Se o metadado COM estiver
-            // ausente ou inconsistente, o WinGet escolhe o instalador e seus requisitos.
+            // ausente ou inconsistente, o gerenciador de pacotes escolhe o instalador e seus requisitos.
             PackageDiagnostics.Write(
                 $"{comTag} installer-metadata unavailable {ex.GetType().Name}: {ex.Message}");
         }
 
         // Route BEFORE dispatch: self-elevating installers otherwise show their own
-        // UAC prompt and cannot reuse the host's gsudo authorization.
+        // UAC prompt and cannot reuse the host's helper de elevação authorization.
         if (!InProcessWinGetFactory.Enabled && preferences is not null
             && InstallerElevationPolicy.RequiresElevatedComHost(source, preferences.Scope,
                 preferences.RequiresElevation, preferences.ElevationProhibited))
@@ -2218,7 +2218,7 @@ public sealed partial class WinGetService
                     $"{comTag} stage=first-progress state={state} " +
                     $"download={downloadProgress} install={installationProgress} " +
                     $"dispatcher=false elapsed={stopwatch.Elapsed}");
-                Trace.WriteLine(
+                WinProvision.Core.Services.CoreLog.Debug(
                     $"WinGet COM install: first progress callback at {stopwatch.Elapsed}.");
                 watchdogCts.Cancel();
             }
@@ -2344,8 +2344,8 @@ public sealed partial class WinGetService
         PackageDiagnostics.Write(
             $"{comTag} stage=result status={installResult.Status} " +
             $"reboot={installResult.RebootRequired} elapsed={stopwatch.Elapsed}");
-        Trace.WriteLine($"WinGet COM install result: {installResult.Status}.");
-        Trace.WriteLine($"WinGet COM install completed in {stopwatch.Elapsed}.");
+        WinProvision.Core.Services.CoreLog.Debug($"WinGet COM install result: {installResult.Status}.");
+        WinProvision.Core.Services.CoreLog.Debug($"WinGet COM install completed in {stopwatch.Elapsed}.");
         if (installResult.RebootRequired)
         {
             output += " Reinicialização necessária.";
@@ -2365,7 +2365,7 @@ public sealed partial class WinGetService
 
             // O instalador chegou a rodar e devolveu o próprio código de erro: repetir por outro
             // caminho executaria o mesmo instalador de novo (risco de instalação dupla/parcial).
-            // O WinGet classifica opções inválidas e ausência de instalador aplicável
+            // O gerenciador de pacotes classifica opções inválidas e ausência de instalador aplicável
             // antes de executar o instalador (PackageManager.cpp/GetPackageVersion).
             // Um callback pode informar Installing antes desse HRESULT, mas nenhum instalador
             // foi iniciado; só neste caso é seguro continuar pela cadeia de fallback.
@@ -2391,7 +2391,7 @@ public sealed partial class WinGetService
             }
 
             // Qualquer outra falha da COM (download, dependências do pacote, catálogo, erro
-            // interno, sem instalador aplicável...) cai pra API própria e depois pro winget.exe.
+            // interno, sem instalador aplicável...) cai pra API própria e depois pro cliente de pacotes.
             // Antes só a elevação caía; o resto voltava como falha final, sem fallback.
             if (!forceComOnly && WinGetFactoryHelper.CliFallbackAllowed && !installerFailedItself && !blockedByPolicy)
             {
@@ -2425,7 +2425,7 @@ public sealed partial class WinGetService
                 output += $" Erro estendido: {extendedError.Message}";
             }
 
-            Trace.WriteLine(output);
+            WinProvision.Core.Services.CoreLog.Debug(output);
             return new WingetExecutionResult
             {
                 Success = false,
@@ -2468,7 +2468,7 @@ public sealed partial class WinGetService
                     continue;
                 }
 
-                Trace.WriteLine(
+                WinProvision.Core.Services.CoreLog.Debug(
                     $"WinGet COM install: no progress for {ComProgressTimeout.TotalSeconds:0} seconds at {stopwatch.Elapsed}; cancelling.");
                 onTimeout();
                 operationCts.Cancel();
@@ -2558,9 +2558,9 @@ public sealed partial class WinGetService
     /// <summary>
     /// Nível 2 da cadeia de fallback (COM -&gt; API própria -&gt; CLI): tenta instalar via
     /// <see cref="WinProvisionApiService"/> (catálogo próprio hospedado no R2); só recorre
-    /// ao winget.exe (<see cref="_wingetExecutor"/>) se a API própria também não resolver
+    /// ao cliente de pacotes (<see cref="_wingetExecutor"/>) se a API própria também não resolver
     /// (pacote fora do catálogo próprio, sem installer compatível, hash divergente, etc.).
-    /// Chamado a partir de todo ponto onde a API COM do WinGet é pulada ou falha, e do
+    /// Chamado a partir de todo ponto onde a API COM do gerenciador de pacotes é pulada ou falha, e do
     /// bypass direto de SYSTEM/reelevação-falhada no início de <see cref="InstallAsync"/>.
     /// </summary>
     private async Task<WingetExecutionResult> TryWinProvisionApiThenCliAsync(
@@ -2692,7 +2692,7 @@ public sealed partial class WinGetService
             options.RequiresElevation || (effectivePreferences?.RequiresElevation ?? false),
             effectivePreferences?.ElevationProhibited ?? false,
             options.Interactive, options.IgnoreSecurityHash, options.Version, options.CustomArguments).ConfigureAwait(false);
-        // O WinGet CLI não expõe ao chamador o instante em que transfere o controle ao
+        // O gerenciador de pacotes CLI não expõe ao chamador o instante em que transfere o controle ao
         // instalador. Em caso de falha, tratamos o estado como incerto e não repetimos o
         // pacote automaticamente por outra tentativa do /auto.
         if (!cliResult.Success)

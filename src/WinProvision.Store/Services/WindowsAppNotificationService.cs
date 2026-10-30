@@ -11,7 +11,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
     public WindowsAppNotificationService(OperationPreferencesService? preferences = null) => _preferences = preferences ?? new();
     private bool Allows(NotificationCategory category) => !SuppressNotifications && _preferences.Load().Allows(category);
     private bool AllowsSuccessfulOperation(bool isBatch) => !SuppressNotifications && _preferences.Load().AllowsSuccessfulOperation(isBatch);
-    public Action<string> Log { get; set; } = message => System.Diagnostics.Trace.WriteLine(message);
+    public Action<string> Log { get; set; } = message => WinProvision.Core.Services.CoreLog.Debug(message);
     public bool SuppressNotifications { get; set; }
     private bool _registered;
     private bool _activationHandlerRegistered;

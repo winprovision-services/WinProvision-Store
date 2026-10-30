@@ -5,8 +5,8 @@ namespace WinProvision.Core.Services;
 
 /// <summary>
 /// Opções de serialização/desserialização de JSON usadas por TODOS os serviços
-/// do app (profiles, manifestos de provisionamento, backup local/Gist, configuração
-/// da conta GitHub etc.). Ter um ponto centralizado garante:
+/// do app (perfis, manifestos de provisionamento, backup local/remoto, configuração
+/// da conta serviço remoto etc.). Ter um ponto centralizado garante:
 ///
 /// <list type="bullet">
 /// <item><description>O app SEMPRE lê o que escreveu — nenhum serviço usa opções

@@ -5,13 +5,13 @@ using WinProvision.Core.Models;
 namespace WinProvision.Core.Services;
 
 /// <summary>
-/// Faz o parsing da saída de texto de <c>winget upgrade</c> (tabela alinhada por coluna).
+/// Faz o parsing da saída textual do comando de atualização (tabela alinhada por coluna).
 ///
-/// Diferente de <c>winget export</c>, o <c>winget upgrade</c> não tem uma opção de saída
+/// Diferente da exportação estruturada, o comando de atualização não tem uma opção de saída
 /// estruturada (JSON) — só imprime uma tabela de texto formatada pro console. Esse parser
 /// usa a técnica padrão pra esse cenário: acha a linha de cabeçalho (a que vem logo antes
 /// da linha de traços "----...") e usa a posição inicial de cada palavra do cabeçalho como
-/// o limite de cada coluna nas linhas de dados seguintes — como as colunas do winget são
+/// o limite de cada coluna nas linhas de dados seguintes — como as colunas do gerenciador de pacotes são
 /// alinhadas com espaços (padding), o valor de cada linha de dados começa na mesma posição
 /// que o título da coluna correspondente.
 ///
@@ -129,11 +129,11 @@ public static class WingetUpgradeListParser
 
             if (string.IsNullOrWhiteSpace(trimmed))
             {
-                // Linha em branco = fim da tabela (o rodapé de resumo do winget vem depois dela).
+                // Linha em branco = fim da tabela (o rodapé de resumo do gerenciador de pacotes vem depois dela).
                 break;
             }
 
-            // Detecta linhas de resumo/rodapé do winget (ex: "2 atualizações disponíveis.", "2 upgrades available.")
+            // Detecta linhas de resumo/rodapé do gerenciador de pacotes (ex: "2 atualizações disponíveis.", "2 upgrades available.")
             if (IsFooterOrSummaryLine(trimmed))
             {
                 break;
@@ -158,7 +158,7 @@ public static class WingetUpgradeListParser
             string availableVersion = availableCol >= 0 && availableCol < columns.Length ? columns[availableCol].Trim() : string.Empty;
             string source = sourceCol >= 0 && sourceCol < columns.Length ? columns[sourceCol].Trim() : string.Empty;
 
-            // Se a tabela possui coluna de versão disponível (como em "winget upgrade"),
+            // Se a tabela possui coluna de versão disponível,
             // a linha precisa obrigatoriamente ter uma versão disponível válida.
             // Se for vazia, não é uma linha de pacote atualizável válida (ex.: resto de rodapé).
             if (requireAvailableVersion && string.IsNullOrWhiteSpace(availableVersion))
@@ -166,7 +166,7 @@ public static class WingetUpgradeListParser
                 return false;
             }
 
-            // Identificador do winget não deve conter espaços e não deve ser resquício de palavra cortada (ex.: "is.")
+            // Identificador do gerenciador de pacotes não deve conter espaços e não deve ser resquício de palavra cortada (ex.: "is.")
             if (id.Contains(' ') && !(allowMissingAvailableColumn && id.StartsWith("ARP\\", StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
@@ -202,7 +202,7 @@ public static class WingetUpgradeListParser
         if (Regex.IsMatch(trimmed, @"^\d+\s+(atualizaç|upgrade|pacote|package)", RegexOptions.IgnoreCase))
             return true;
 
-        // Frases típicas de resumo de atualizações do winget
+        // Frases típicas de resumo de atualizações do gerenciador de pacotes
         if (Regex.IsMatch(trimmed, @"(atualizaç[õo]es?\s+dispon[íi]ve|upgrades?\s+available)", RegexOptions.IgnoreCase))
             return true;
 

@@ -6,6 +6,16 @@ namespace WinProvision.Core.Tests;
 public class CatalogEndpointsTests
 {
     [Fact]
+    public void NetworkEndpointBuildersKeepPathsRelativeToTheirConfiguredHosts()
+    {
+        Assert.Equal("https://api.github.com/repos/owner/repo/releases/latest",
+            NetworkEndpoints.GitHubRepositoryUrl("owner/repo", "releases/latest"));
+        Assert.Equal("https://gist.githubusercontent.com",
+            NetworkEndpoints.GitHubRawBaseUrl);
+        Assert.EndsWith("/v7.0/products", NetworkEndpoints.DisplayCatalogProductsUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LegacyMediaMovesWithoutChangingPathsOrHashQuery()
     {
         string original = "https://" + "pub-166b41912a994dbe86583ba10596d673.r2." + "dev/Store/Catalog/media/banner%20image.png?v=abcd#preview";

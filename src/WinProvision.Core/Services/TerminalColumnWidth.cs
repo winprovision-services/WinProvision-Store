@@ -5,7 +5,7 @@ using System.Text;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Conta células de terminal por grafema, como as tabelas do WinGet.</summary>
+/// <summary>Conta células de terminal por grafema, como as tabelas do gerenciador de pacotes.</summary>
 internal static partial class TerminalColumnWidth
 {
     public static int Measure(string text)
@@ -36,7 +36,7 @@ internal static partial class TerminalColumnWidth
         if (element[0] < 0x80) return 1;
         Rune.DecodeFromUtf16(element, out var rune, out _);
         int value = rune.Value;
-        // WinGet also uses ICU East_Asian_Width for the first code point of each grapheme.
+        // gerenciador de pacotes also uses ICU East_Asian_Width for the first code point of each grapheme.
         // The system library is available without COM initialization starting in Windows 10 1903.
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))
         {

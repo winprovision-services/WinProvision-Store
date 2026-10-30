@@ -15,9 +15,9 @@ namespace WinProvision.Core.Services.Office;
 [SupportedOSPlatform("windows")]
 public sealed class OfficeUninstallService
 {
-    private const string GetHelpCmdDownloadUrl = "https://aka.ms/SaRA_EnterpriseVersionFiles";
+    private const string GetHelpCmdDownloadUrl = NetworkEndpoints.HelpRecoveryAssistantUrl;
     // A GetHelpCmd build expires 90 days after its creation date. Refresh at 60 days
-    // so a cached copy does not reach Microsoft's expiration window.
+    // so a cached copy does not reach plataforma do sistema's expiration window.
     private static readonly TimeSpan GetHelpCmdCacheLifetime = TimeSpan.FromDays(60);
 
     private static readonly string GetHelpCmdRoot = Path.Combine(

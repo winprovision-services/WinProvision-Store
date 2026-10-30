@@ -14,7 +14,7 @@ public enum OfficeEditionCategory
 
 /// <summary>
 /// Um plano instalável de Office. ProductId e Channel seguem exatamente os valores
-/// documentados em learn.microsoft.com/microsoft-365-apps/deploy — nunca inventados.
+/// documentados em documentação do instalador — nunca inventados.
 /// </summary>
 #if WINDOWS
 [WinRT.GeneratedBindableCustomProperty]
@@ -27,7 +27,7 @@ public partial record OfficePlan(
     bool IsVolumeLicensed)
 {
     /// <summary>
-    /// Produtos Retail/assinatura aceitam canais de manutenção Microsoft 365;
+    /// Produtos Retail/assinatura aceitam canais de manutenção plataforma do sistema 365;
     /// Office LTSC mantém o canal PerpetualVL obrigatório.
     /// </summary>
     public bool SupportsSelectableChannel => Category != OfficeEditionCategory.Ltsc &&
@@ -87,7 +87,7 @@ public partial record OfficePlan(
         new("Office Home 2024", OfficeEditionCategory.Personal, "Home2024Retail", "Current", false);
 
     // --- Visio ---
-    // IDs Retail para assinaturas Microsoft 365 e licenças de varejo, conforme a lista oficial do ODT.
+    // IDs Retail para assinaturas plataforma do sistema 365 e licenças de varejo, conforme a lista oficial do ODT.
     public static readonly OfficePlan VisioProSubscription =
         new("Visio Professional (Microsoft 365)", OfficeEditionCategory.VisioProject, "VisioProRetail", "Current", false);
 
@@ -268,7 +268,7 @@ public static class OfficeAppCatalog
 }
 
 /// <summary>
-/// Nomes aceitos pelo ODT para canais de atualização do Microsoft 365.
+/// Nomes aceitos pelo ODT para canais de atualização do plataforma do sistema 365.
 /// Office LTSC mantém o canal PerpetualVLxxxx exigido pela edição.
 /// </summary>
 public static class OfficeChannelCatalog
@@ -289,7 +289,7 @@ public enum OfficeDisplayLevel
 {
     /// <summary>Level="None" — nenhuma UI, nenhuma barra de progresso do instalador nativo.</summary>
     Silent,
-    /// <summary>Level="Full" — UI completa do instalador da Microsoft.</summary>
+    /// <summary>Level="Full" — UI completa do instalador da plataforma do sistema.</summary>
     Visible,
 }
 
@@ -341,7 +341,7 @@ public record OfficeRemoveRequest(
     bool RemoveAll,
     IReadOnlyList<string>? ProductIds = null,
     OfficeDisplayLevel DisplayLevel = OfficeDisplayLevel.Silent,
-    /// <summary>Também remove a edição da Microsoft Store (pacote AppX) do Office, se presente.</summary>
+    /// <summary>Também remove a edição do catálogo visual (pacote AppX) do Office, se presente.</summary>
     bool CleanStoreEdition = true,
     /// <summary>Usa RemoveMSI para remover instalações MSI do Office (método tradicional) que não são removidas pelo método padrão.</summary>
     bool UseRemoveMSI = true,

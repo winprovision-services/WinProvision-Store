@@ -235,7 +235,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
                 if (!string.IsNullOrWhiteSpace(tokenData?.AccessToken))
                 {
                     OAuthStatus = "Autorizado. Conectando...";
-                    GitHubConnectResult result = await _backup.ConnectAsync(tokenData.AccessToken, cancellationToken, tokenData.RefreshToken);
+                    CloudConnectResult result = await _backup.ConnectAsync(tokenData.AccessToken, cancellationToken, tokenData.RefreshToken);
                     if (!result.Success)
                     {
                         StatusText = result.ErrorMessage ?? "Não foi possível conectar a conta GitHub.";
@@ -364,7 +364,7 @@ public sealed partial class AccountSyncViewModel : ObservableObject, IDisposable
             }
             CloudBackupFile selectedFile = importable[selectedIndex.Value];
             StatusText = $"Baixando {selectedFile.FileName}...";
-            GitHubBackupDownloadResult result = await _backup.DownloadCloudFileAsync(selectedFile.FileName, cancellationToken);
+            CloudBackupDownloadResult result = await _backup.DownloadCloudFileAsync(selectedFile.FileName, cancellationToken);
             if (!result.Success || result.BackupSet is null)
             {
                 StatusText = result.ErrorMessage ?? "Ainda não existe um backup de perfil na nuvem.";

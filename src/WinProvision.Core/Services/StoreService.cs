@@ -10,7 +10,7 @@ using WinProvision.Core.Models;
 
 namespace WinProvision.Core.Services;
 
-public class StoreService : IAsyncDisposable
+public class StoreService : IStoreCatalog
 {
     private const string CatalogV2BaseUrl = CatalogEndpoints.PublicBaseUrl + "/Store/Catalog";
     private const string CatalogManifestUrl = CatalogV2BaseUrl + "/manifest.json";
@@ -33,8 +33,8 @@ public class StoreService : IAsyncDisposable
     private bool _disposed;
     private readonly IconService _iconService;
 
-    // Opções centralizadas compartilhadas pelo app; o Python emite JSON UTF-8 compacto
-    // compatível com o mesmo modelo AppEntry usado pelo Indexer e pelo cliente.
+    // Opções centralizadas compartilhadas pelo app para manter o cache compacto
+    // e compatível com o modelo AppEntry usado pelo cliente.
     private static readonly JsonSerializerOptions _jsonOptions = WinProvisionJsonOptions.Compact;
 
     private List<AppEntry> _cachedCatalog = [];
@@ -70,8 +70,7 @@ public class StoreService : IAsyncDisposable
     internal StoreService(HttpClient? httpClient, IconService? iconService, string cacheDirectory)
     {
         _ownsHttpClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler
-            { AllowAutoRedirect = false })) { Timeout = TimeSpan.FromSeconds(30) };
+        _httpClient = httpClient ?? NetworkClientFactory.Create(TimeSpan.FromSeconds(30));
         _iconService = iconService ?? new IconService();
 
         _cacheDirectory = cacheDirectory;
@@ -272,7 +271,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Não foi possível carregar detalhes de {app.Id}: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Não foi possível carregar detalhes de {app.Id}: {ex.Message}");
             if (!hashMismatch || !allowRefresh) return app;
         }
         finally
@@ -368,7 +367,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Cache local WinGet v1 inválido: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Cache local WinGet v1 inválido: {ex.Message}");
             return false;
         }
     }
@@ -389,7 +388,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Cache legado do catálogo inválido: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Cache legado do catálogo inválido: {ex.Message}");
             return false;
         }
     }
@@ -412,7 +411,7 @@ public class StoreService : IAsyncDisposable
                 .OrderBy(x => x.Score)
                 .ThenBy(x => x.Document.Name.Length)
                 .ThenBy(x => x.Document.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(x => x.Document.App);
+                .Select(x => _cachedCatalog[x.Document.CatalogIndex]);
         }
 
         // A tela principal só precisa de candidatos suficientes para combinar
@@ -447,7 +446,7 @@ public class StoreService : IAsyncDisposable
             .ThenBy(item => item.Priority.NameLength)
             .ThenBy(item => item.Priority.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.Priority.Index)
-            .Select(item => item.Element.App)
+            .Select(item => _cachedCatalog[item.Element.CatalogIndex])
             .ToArray();
     }
 
@@ -486,7 +485,7 @@ public class StoreService : IAsyncDisposable
         if (document.Publisher.Contains(query, StringComparison.OrdinalIgnoreCase))
             return 7;
 
-        if (document.App.Tags.Any(tag => tag.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        if (document.Tags.Any(tag => tag.Contains(query, StringComparison.OrdinalIgnoreCase)))
             return 8;
 
         if (document.Description.Contains(query, StringComparison.OrdinalIgnoreCase))
@@ -552,7 +551,7 @@ public class StoreService : IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Catálogo WinGet v1 indisponível: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Catálogo WinGet v1 indisponível: {ex.Message}");
             return _cachedCatalog;
         }
     }
@@ -655,7 +654,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Falha ao baixar catálogo remoto: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Falha ao baixar catálogo remoto: {ex.Message}");
             if (_cachedCatalog.Count == 0 && TryLoadLegacyCatalog())
             {
                 RemoveLegacyScreenshotLinks(_cachedCatalog);
@@ -730,7 +729,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Não foi possível remover o cache do catálogo: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Não foi possível remover o cache do catálogo: {ex.Message}");
             if (throwOnError) throw;
         }
 
@@ -740,12 +739,12 @@ public class StoreService : IAsyncDisposable
     private void SetCachedCatalog(List<AppEntry> catalog)
     {
         _cachedCatalog = catalog;
-        _searchIndex = catalog.Select(app =>
+        _searchIndex = catalog.Select((app, index) =>
         {
             string name = app.Name ?? string.Empty;
             string id = app.Id ?? string.Empty;
             return new SearchDocument(
-                app,
+                index,
                 name,
                 id,
                 app.Publisher ?? string.Empty,
@@ -754,7 +753,8 @@ public class StoreService : IAsyncDisposable
                 app.Description ?? string.Empty,
                 app.Homepage ?? string.Empty,
                 app.PublisherUrl ?? string.Empty,
-                app.PackageUrl ?? string.Empty);
+                app.PackageUrl ?? string.Empty,
+                app.Tags.ToArray());
         }).ToArray();
     }
 
@@ -798,7 +798,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Debug.WriteLine($"[StoreService] Não foi possível remover índices de catálogo antigos: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Não foi possível remover índices de catálogo antigos: {ex.Message}");
         }
     }
 
@@ -842,7 +842,7 @@ public class StoreService : IAsyncDisposable
     }
 
     internal sealed record SearchDocument(
-        AppEntry App,
+        int CatalogIndex,
         string Name,
         string Id,
         string Publisher,
@@ -851,7 +851,8 @@ public class StoreService : IAsyncDisposable
         string Description,
         string Homepage,
         string PublisherUrl,
-        string PackageUrl);
+        string PackageUrl,
+        string[] Tags);
 
     private async Task<RemoteTextResult> FetchTextWithCacheAsync(
         string url,
@@ -909,7 +910,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Recurso remoto indisponível; usando cache local ({Path.GetFileName(cachePath)}): {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Recurso remoto indisponível; usando cache local ({Path.GetFileName(cachePath)}): {ex.Message}");
             return new RemoteTextResult(cachedContent, cachedEtag, cachedLastModified, ShouldCommit: false);
         }
     }
@@ -989,7 +990,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Cache MS Store local inválido: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Cache MS Store local inválido: {ex.Message}");
             return [];
         }
     }
@@ -1041,7 +1042,7 @@ public class StoreService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[StoreService] Subcatálogo MS Store indisponível: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[StoreService] Subcatálogo MS Store indisponível: {ex.Message}");
             return TryLoadLocalMsStoreCatalog();
         }
     }

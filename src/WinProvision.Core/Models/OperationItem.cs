@@ -22,7 +22,7 @@ public enum OperationState
 
 /// <summary>
 /// Camada/via usada para a operação em andamento (ver WinGetService: COM -&gt; API própria ->
-/// winget.exe). Não é mostrada como texto pro usuário final — só orienta a cor da barra de
+/// cliente de pacotes). Não é mostrada como texto pro usuário final — só orienta a cor da barra de
 /// progresso (ver GradientProgressBar.xaml). "Unknown" = ainda não identificada (cor padrão).
 /// </summary>
 public enum WingetMethod
@@ -109,7 +109,7 @@ public partial class OperationItem : INotifyPropertyChanged, IDisposable
         set => SetField(ref _isIndeterminate, value);
     }
 
-    /// <summary>Camada atual (COM/API própria/winget.exe), usada só pra colorir a barra de progresso.</summary>
+    /// <summary>Camada atual (COM/API própria/cliente de pacotes), usada só pra colorir a barra de progresso.</summary>
     public WingetMethod Method
     {
         get => _method;

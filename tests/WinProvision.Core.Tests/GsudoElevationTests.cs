@@ -60,6 +60,16 @@ public class GsudoElevationTests
         => Assert.Equal(expected, GsudoElevationService.ClassifyHelperOutput(output).ToString());
 
     [Fact]
+    public void CacheCommandsUseOfficialGsudoSyntax()
+    {
+        Assert.Equal(["cache", "on"], GsudoElevationService.BuildCacheOnArguments());
+        Assert.Equal(["cache", "off"], GsudoElevationService.BuildCacheOffArguments());
+        Assert.False(GsudoElevationService.IsCacheAvailableOutput("CacheAvailable: false"));
+        Assert.True(GsudoElevationService.IsCacheAvailableOutput("CacheAvailable: true"));
+        Assert.True(GsudoElevationService.IsCacheAvailableOutput("""{"CacheAvailable":true}"""));
+    }
+
+    [Fact]
     public async Task AlreadyElevatedProcessRunsDirectlyWithoutHelperOrPolicy()
     {
         if (!OperatingSystem.IsWindows()) return;

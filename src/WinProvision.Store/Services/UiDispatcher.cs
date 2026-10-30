@@ -26,6 +26,6 @@ public sealed partial class UiDispatcher(DispatcherQueue queue) : IUiDispatcher
     {
         if (queue.HasThreadAccess) action();
         else if (!queue.TryEnqueue(() => action()))
-            System.Diagnostics.Debug.WriteLine("Dispatcher indisponível durante o encerramento.");
+            WinProvision.Core.Services.CoreLog.Debug("Dispatcher indisponível durante o encerramento.");
     }
 }

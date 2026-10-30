@@ -25,6 +25,11 @@ public sealed partial class MainWindow : Window
     private bool _isClosing;
     private string? _currentNavigationTag;
     public FrameworkElement RootElement => Root;
+    public void Minimize()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+            presenter.Minimize();
+    }
     internal Visibility ProvisioningMenuVisibility => ProvisioningNavigationItem.Visibility;
     internal Page? CurrentPage => PageHost.Content as Page;
     internal Controls.AppDetailsOverlay? CreatedDetailsOverlay => _details;

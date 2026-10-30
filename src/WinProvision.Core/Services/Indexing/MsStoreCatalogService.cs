@@ -7,14 +7,14 @@ namespace WinProvision.Core.Services.Indexing;
 
 /// <summary>
 /// Resolve apps curados manualmente (config/msstore-curated.json no Indexer) contra a
-/// Display Catalog API pública da Microsoft Store — o mesmo backend que o winget usa
+/// API pública do catálogo visual — o mesmo backend que o gerenciador de pacotes usa
 /// pra source "msstore". Existe porque a source msstore não tem um repositório
-/// enumerável como o winget-pkgs: não há como "escanear tudo", só resolver Product IDs
+/// enumerável como o catálogo de pacotes: não há como "escanear tudo", só resolver Product IDs
 /// conhecidos um a um. Ver Program.cs, passo [+], para onde essas entradas entram na
 /// pipeline (junto de "candidates", antes do corte por score).
 ///
 /// Endpoint não documentado oficialmente, mas usado sem autenticação por ferramentas
-/// de terceiros consolidadas (winget-cli, StoreLib, rg-adguard) pra consulta pública de
+/// de terceiros consolidadas (gerenciador de pacotes-cli, StoreLib, rg-adguard) pra consulta pública de
 /// metadados de apps — não requer chave nem token.
 /// </summary>
 public class MsStoreCatalogService : IDisposable
@@ -24,7 +24,7 @@ public class MsStoreCatalogService : IDisposable
         if (_ownsHttpClient) _httpClient.Dispose();
     }
 
-    private const string DisplayCatalogUrl = "https://displaycatalog.mp.microsoft.com/v7.0/products";
+    private const string DisplayCatalogUrl = NetworkEndpoints.DisplayCatalogProductsUrl;
 
     // Limite conservador por chamada, só pra não montar uma query string gigante quando
     // a lista curada crescer — a API aceita bigIds em lote via vírgula.
@@ -47,7 +47,7 @@ public class MsStoreCatalogService : IDisposable
     public MsStoreCatalogService(HttpClient? httpClient = null)
     {
         _ownsHttpClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient(new RequestRateLimitHandler(new SocketsHttpHandler())) { Timeout = TimeSpan.FromSeconds(15) };
+        _httpClient = httpClient ?? NetworkClientFactory.Create(TimeSpan.FromSeconds(15));
     }
 
     public async Task<List<AppEntry>> SearchAsync(
@@ -59,7 +59,7 @@ public class MsStoreCatalogService : IDisposable
         if (string.IsNullOrWhiteSpace(query))
             return [];
 
-        string url = $"https://displaycatalog.mp.microsoft.com/v7.0/productFamilies/Apps/products" +
+        string url = $"{NetworkEndpoints.DisplayCatalogProductFamiliesUrl}" +
             $"?query={Uri.EscapeDataString(query.Trim())}&market={Uri.EscapeDataString(market)}&languages={Uri.EscapeDataString(language)}" +
             "&fieldsTemplate=details&platformdependencyname=windows.xbox";
 
@@ -242,8 +242,8 @@ public class MsStoreCatalogService : IDisposable
         {
             Id = product.ProductId,
             Source = "msstore",
-            // A Display Catalog não expõe uma versão fixa e comparável ao esquema do
-            // winget-pkgs (winget/COM resolvem a versão vigente na hora da instalação),
+            // A catálogo visual não expõe uma versão fixa e comparável ao esquema do
+            // catálogo de pacotes (gerenciador de pacotes/COM resolvem a versão vigente na hora da instalação),
             // então não há um número real pra publicar aqui.
             Version = "-",
             Name = localized.ProductTitle ?? product.ProductId,
@@ -251,7 +251,7 @@ public class MsStoreCatalogService : IDisposable
             // A consulta pode devolver a localização padrão quando não há tradução
             // para o idioma solicitado. Usa o idioma informado pela própria Store.
             PackageLocale = localized.Language,
-            Homepage = $"https://apps.microsoft.com/detail/{product.ProductId}",
+            Homepage = $"{NetworkEndpoints.MicrosoftStoreAppBaseUrl}/{product.ProductId}",
             Description = localized.ShortDescription ?? localized.Description,
             StoreIconUrl = iconUrl,
             StoreBannerUrl = bannerUrl,
@@ -306,7 +306,7 @@ public class MsStoreCatalogService : IDisposable
             return normalized;
         }
 
-        // A Display Catalog screenshot URI may already be constrained to a small
+        // A catálogo visual screenshot URI may already be constrained to a small
         // rendition (commonly 480x270). Request the CDN's high-quality 1080p variant.
         var builder = new UriBuilder(parsed);
         var query = builder.Query.TrimStart('?')

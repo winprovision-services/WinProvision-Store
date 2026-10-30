@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 namespace WinProvision.Store.Services;
 
 /// <summary>
-/// Log de diagnóstico do WinGet: grava em WinProvision-Log.log, na pasta temporária.
+/// Log de diagnóstico do gerenciador de pacotes: grava em WinProvision-Log.log, na pasta temporária.
 /// As mensagens que chegam em <see cref="Write"/> costumam vir cheias de campos técnicos
 /// (pid, tid, elapsed, dispatcher etc.), úteis pra quem escreveu o código, inúteis pra
 /// quem só quer saber "o que aconteceu". <see cref="Humanize"/> traduz os formatos mais
@@ -134,13 +134,13 @@ internal static partial class WinProvisionLog
         (new Regex(@"^WINGET MODE=(?<mode>\S+) \([^)]*\) estratégias-COM=(?<strategies>\S+)$"),
             m => $"Modo de operação: {m.Groups["mode"].Value} (estratégias COM: {m.Groups["strategies"].Value.Replace(">", " > ")})"),
 
-        // Chamadas diretas ao winget.exe (fallback CLI ou verificações pontuais).
+        // Chamadas diretas ao cliente de pacotes (fallback CLI ou verificações pontuais).
         (new Regex(@"^WINGET\.EXE LAUNCH file=(?<file>\S+) args=""(?<args>[^""]*)"".*$"),
             m => $"Executando: {m.Groups["file"].Value} {m.Groups["args"].Value}".TrimEnd()),
         (new Regex(@"^WINGET\.EXE RESULT file=(?<file>\S+) args=(?<args>.*?) exitCode=(?<code>-?\d+) success=(?<success>True|False) elapsed=\S+$"),
             m => DescribeWingetResult(m.Groups["args"].Value, m.Groups["code"].Value, m.Groups["success"].Value == "True")),
 
-        // Ativação dos componentes COM do WinGet (CLSID/IID/HRESULT). Só interessa
+        // Ativação dos componentes COM do gerenciador de pacotes (CLSID/IID/HRESULT). Só interessa
         // quando algo dá errado — quando funciona, é ruído de instrumentação.
         (new Regex(@"^COM ACTIVATION type=\S+ strategy=\S+ CLSID=.*$"),
             _ => null),
@@ -167,7 +167,7 @@ internal static partial class WinProvisionLog
                 ? $"Solicitação de instalação: {m.Groups["id"].Value}"
                 : $"Solicitação de atualização: {m.Groups["id"].Value}"),
 
-        // Quem está do outro lado da chamada COM (nosso processo e o serviço do WinGet).
+        // Quem está do outro lado da chamada COM (nosso processo e o serviço do gerenciador de pacotes).
         (new Regex(@"^COM SERVER name=\S+ pid=not-found$"),
             _ => "Serviço do WinGet não está em execução"),
         (new Regex(@"^COM SERVER name=\S+ pid=\d+ integrity=(?<integrity>\S+) path="),
@@ -176,7 +176,7 @@ internal static partial class WinProvisionLog
             m => $"Executando com integridade {m.Groups["integrity"].Value}" +
                  (m.Groups["elevated"].Value == "True" ? ", elevado" : ", não elevado")),
 
-        // Ciclo de vida de uma instalação/atualização via API COM do WinGet.
+        // Ciclo de vida de uma instalação/atualização via API COM do gerenciador de pacotes.
         (new Regex(@"^(?<tag>INSTALL|UPDATE) COM stage=begin$"),
             m => m.Groups["tag"].Value == "INSTALL" ? "Iniciando instalação via WinGet" : "Iniciando atualização via WinGet"),
         (new Regex(@"^(INSTALL|UPDATE) COM stage=connect-completed catalog=(?<cat>\S+) status=(?<status>\S+)"),
@@ -200,7 +200,7 @@ internal static partial class WinProvisionLog
         (new Regex(@"^(INSTALL|UPDATE) COM failure status=(?<status>\S+) installerErrorCode=(?<code>0x[0-9A-Fa-f]+ \(\d+\))"),
             m => $"Falha na instalação ({m.Groups["status"].Value}), código do instalador {m.Groups["code"].Value}"),
 
-        // Trocas de estratégia (COM -> API própria -> winget.exe).
+        // Trocas de estratégia (COM -> API própria -> cliente de pacotes).
         (new Regex(@"^FALLBACK PARA API PRÓPRIA: motivo=(?<why>.+)$"),
             m => $"Usando a API própria da WinProvision (motivo: {m.Groups["why"].Value})"),
         (new Regex(@"^FALLBACK PARA CLI: motivo=(?<why>.+)$"),

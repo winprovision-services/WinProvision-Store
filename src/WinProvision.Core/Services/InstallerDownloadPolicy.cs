@@ -2,8 +2,8 @@ namespace WinProvision.Core.Services;
 
 public static class InstallerDownloadPolicy
 {
-    public static string ResolveDirectory(string? explicitDirectory = null)
-        => Path.GetFullPath(explicitDirectory ?? new OperationPreferencesService().Load().DownloadDirectory
+    public static string ResolveDirectory(string? explicitDirectory = null, OperationPreferencesService? preferences = null)
+        => Path.GetFullPath(explicitDirectory ?? (preferences ?? new OperationPreferencesService()).Load().DownloadDirectory
             ?? Office.OfficeCliDownloadService.GetDownloadsFolder());
 
     public static string FileName(InstallerNameStyle style, string id, string? version, string? architecture, string original)

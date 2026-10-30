@@ -69,7 +69,7 @@ public sealed class ViperEngineTests : IDisposable
     public async Task CancellationResumesVerifiedPartsAndRedownloadsLocallyCorruptedPart()
     {
         await using var server = new ViperTestServer();
-        // Segmentation needs >1 worker; the test uses two so checkpoints exist before cancellation.
+        // Segmentation needs >1 worker; the usa two so checkpoints exist before cancellation.
         await using var segmented = new ViperEngine(Options with { ConnectionsPerFile = 2 });
         using var cancellation = new CancellationTokenSource();
         var progress = new InlineProgress(p => { if (p.CompletedPieces >= 3) cancellation.Cancel(); });
@@ -277,7 +277,7 @@ public sealed class ViperEngineTests : IDisposable
         await using var destination = new ViperTestServer();
         await using var source = new ViperTestServer();
         int counter = 0;
-        // Como GitHub Releases/Azure Blob: cada requisição recebe uma URL assinada diferente para o mesmo arquivo.
+        // Como servidores de origem: cada requisição recebe uma URL assinada diferente para o mesmo arquivo.
         source.Override = _ => new(302, [], new() { ["Location"] = destination.Url + "?sig=" + Interlocked.Increment(ref counter) });
         await using var engine = new ViperEngine(Options);
         var segmented = await engine.DownloadAsync(new(source.Url, Target("signed-segmented.bin")) { Sha256 = Hash(destination.Payload) });
