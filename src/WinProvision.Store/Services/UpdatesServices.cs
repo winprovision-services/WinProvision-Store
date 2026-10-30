@@ -21,4 +21,6 @@ public interface IBackgroundUpdateStartupService
     Task<(bool Success, string? Message)> EnableAsync(CancellationToken token = default);
     Task<(bool Success, string? Message)> DisableAsync(CancellationToken token = default);
     Task<(bool Success, string? Message)> ApplyConfiguredScheduleAsync(CancellationToken token = default);
+    Task<(bool Success, string? Message)> ConfigureApplicationStartupAsync(bool enabled, CancellationToken token = default)
+        => Task.FromResult((true, (string?)null));
 }

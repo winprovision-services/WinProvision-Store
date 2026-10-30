@@ -9,7 +9,7 @@ namespace WinProvision.Core.Services.Profile;
 
 public interface IOfflineOfficeSource
 {
-    /// <summary>Copies a verified Microsoft ODT executable; returns its independently verified SHA256.</summary>
+    /// <summary>Copies a verified plataforma do sistema ODT executable; returns its independently verified SHA256.</summary>
     Task<string> CopySetupAsync(string destination, IProgress<OfflineCollectionProgress>? progress, CancellationToken token);
     Task DownloadPayloadAsync(string setup, string configuration, IProgress<OfflineCollectionProgress>? progress, CancellationToken token)
         => throw new NotSupportedException("Este provedor não oferece download offline dos arquivos Office.");

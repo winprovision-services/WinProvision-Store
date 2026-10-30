@@ -1,11 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
-using WinProvision.Core.Models;
 using WinProvision.Core.Services;
-using WinProvision.Core.Services.Backup;
-using WinProvision.Core.Services.Office;
-using WinProvision.Core.Services.Profile;
 using WinProvision.Store.Services;
 using WinProvision.Store.ViewModels;
 using WinProvision.Store.Views;
@@ -44,98 +40,7 @@ public partial class App : Application
         _memoryMilestoneLog = MemoryMilestoneLog.TryCreate();
         MemoryLog = _memoryMilestoneLog;
         _memoryMilestoneLog?.RecordOnce("onlaunched_start");
-        var services = new ServiceCollection();
-        services.AddSingleton<IUiDispatcher>(new UiDispatcher(DispatcherQueue.GetForCurrentThread()));
-        services.AddSingleton<StoreService>();
-        services.AddSingleton<WingetBootstrapper>();
-        services.AddSingleton<WingetExecutor>();
-        services.AddSingleton<WinProvisionApiService>();
-        services.AddSingleton<PackageMetricsService>();
-        services.AddSingleton<IPackageMetricsService>(provider => provider.GetRequiredService<PackageMetricsService>());
-        services.AddSingleton<PowerShell7Bootstrapper>();
-        services.AddSingleton<PowerShellScriptAnalyzerService>();
-        services.AddSingleton<IOfflineCollectionSource, OfflineCollectionSource>();
-        services.AddSingleton<IOfflineOfficeSource, OfflineOfficeSource>();
-        services.AddSingleton<OfflineCollectionExportService>();
-        services.AddSingleton<InstalledAppsService>();
-        services.AddSingleton<OperationHistoryService>();
-        services.AddSingleton<OperationsQueueService>();
-        services.AddSingleton<OperationPreferencesService>();
-        services.AddSingleton<InstallationPreferencesService>();
-        services.AddSingleton<LocalBackupService>();
-        services.AddSingleton<GitHubBackupService>();
-        services.AddSingleton<IAccountBackupService, AccountBackupService>();
-        WinProvision.PackageManagement.PackageDiagnostics.Configure(WinProvisionLog.Write, WinProvisionLog.WriteComServerInfo);
-        WinProvisionLog.Write($"APP version={System.Diagnostics.FileVersionInfo.GetVersionInfo(Environment.ProcessPath!).FileVersion} path={Environment.ProcessPath} elevator={WinProvision.Core.Services.GsudoElevationService.IsBundled}");
-        services.AddSingleton<WinGetService>(p => new WinGetService(
-            p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
-            p.GetRequiredService<WingetBootstrapper>(),
-            () => p.GetRequiredService<InstallationPreferencesService>().PreferredMethod,
-            preferredUpdateMethod: () => p.GetRequiredService<InstallationPreferencesService>().PreferredUpdateMethod));
-        services.AddSingleton(p => new WinProvision.PackageManagement.ApplicationEngine(
-            p.GetRequiredService<WinGetService>(), p.GetRequiredService<WingetExecutor>(), p.GetRequiredService<WinProvisionApiService>(),
-            p.GetRequiredService<WingetBootstrapper>(), p.GetRequiredService<StoreService>(), WinProvisionLog.Write));
-        services.AddSingleton<IPackageBackend, PackageBackend>();
-        services.AddSingleton<PresentationService>();
-        services.AddSingleton<IPresentationService>(provider => provider.GetRequiredService<PresentationService>());
-        services.AddSingleton<HomeViewModel>();
-        services.AddSingleton<StorefrontViewModel>();
-        services.AddSingleton<FeaturedCatalogService>();
-        services.AddSingleton<IconService>();
-        services.AddSingleton<WinProvision.Core.Services.Indexing.MsStoreCatalogService>();
-        services.AddSingleton(p => new WindowsAppNotificationService(p.GetRequiredService<OperationPreferencesService>()) { SuppressNotifications = IsSmokeTest, Log = WinProvisionLog.Write });
-        services.AddSingleton<CollectionsViewModel>();
-        services.AddSingleton<ProvisioningWallpaperCatalogService>();
-        services.AddSingleton<ProvisioningViewModel>();
-        services.AddSingleton<OfficeDeploymentToolService>();
-        services.AddSingleton<IOfficeCollectionInstaller, OfficeCollectionInstaller>();
-        services.AddSingleton<OfficeInstalledProductsDetector>();
-        services.AddSingleton<IOfficeConfigurationExportService, OfficeConfigurationExportService>();
-        services.AddSingleton<IDesktopIntegrationService, DesktopIntegrationService>();
-        services.AddSingleton<IElevatorSettingsService, ElevatorSettingsService>();
-        services.AddSingleton<ICacheSettingsService, CacheSettingsService>();
-        services.AddSingleton<OfficeViewModel>();
-        services.AddSingleton<InstalledIconResolver>();
-        services.AddSingleton<IInstalledPackagesService, InstalledPackagesService>();
-        services.AddSingleton<ApplicationPreferencesService>();
-        services.AddSingleton<ApplicationThemeService>();
-        services.AddSingleton<CacheService>();
-        services.AddSingleton(_ => new AppUpdateService(
-            "winprovision-services/WinProvision-Store",
-            "WinProvision.Store-Setup.exe",
-            "71B03A9D-2C64-4E81-BF6D-3A90257F1C49"));
-        services.AddSingleton<SettingsViewModel>();
-        services.AddTransient<SettingsPage>();
-        services.AddSingleton<IBackgroundUpdateStartupService>(p => new BackgroundUpdateStartupService(p.GetRequiredService<ApplicationPreferencesService>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BackgroundUpdateStartupService>.Instance));
-        services.AddSingleton<IUpdatesIgnoreStore, UpdatesIgnoreStore>();
-        services.AddSingleton<UpdatesViewModel>();
-        services.AddSingleton<InstalledPackagesViewModel>();
-        services.AddSingleton<IClipboardService, ClipboardService>();
-        services.AddSingleton<UninstallerEngineService>();
-        services.AddSingleton<PackageInstallOptionsService>();
-        services.AddSingleton<WingetPackageDetailsService>();
-        services.AddSingleton<IPackageDetailsProvider, PackageDetailsProvider>();
-        services.AddSingleton<IDetailsImageService, DetailsImageService>();
-        services.AddSingleton<AppDetailsViewModel>();
-        services.AddSingleton<Controls.AppDetailsOverlay>();
-        services.AddSingleton<OperationsViewModel>();
-        services.AddTransient<HomePage>();
-        services.AddTransient<CollectionsPage>();
-        services.AddTransient<UpdatesPage>();
-        services.AddTransient<InstalledPackagesPage>();
-        services.AddTransient<OfficePage>();
-        services.AddTransient<ProvisioningPage>();
-        services.AddSingleton<MoreViewModel>();
-        services.AddTransient<MorePage>();
-        services.AddSingleton<WinUiBackupSyncService>(provider => new WinUiBackupSyncService(
-            provider.GetRequiredService<CollectionsViewModel>(),
-            provider.GetRequiredService<IAccountBackupService>(),
-            provider.GetRequiredService<ApplicationPreferencesService>(),
-            enableAutomaticSync: !IsSmokeTest));
-        services.AddSingleton<AccountSyncViewModel>();
-        services.AddTransient<AccountSyncPage>();
-        ConfigureValidationServices(services);
-        _services = services.BuildServiceProvider();
+        _services = BuildServiceProvider();
         _memoryMilestoneLog?.RecordOnce("di_provider_created");
         bool validationHandled = false;
         TryLaunchValidation(ref validationHandled);
@@ -161,6 +66,8 @@ public partial class App : Application
         _memoryMilestoneLog?.RecordOnce("startup_dependencies_resolved");
         ConfigureValidationWindow();
         _window.Activate();
+        if (Environment.GetCommandLineArgs().Contains("--startup-minimized"))
+            _window.Minimize();
         _memoryMilestoneLog?.RecordOnce("window_activated");
     }
     private async void Settings_RestartRequested(object? sender, EventArgs e)
@@ -194,48 +101,4 @@ public partial class App : Application
         }
     }
 
-    public Task ShutdownAsync() => _shutdown ??= ShutdownCoreAsync();
-    private async Task ShutdownCoreAsync()
-    {
-        if (_services is null) { ShutdownComplete = true; return; }
-        _services.GetRequiredService<PresentationService>().CancelDialogs();
-        _services.GetRequiredService<HomeViewModel>().RefreshCommand.Cancel();
-        await _services.GetRequiredService<StorefrontViewModel>().OnNavigatedFromAsync();
-        var detailsOverlay = _window?.CreatedDetailsOverlay;
-        if (detailsOverlay is not null)
-            await detailsOverlay.ShutdownAsync();
-        _services.GetRequiredService<UpdatesViewModel>().ScanCommand.Cancel();
-        _services.GetRequiredService<UpdatesViewModel>().UpdateSelectedCommand.Cancel();
-        _services.GetRequiredService<InstalledPackagesViewModel>().RefreshCommand.Cancel();
-        _services.GetRequiredService<InstalledPackagesViewModel>().RemoveSelectedCommand.Cancel();
-        _services.GetRequiredService<InstalledPackagesViewModel>().DownloadSelectedCommand.Cancel();
-        _services.GetRequiredService<CollectionsViewModel>().InstallSelectedCommand.Cancel();
-        _services.GetRequiredService<CollectionsViewModel>().DownloadSelectedCommand.Cancel();
-        _services.GetRequiredService<CollectionsViewModel>().ExportOfflineCommand.Cancel();
-        await _services.GetRequiredService<CollectionsViewModel>().StopMetricsAsync();
-        var account = _services.GetRequiredService<AccountSyncViewModel>();
-        account.ConnectCommand.Cancel();
-        account.SaveBackupCommand.Cancel();
-        account.RestoreFromCloudCommand.Cancel();
-        account.ImportJsonCommand.Cancel();
-        account.ExportJsonCommand.Cancel();
-        var more = _services.GetRequiredService<MoreViewModel>();
-        more.CheckStatusCommand.Cancel();
-        more.CancelLogLoad();
-        _services.GetRequiredService<OperationsQueueService>().CancelAll();
-        await _services.GetRequiredService<IPackageBackend>().ShutdownAsync();
-        await _services.GetRequiredService<UpdatesViewModel>().ShutdownAsync();
-        await _services.GetRequiredService<SettingsViewModel>().ShutdownAsync();
-        var details = _window?.CreatedDetailsViewModel;
-        var installed = _services.GetRequiredService<InstalledPackagesViewModel>();
-        var collections = _services.GetRequiredService<CollectionsViewModel>();
-        var commands = new[] { _services.GetRequiredService<HomeViewModel>().RefreshCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().ScanCommand.ExecutionTask, _services.GetRequiredService<UpdatesViewModel>().UpdateSelectedCommand.ExecutionTask, installed.RefreshCommand.ExecutionTask, installed.RemoveSelectedCommand.ExecutionTask, installed.DownloadSelectedCommand.ExecutionTask, collections.InstallSelectedCommand.ExecutionTask, collections.DownloadSelectedCommand.ExecutionTask, collections.ExportOfflineCommand.ExecutionTask, details?.InstallCommand.ExecutionTask, details?.UpdateCommand.ExecutionTask, details?.UninstallCommand.ExecutionTask, account.ConnectCommand.ExecutionTask, account.SaveBackupCommand.ExecutionTask, account.RestoreFromCloudCommand.ExecutionTask, account.RefreshCloudFilesCommand.ExecutionTask, account.RestoreSelectedCloudFileCommand.ExecutionTask, account.DeleteSelectedCloudFileCommand.ExecutionTask, account.DeleteAllAppGistsCommand.ExecutionTask, account.ImportJsonCommand.ExecutionTask, account.ExportJsonCommand.ExecutionTask, more.CheckStatusCommand.ExecutionTask, more.OpenLogCommand.ExecutionTask, more.RefreshLogCommand.ExecutionTask };
-        foreach (var command in commands) if (command is not null) { try { await command; } catch (Exception exception) { WinProvisionLog.Warning(exception, "ShutdownCommand"); } }
-        await AsyncImage.ShutdownAsync();
-        await _services.GetRequiredService<OperationsQueueService>().WaitForIdleAsync();
-        try { await WinProvision.Core.Services.GsudoElevationService.StopCacheAsync(); }
-        catch (Exception ex) { WinProvisionLog.Warning(ex, "ShutdownElevationCache"); }
-        await _services.DisposeAsync();
-        ShutdownComplete = true;
-    }
 }

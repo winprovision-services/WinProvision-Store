@@ -4,7 +4,7 @@ using WinProvision.Core.Services;
 
 namespace WinProvision.PackageManagement;
 
-/// <summary>Official WinGet InProcCom, hosted exclusively in the elevated operation process.</summary>
+/// <summary>Official gerenciador de pacotes InProcCom, hosted exclusively in the elevated operation process.</summary>
 public static class InProcessWinGetFactory
 {
     public static bool Enabled { get; private set; }

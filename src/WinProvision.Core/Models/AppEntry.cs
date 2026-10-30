@@ -8,8 +8,8 @@ namespace WinProvision.Core.Models;
 
 /// <summary>
 /// Modelo do aplicativo no catálogo da loja.
-/// Campos vêm do manifesto do winget-pkgs (locale/instalador) e são
-/// enriquecidos pela engine de indexação (Score, RegionTags, GitHubStars).
+/// Campos vêm do manifesto do catálogo de pacotes (locale/instalador) e são
+/// enriquecidos pela engine de indexação (Score, RegionTags e pontuação externa).
 /// </summary>
 #if WINDOWS
 [WinRT.GeneratedBindableCustomProperty]
@@ -43,10 +43,10 @@ public partial class AppEntry : INotifyPropertyChanged
     public CatalogMedia? Media { get; set; }
 
     /// <summary>
-    /// Origem do pacote para fins de instalação: "winget" (padrão, veio de um manifesto
-    /// do winget-pkgs) ou "msstore" (curadoria manual via MsStoreCatalogService, ver
+    /// Origem do pacote para fins de instalação: "gerenciador de pacotes" (padrão, veio de um manifesto
+    /// do catálogo de pacotes) ou "msstore" (curadoria manual via MsStoreCatalogService, ver
     /// config/msstore-curated.json no Indexer — não existe listagem em massa pública da
-    /// Microsoft Store, então esses apps são adicionados um a um). O app cliente usa este
+    /// catálogo visual, então esses apps são adicionados um a um). O app cliente usa este
     /// campo pra decidir o --source correto no fallback de CLI do WingetExecutor; a
     /// instalação via COM (WinGetService) já resolve por Id sem precisar disso.
     /// </summary>
@@ -72,13 +72,13 @@ public partial class AppEntry : INotifyPropertyChanged
     public string? ReleaseNotes { get; set; }
 
     /// <summary>
-    /// URL direta recebida em resultados ao vivo da Microsoft Store. Os registros do
+    /// URL direta recebida em resultados ao vivo do catálogo visual. Os registros do
     /// catálogo V2 usam o caminho em <see cref="Media"/> e montam a URL pelo IconService.
     /// </summary>
     [JsonPropertyName("storeIconUrl")]
     public string? StoreIconUrl { get; set; }
 
-    /// <summary>Arte horizontal da Microsoft Store para banners da Visão Geral.</summary>
+    /// <summary>Arte horizontal do catálogo visual para banners da Visão Geral.</summary>
     public string? StoreBannerUrl { get; set; }
 
     public string? StoreCategory { get; set; }
@@ -87,11 +87,11 @@ public partial class AppEntry : INotifyPropertyChanged
 
     public List<string>? StoreScreenshotUrls { get; set; }
 
-    /// <summary>Capturas de tela fornecidas pelo catálogo para pacotes WinGet.</summary>
+    /// <summary>Capturas de tela fornecidas pelo catálogo para pacotes do gerenciador de pacotes.</summary>
     [JsonPropertyName("screenshotUrls")]
     public List<string>? ScreenshotUrls { get; set; }
 
-    /// <summary>Nota média do produto na Microsoft Store, quando publicada.</summary>
+    /// <summary>Nota média do produto no catálogo visual, quando publicada.</summary>
     [JsonPropertyName("storeRating")]
     public double? StoreRating { get; set; }
 
@@ -156,7 +156,7 @@ public partial class AppEntry : INotifyPropertyChanged
     [JsonPropertyName("architectures")]
     public List<string> Architectures { get; set; } = [];
 
-    /// <summary>Opções MSI, MSIX, EXE, ZIP e outros formatos extraídas do manifesto WinGet.</summary>
+    /// <summary>Opções MSI, MSIX, EXE, ZIP e outros formatos extraídas do manifesto do gerenciador de pacotes.</summary>
     [JsonPropertyName("installers")]
     public List<CatalogInstaller> Installers { get; set; } = [];
 
@@ -173,7 +173,7 @@ public partial class AppEntry : INotifyPropertyChanged
     public List<string> RegionTags { get; set; } = [];
 
     /// <summary>
-    /// Indica se foi possível localizar um repositório GitHub para enriquecer o score
+    /// Indica se foi possível localizar uma fonte remota para enriquecer o score
     /// com estrelas/forks/atividade.
     /// </summary>
     [JsonPropertyName("hasGitHubMetrics")]
@@ -190,12 +190,12 @@ public partial class AppEntry : INotifyPropertyChanged
 
     /// <summary>
     /// Presente só quando este item representa um plano de Office (ex.: criado pelo
-    /// botão "Adicionar ao catálogo" da OfficePage), em vez de um pacote winget comum.
-    /// Null = app winget normal, instalado via <see cref="Services.WingetExecutor"/>;
+    /// botão "Adicionar ao catálogo" da OfficePage), em vez de um pacote do gerenciador de pacotes comum.
+    /// Null = aplicativo comum do gerenciador de pacotes, instalado via <see cref="Services.WingetExecutor"/>;
     /// não-null = a tela de Pacotes/Instalar deve rodar o pipeline do ODT
     /// (<see cref="Services.Office.OfficeDeploymentToolService"/>) com estes parâmetros
-    /// em vez de chamar o winget. Serializado normalmente no perfil (.json) — é o que
-    /// permite exportar/importar apps winget e planos de Office no mesmo arquivo.
+    /// em vez de chamar o gerenciador de pacotes. Serializado normalmente no perfil (.json) — é o que
+    /// permite exportar/importar apps gerenciador de pacotes e planos de Office no mesmo arquivo.
     /// </summary>
     [JsonPropertyName("office")]
     public OfficeInstallOptions? Office { get; set; }
@@ -204,7 +204,7 @@ public partial class AppEntry : INotifyPropertyChanged
 
     /// <summary>
     /// Tamanho estimado do instalador, em bytes. Não existe um campo de tamanho no
-    /// schema oficial do winget-pkgs (não há "InstallerSize" no manifesto) — este
+    /// schema oficial do catálogo de pacotes (não há "InstallerSize" no manifesto) — este
     /// valor vem de uma checagem HTTP (HEAD/Range) feita pelo Indexer na
     /// sincronização diária, direto contra a(s) InstallerUrl do manifesto (ver
     /// InstallerSizeResolver). Nem todo pacote resolve (URL pode bloquear HEAD/Range,
@@ -234,7 +234,7 @@ public partial class AppEntry : INotifyPropertyChanged
     private bool _isInstalled;
 
     /// <summary>
-    /// Preenchido em tempo de execução pelo InstalledAppsService (via "winget export").
+    /// Preenchido em tempo de execução pelo InstalledAppsService (via "gerenciador de pacotes export").
     /// Não vem do apps.json. Notifica mudança para o botão Instalar/Abrir do card e do
     /// painel de detalhes trocarem automaticamente via binding.
     /// </summary>

@@ -48,7 +48,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
     private readonly IClipboardService? _clipboard;
     private readonly PackageInstallOptionsService? _installOptions;
     private readonly IPackageMetricsService? _metrics;
-    private readonly StoreService? _store;
+    private readonly IStoreCatalog? _store;
     private readonly IUiDispatcher? _dispatcher;
     private readonly HashSet<PackageItemViewModel> _metricAttempts = [];
     private bool _metricsActive;
@@ -61,6 +61,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
     private readonly WindowsAppNotificationService? _notifications;
     private readonly string _path;
     private readonly IServiceProvider? _serviceProvider;
+    private readonly OperationPreferencesService _operationPreferences;
     private bool _backupSyncActivated;
     private ProfileBackupSet _backup = new();
     private CancellationTokenSource? _metricsCancellation;
@@ -183,8 +184,8 @@ public sealed partial class CollectionsViewModel : PageViewModel
         OfflineCollectionExportService? offlineExport = null,
         PowerShellScriptAnalyzerService? scriptAnalyzer = null,
         IOfficeCollectionInstaller? officeInstaller = null, WindowsAppNotificationService? notifications = null,
-        StoreService? store = null, IUiDispatcher? dispatcher = null, WinProvision.PackageManagement.ApplicationEngine? engine = null,
-        IServiceProvider? serviceProvider = null)
+        IStoreCatalog? store = null, IUiDispatcher? dispatcher = null, WinProvision.PackageManagement.ApplicationEngine? engine = null,
+        IServiceProvider? serviceProvider = null, OperationPreferencesService? operationPreferences = null)
     {
         _backend = backend;
         _engine = engine;
@@ -196,6 +197,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
         _store = store;
         _dispatcher = dispatcher;
         _serviceProvider = serviceProvider;
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
         _offlineExport = offlineExport;
         _scriptAnalyzer = scriptAnalyzer;
         _officeInstaller = officeInstaller;
@@ -694,7 +696,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             failures.AddRange(selected
                 .Where(item => !item.IsInstalled && !item.SupportsInstall && !item.App.IsSelf)
                 .Select(item => $"{item.Name}: configuração de instalação ausente ou incompatível."));
-            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            using var batchGate = new SemaphoreSlim(_operationPreferences.Load().ParallelOperations);
             await Task.WhenAll(installable.Select(async item =>
             {
                 await batchGate.WaitAsync(token);
@@ -873,7 +875,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             StatusText = "Selecione pacotes WinGet ou Microsoft Store sem versão fixa para baixar.";
             return;
         }
-        string? folder = new OperationPreferencesService().Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
+        string? folder = _operationPreferences.Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
         if (folder is null)
             return;
         await DownloadAsync(selected, folder, token);
@@ -885,7 +887,7 @@ public sealed partial class CollectionsViewModel : PageViewModel
             throw new InvalidOperationException("O serviço de download de instaladores não foi configurado.");
         int downloaded = 0;
         var failures = new List<string>();
-        using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelDownloads);
+        using var batchGate = new SemaphoreSlim(_operationPreferences.Load().ParallelDownloads);
         await Task.WhenAll(selected.Select(async (item, index) =>
         {
             await batchGate.WaitAsync(token);

@@ -5,7 +5,7 @@ using Microsoft.Xaml.Interactivity;
 
 namespace WinProvision.Store.Controls;
 
-/// <summary>Enfileira mensagens da página em uma InfoBar empilhada do CommunityToolkit.</summary>
+/// <summary>Enfileira mensagens da página em uma InfoBar empilhada do biblioteca de interface.</summary>
 public sealed partial class StatusInfoBar : InfoBar
 {
     public static readonly DependencyProperty StatusMessageProperty = DependencyProperty.Register(

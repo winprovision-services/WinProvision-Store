@@ -40,7 +40,7 @@ public enum PowerPlanMode
 
 /// <summary>
 /// Representa um perfil de provisionamento do SISTEMA — diferente de <see cref="ProfileManifest"/>
-/// (que descreve apps a instalar via winget/ODT), este cobre ajustes de máquina aplicados via
+/// (que descreve apps a instalar via gerenciador de pacotes/ODT), este cobre ajustes de máquina aplicados via
 /// Registro do Windows/Win32 (tema, barra de tarefas, plano de energia, nome do computador).
 /// Usado tanto pela tela "Provisionamento" quanto pelo modo CLI
 /// (<c>WinProvision.Store.exe /Provision caminho\perfil.json</c>).
@@ -61,7 +61,7 @@ public class ProvisioningManifest
 
     /// <summary>
     /// Nome opcional de quem montou o perfil (ex.: "Gabriel", "Setor de TI", "Acme Corp").
-    /// Durante o Apply é gravado no registro HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation
+    /// Durante o Apply é gravado no registro HKLM\SOFTWARE\plataforma do sistema\Windows\CurrentVersion\OEMInformation
     /// como Manufacturer, então aparece na tela Configurações → Sistema → Sobre como "Autor do
     /// setup" / "Organização". Falta de privilégio Admin durante o Apply não quebra o Apply —
     /// a informação é apenas omitida.
@@ -149,7 +149,7 @@ public class ProvisioningManifest
     public int? DisplayTimeoutOnDc { get; set; }
 
     /// <summary>
-    /// Tempo (em minutos) até o PC ser suspenso (S0 Low Power Idle / S3 / Hibernate / Modern Standby,
+    /// Tempo (em minutos) até o PC ser suspenso (S0 Low Power Idle / armazenamento remoto / Hibernate / Modern Standby,
     /// conforme suportado pelo hardware) quando ligado na tomada (CA).
     /// null = "não alterar"; 0 = "Nunca".
     /// Aplicado via powercfg /change standby-timeout-ac no plano ativo.

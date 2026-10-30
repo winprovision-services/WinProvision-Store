@@ -7,7 +7,7 @@ namespace WinProvision.Core.Services;
 
 /// <summary>
 /// Obtém e mantém em cache metadados leves dos pacotes (principalmente tamanho do instalador).
-/// O cache é persistido em disco para evitar executar "winget show" repetidamente.
+/// O cache é persistido em disco para evitar executar "gerenciador de pacotes show" repetidamente.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public interface IPackageMetricsService
@@ -47,7 +47,7 @@ public sealed class PackageMetricsService : IPackageMetricsService
         // preenchido a partir da InstallerUrl do manifesto pelo InstallerSizeResolver
         // no passo 6 da pipeline) e persiste no apps.json. Quando o valor já vem do
         // catálogo, usamos ele direto — sem tocar no cache em disco nem rodar
-        // "winget show" ao vivo, que agora é só o fallback dos poucos pacotes que o
+        // "gerenciador de pacotes show" ao vivo, que agora é só o fallback dos poucos pacotes que o
         // Indexer não conseguiu resolver.
         if (app.InstallerSizeBytes is > 0)
             return app.InstallerSizeBytes;

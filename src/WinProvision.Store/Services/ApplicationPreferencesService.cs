@@ -97,6 +97,7 @@ public sealed partial class ApplicationPreferencesService
                     UpdateNotificationsEnabled = saved.UpdateNotificationsEnabled;
                     UpdateScheduleAnchorUtc = saved.UpdateScheduleAnchorUtc;
                     _savedAutoUpdateEnabled = saved.AutoUpdateAtStartup;
+                    _savedLaunchAtStartup = saved.LaunchAtStartup;
                     AutoMaintenanceUpdates = saved.AutoMaintenanceUpdates;
                     AutoMaintenanceDrivers = saved.AutoMaintenanceDrivers;
                     AutomaticCloudBackupEnabled = saved.AutomaticCloudBackupEnabled;
@@ -129,7 +130,7 @@ public sealed partial class ApplicationPreferencesService
             bool legacyBackgroundOnly = HasArgument(appCommand, "--background-update") && !cliStartup;
             bool legacyCombined = HasArgument(appCommand, "--update-at-startup");
 
-            LaunchAtStartup = !string.IsNullOrWhiteSpace(appCommand) && !legacyBackgroundOnly;
+            LaunchAtStartup = _savedLaunchAtStartup ?? (!string.IsNullOrWhiteSpace(appCommand) && !legacyBackgroundOnly);
             bool registeredForBackgroundUpdates = !string.IsNullOrWhiteSpace(updateCommand)
                 || legacyBackgroundOnly
                 || legacyCombined;
@@ -352,17 +353,9 @@ public sealed partial class ApplicationPreferencesService
         if (!_persistStartup) return;
         using var key = Registry.CurrentUser.CreateSubKey(StartupRegistryPath, writable: true)
             ?? throw new InvalidOperationException("Não foi possível abrir a configuração de inicialização do usuário.");
-        string command = BackgroundUpdateCommand.ForDirectory(AppContext.BaseDirectory);
+        key.DeleteValue(StartupValueName, throwOnMissingValue: false);
 
-        if (LaunchAtStartup)
-            key.SetValue(StartupValueName, command, RegistryValueKind.String);
-        else
-            key.DeleteValue(StartupValueName, throwOnMissingValue: false);
-
-        if (!LaunchAtStartup && BackgroundUpdatesEnabled && UpdateSchedule == BackgroundUpdateSchedule.AtLogon)
-            key.SetValue(BackgroundUpdateValueName, command, RegistryValueKind.String);
-        else
-            key.DeleteValue(BackgroundUpdateValueName, throwOnMissingValue: false);
+        key.DeleteValue(BackgroundUpdateValueName, throwOnMissingValue: false);
     }
 
     private static bool HasArgument(string? command, string argument) =>
@@ -382,10 +375,12 @@ public sealed partial class ApplicationPreferencesService
             UpdateScheduleDay,
             _autoUpdatePackageKeys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
             AutoMaintenanceUpdates, AutoMaintenanceDrivers, UpdateIntervalMinutes, UpdateNotificationsEnabled, UpdateScheduleAnchorUtc,
-            AutomaticCloudBackupEnabled, UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled, StartupPage)));
+            AutomaticCloudBackupEnabled, UseViperOfficeDownload, SearchOnDemand, ProvisioningMenuEnabled, StartupPage,
+            LaunchAtStartup)));
     }
 
     private bool? _savedAutoUpdateEnabled;
+    private bool? _savedLaunchAtStartup;
 
     internal sealed record Preferences(
         AppThemePreference Theme,
@@ -405,7 +400,8 @@ public sealed partial class ApplicationPreferencesService
         bool UseViperOfficeDownload = false,
         bool SearchOnDemand = false,
         bool ProvisioningMenuEnabled = false,
-        ApplicationStartupPage? StartupPage = null);
+        ApplicationStartupPage? StartupPage = null,
+        bool? LaunchAtStartup = null);
 }
 
 public sealed record PortableApplicationPreferences(

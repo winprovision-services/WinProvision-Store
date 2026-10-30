@@ -76,6 +76,14 @@
     <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
   </ItemGroup>
+  <Target Name="ExcludeUnavailableRuntimeInstrumentation"
+          BeforeTargets="_CopyOutOfDateSourceItemsToOutputDirectory">
+    <ItemGroup>
+      <_SourceItemsToCopyToOutputDirectory
+        Remove="@(_SourceItemsToCopyToOutputDirectory)"
+        Condition="'%(Filename)%(Extension)' == 'WindowsAppSdk.AppxDeploymentExtensions.Desktop-EventLog-Instrumentation.dll' and !Exists('%(FullPath)')" />
+    </ItemGroup>
+  </Target>
   <!-- A compilação direta da interface também precisa do host COM elevado. -->
   <Target Name="IncludeDevelopmentComWorker" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true'">
     <MSBuild Projects="..\WinProvision.Cli\WinProvision.Cli.csproj" Targets="Build" Properties="Configuration=$(Configuration);Platform=AnyCPU" />

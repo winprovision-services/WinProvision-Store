@@ -11,7 +11,7 @@ public interface IPackageDetailsProvider
     Task<IReadOnlyList<CatalogInstaller>> LoadVersionInstallersAsync(AppEntry app, string? version, CancellationToken token);
 }
 
-public sealed partial class PackageDetailsProvider(StoreService store, WingetPackageDetailsService metadata, InstalledAppsService installed) : IPackageDetailsProvider
+public sealed partial class PackageDetailsProvider(IStoreCatalog store, WingetPackageDetailsService metadata, InstalledAppsService installed) : IPackageDetailsProvider
 {
     public async Task<AppEntry> LoadCatalogAsync(AppEntry app, CancellationToken token)
     {

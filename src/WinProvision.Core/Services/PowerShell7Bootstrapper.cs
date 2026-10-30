@@ -25,8 +25,8 @@ public sealed record PowerShell7Runtime(
 [SupportedOSPlatform("windows")]
 public sealed class PowerShell7Bootstrapper
 {
-    private const string LatestReleaseApi = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest";
-    private const string WinGetManifestDirectoryApi = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/PowerShell?ref=master";
+    private const string LatestReleaseApi = NetworkEndpoints.GitHubApiBaseUrl + "/repos/PowerShell/PowerShell/releases/latest";
+    private const string WinGetManifestDirectoryApi = NetworkEndpoints.GitHubApiBaseUrl + "/repos/microsoft/winget-pkgs/contents/manifests/m/Microsoft/PowerShell?ref=master";
     private const string GithubUserAgent = "WinProvision-Store/1.0 (PowerShell runtime bootstrap)";
     private const long MaximumArchiveBytes = 512L * 1024 * 1024;
     private static readonly Version MinimumSupportedVersion = new(7, 4);
@@ -257,7 +257,7 @@ public sealed class PowerShell7Bootstrapper
 
     private async Task<ReleaseAsset> GetReleaseWithFallbacksAsync(Action<string>? log, CancellationToken ct)
     {
-        // A API própria tem cache local e representa a versão já publicada no catálogo WinGet.
+        // A API própria tem cache local e representa a versão já publicada no catálogo do gerenciador de pacotes.
         try
         {
             PackageManifest? package = await _apiService.GetPackageAsync("Microsoft.PowerShell", ct, "winget")
@@ -282,7 +282,7 @@ public sealed class PowerShell7Bootstrapper
             log?.Invoke($"WinProvision API indisponível para provisionar o PowerShell: {ex.Message}");
         }
 
-        // Consulta os diretórios versionados do manifesto comunitário oficial do WinGet.
+        // Consulta os diretórios versionados do manifesto comunitário oficial do gerenciador de pacotes.
         try
         {
             string? wingetVersion = await GetLatestWinGetVersionAsync(ct).ConfigureAwait(false);
@@ -349,7 +349,7 @@ public sealed class PowerShell7Bootstrapper
     private static async Task<ReleaseAsset?> TryGetReleaseForVersionAsync(string version, CancellationToken ct)
     {
         string tag = Uri.EscapeDataString($"v{version}");
-        var releaseUri = new Uri($"https://api.github.com/repos/PowerShell/PowerShell/releases/tags/{tag}");
+        var releaseUri = new Uri(NetworkEndpoints.GitHubRepositoryUrl("PowerShell/PowerShell", $"releases/tags/{tag}"));
         try
         {
             return await GetReleaseFromApiAsync(releaseUri, version, ct).ConfigureAwait(false);

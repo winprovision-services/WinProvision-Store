@@ -1,19 +1,18 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Host integration for the pinned WinProvision fork of gsudo.</summary>
+/// <summary>Host integration for the pinned WinProvision fork of helper de elevação.</summary>
 public static class GsudoElevationService
 {
     private static readonly SemaphoreSlim CacheGate = new(1, 1);
     private static bool _cacheStarted;
     public const int CacheMinutes = 5;
 
-    /// <summary>Exit code que o gsudo usa para qualquer erro próprio (UAC cancelado, senha inválida, pipe, etc.).</summary>
+    /// <summary>Exit code que o helper de elevação usa para qualquer erro próprio (UAC cancelado, senha inválida, pipe, etc.).</summary>
     internal const int GsudoErrorExitCode = 999;
 
     // Códigos Win32 usados para falhas do helper, para que todos os chamadores que já tratam
@@ -111,7 +110,7 @@ public static class GsudoElevationService
         {
             if (!_cacheStarted) return false;
             var result = await RunControlAsync(["status", "CacheAvailable"], token).ConfigureAwait(false);
-            return result.ExitCode == 0 && result.Output.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+            return result.ExitCode == 0 && IsCacheAvailableOutput(result.Output);
         }
         finally { CacheGate.Release(); }
     }
@@ -137,12 +136,11 @@ public static class GsudoElevationService
             if (_cacheStarted)
             {
                 var status = await RunControlAsync(["status", "CacheAvailable"], token).ConfigureAwait(false);
-                if (status.ExitCode == 0 && status.Output.Trim().Equals("true", StringComparison.OrdinalIgnoreCase)) return;
+                if (status.ExitCode == 0 && IsCacheAvailableOutput(status.Output)) return;
                 _cacheStarted = false;
             }
 
-            string[] arguments = ["cache", "on", "--pid", Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
-                "--duration", TimeSpan.FromMinutes(CacheMinutes).ToString("c", CultureInfo.InvariantCulture)];
+            string[] arguments = BuildCacheOnArguments();
             for (int attempt = 1; ; attempt++)
             {
                 var result = await RunControlAsync(arguments, token, AuthorizationTimeout).ConfigureAwait(false);
@@ -191,8 +189,9 @@ public static class GsudoElevationService
             // upstream encerra a sessão ao fim do PID/inatividade. Não deve impedir o encerramento do app.
             if (!IsBundled) { _cacheStarted = false; return; }
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var result = await RunControlAsync(["cache", "off", "--pid", Environment.ProcessId.ToString(CultureInfo.InvariantCulture)], timeout.Token).ConfigureAwait(false);
-            if (result.ExitCode != 0) throw new IOException("Não foi possível encerrar o cache de elevação.");
+            var result = await RunControlAsync(BuildCacheOffArguments(), timeout.Token).ConfigureAwait(false);
+            if (result.ExitCode != 0)
+                CoreLog.Warning(new IOException($"gsudo cache off retornou {result.ExitCode}."), "GsudoCacheStop");
             _cacheStarted = false;
         }
         finally { CacheGate.Release(); }
@@ -219,7 +218,7 @@ public static class GsudoElevationService
         EnsureElevationAllowed();
         var start = CreateStartInfo();
         start.WorkingDirectory = ResolveWorkingDirectory(fileName, workingDirectory);
-        // Existing installer/WinGet builders supply a Windows command line. --direct
+        // Existing installer/gerenciador de pacotes builders supply a Windows command line. --direct
         // avoids interpreting it through PowerShell or cmd.exe.
         start.Arguments = $"--direct --loglevel Error \"{fileName}\" {arguments}";
         using var process = Process.Start(start)
@@ -233,8 +232,8 @@ public static class GsudoElevationService
         await process.WaitForExitAsync().ConfigureAwait(false);
         await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
         int exitCode = process.ExitCode;
-        // 999 também é um código possível de instaladores: só é falha do helper quando ele mesmo
-        // registrou o motivo (formato "Error: ..." do gsudo). Sem esse texto, o código é do instalador.
+        // O GSudo reserva 999 para falhas ao elevar. Um processo elevado que retorne 999
+        // não deve ser confundido com uma execução normal.
         if (exitCode == GsudoErrorExitCode)
         {
             switch (ClassifyHelperOutput(tail.ToString()))
@@ -246,6 +245,10 @@ public static class GsudoElevationService
                     WinProvisionElevationState.MarkFailed();
                     throw new Win32Exception(ErrorLogonFailure, "As credenciais de administrador informadas no UAC são inválidas.");
             }
+            WinProvisionElevationState.MarkFailed();
+            throw new Win32Exception(ErrorStartFailed,
+                "O GSudo não conseguiu iniciar o processo elevado."
+                + (tail.ToString().Trim() is { Length: > 0 } detail ? " " + detail : string.Empty));
         }
         return exitCode;
     }
@@ -294,7 +297,20 @@ public static class GsudoElevationService
 
     internal enum HelperFailure { None, Canceled, BadCredentials }
 
-    /// <summary>Reconhece as mensagens de erro do gsudo (idioma fixo do upstream, no formato "Error: ...").</summary>
+    internal static string[] BuildCacheOnArguments() => ["cache", "on"];
+
+    internal static string[] BuildCacheOffArguments() => ["cache", "off"];
+
+    internal static bool IsCacheAvailableOutput(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return false;
+        string normalized = output.Trim();
+        if (normalized.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+        return normalized.Contains("\"CacheAvailable\":true", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("CacheAvailable: true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Reconhece as mensagens de erro do helper de elevação (idioma fixo do upstream, no formato "Error: ...").</summary>
     internal static HelperFailure ClassifyHelperOutput(string? output)
     {
         if (string.IsNullOrWhiteSpace(output)) return HelperFailure.None;

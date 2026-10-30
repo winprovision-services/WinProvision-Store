@@ -14,14 +14,14 @@ $taskOutput = Join-Path $taskRoot "artifacts/winget/$taskPackageId/$AppVersion"
 New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
 $taskHeader = "PackageIdentifier: $taskPackageId`nPackageVersion: $AppVersion"
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+# O manifesto segue o esquema de validação correspondente.
 $taskHeader
 DefaultLocale: pt-BR
 ManifestType: version
 ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.yaml") -Encoding utf8NoBOM
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+# O manifesto segue o esquema de validação correspondente.
 $taskHeader
 InstallerLocale: pt-BR
 MinimumOSVersion: 10.0.17763.0
@@ -44,7 +44,7 @@ ManifestType: installer
 ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.installer.yaml") -Encoding utf8NoBOM
 @"
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+# O manifesto segue o esquema de validação correspondente.
 $taskHeader
 PackageLocale: pt-BR
 Publisher: WinProvision Store

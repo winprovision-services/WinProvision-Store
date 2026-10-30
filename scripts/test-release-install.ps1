@@ -64,7 +64,7 @@ try {
             $taskOtherScope = if ($taskMachine) { 'User' } else { 'Machine' }
             $taskOtherBefore = if ($taskMachine) { $taskBeforeUserPath } else { $taskBeforeMachinePath }
             if ([string][Environment]::GetEnvironmentVariable('Path', $taskOtherScope) -ne [string]$taskOtherBefore) { throw 'O instalador alterou o PATH de outro escopo.' }
-            # Model a new session: existing parent processes retain their old environment.
+            # Model a new execução: existing parent processes retain their old environment.
             $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
             if ((Get-Command winprovision.exe -CommandType Application).Source -ne (Join-Path $taskCliDirectory 'winprovision.exe')) { throw 'A CLI não foi resolvida pelo PATH.' }
             & winprovision.exe --help

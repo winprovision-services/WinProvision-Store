@@ -152,6 +152,12 @@ public sealed partial class AsyncImage : DependencyObject
         InFlight.Clear();
     }
 
+    internal static void ReleasePageMemory()
+    {
+        Interlocked.Increment(ref _cacheGeneration);
+        MemoryCache.TrimTo(0);
+    }
+
     public static void ClearCache()
     {
         DiskMutationGate.Wait();
@@ -414,7 +420,7 @@ public sealed partial class AsyncImage : DependencyObject
                 RememberFailure(requestKey);
                 if (previousBitmap is not null)
                 {
-                    // Do not mark a failed renewal fresh: the prior file remains unchanged.
+                    // Do not mark a failed renewal fresh: the anterior file remains unchanged.
                     if (generation == Interlocked.Read(ref _cacheGeneration)) MemoryCache.Set(requestKey, previousBitmap);
                     return previousBitmap;
                 }

@@ -1,6 +1,6 @@
 namespace WinProvision.Core.Models;
 
-/// <summary>Preferências de instalação reutilizáveis associadas a um pacote WinGet.</summary>
+/// <summary>Preferências de instalação reutilizáveis associadas a um pacote do gerenciador de pacotes.</summary>
 public sealed record PackageInstallOptions(
     bool Interactive = false,
     string? Scope = null,

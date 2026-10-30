@@ -19,6 +19,8 @@ public class CliQueryFallbackTests
         Assert.True(ApplicationEngine.MatchesWinProvisionCatalogEntry(app,
             new InteractiveCliRequest("search", Query: "code")));
         Assert.False(ApplicationEngine.MatchesWinProvisionCatalogEntry(app,
+            new InteractiveCliRequest("search", Query: "text editor", Exact: true)));
+        Assert.False(ApplicationEngine.MatchesWinProvisionCatalogEntry(app,
             new InteractiveCliRequest("search", Query: "Text Editor", Exact: true, Source: "msstore")));
         Assert.True(ApplicationEngine.MatchesWinProvisionCatalogEntry(app,
             new InteractiveCliRequest("search", Id: "contoso.editor", Source: "winget")));

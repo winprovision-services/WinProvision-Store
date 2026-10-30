@@ -41,7 +41,7 @@ public sealed class WinProvisionApiUpdateDiscoveryTests
             Assert.Equal("Acme.App", offer.Id);
             Assert.Equal("registry-only-key", offer.InstalledRegistryId);
             Assert.Equal("2.0.0", (await backend.PrepareApiUpdateAsync(offer.Id)).Manifest.Version);
-            // Invalid target must stop before downloading or executing, without provisioning WinGet.
+            // Invalid target must stop before downloading or executing, without provisioning gerenciador de pacotes.
             var rejected = await engine.ExecuteUpdateAsync(offer, new PackageInstallOptions(Version: "9.0.0"), _ => { }, CancellationToken.None);
             Assert.False(rejected.Success);
             Assert.False(rejected.InstallerStarted);
@@ -199,7 +199,7 @@ public sealed class WinProvisionApiUpdateDiscoveryTests
             {
                 Id = "registry-key", Name = "Acme App", CurrentVersion = "1.0.0", Source = "winget"
             }]));
-            // An exact WinGet ID remains usable even when display names collide.
+            // An exact gerenciador de pacotes ID remains usable even when display names collide.
             Assert.Single(await api.GetUpdatesAsync((UpgradablePackage[])[new UpgradablePackage
             {
                 Id = "Acme.App", Name = "Acme App", CurrentVersion = "1.0.0", Source = "winget"

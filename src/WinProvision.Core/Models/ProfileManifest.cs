@@ -25,7 +25,7 @@ public class ProfileManifest
     /// máquina, wallpaper) — opcional, null quando o perfil só trata de apps/Office. Um único
     /// arquivo .json pode descrever apps E provisionamento ao mesmo tempo: o modo CLI /auto
     /// aplica os dois; o modo /Provision aplica só esta seção. A sincronização via
-    /// backup/Gist (<see cref="ProfileBackupSet"/>) cobre esse campo de graça, por já
+    /// backup remoto (<see cref="ProfileBackupSet"/>) cobre esse campo de graça, por já
     /// serializar o ProfileManifest inteiro.
     /// </summary>
     public ProvisioningManifest? Provisioning { get; set; }

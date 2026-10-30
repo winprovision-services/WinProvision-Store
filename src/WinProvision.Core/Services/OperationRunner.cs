@@ -12,7 +12,7 @@ using WinProvision.Core.Services.Office;
 namespace WinProvision.Core.Services;
 
 /// <summary>
-/// Enfileira e executa uma operação de instalação/remoção via winget ou motor próprio,
+/// Enfileira e executa uma operação de instalação/remoção via gerenciador de pacotes ou motor próprio,
 /// atualizando o <see cref="OperationItem"/> correspondente (status, progresso, cancelamento)
 /// que o painel de operações exibe em tempo real.
 /// </summary>
@@ -46,7 +46,7 @@ public static partial class OperationRunner
     private static void ReportSuccessfulInstall(string packageId, string source)
     {
         try { _successfulInstallObserver?.Invoke(packageId, source); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[OperationRunner] Métrica de instalação indisponível: {ex.Message}"); }
+        catch (Exception ex) { WinProvision.Core.Services.CoreLog.Debug($"[OperationRunner] Métrica de instalação indisponível: {ex.Message}"); }
     }
 
     public static void ConfigureInstallWarmupHandler(
@@ -64,9 +64,9 @@ public static partial class OperationRunner
             : _installWarmupHandler(includeMicrosoftStoreCatalog, onLogReceived, cancellationToken);
 
     /// <summary>
-    /// Configura o handler de atualização (API COM/CLI do WinGet, com fallback interno para a
+    /// Configura o handler de atualização (API COM/CLI do gerenciador de pacotes, com fallback interno para a
     /// API própria da WinProvision Store — ver WinGetService.UpdateAsync). Sem handler
-    /// configurado, RunUpdateAsync usa WingetExecutor.UpdateAppAsync diretamente (winget.exe
+    /// configurado, RunUpdateAsync usa WingetExecutor.UpdateAppAsync diretamente (cliente de pacotes
     /// puro, sem a API própria como alternativa).
     /// </summary>
     public static void ConfigureUpdateHandler(
@@ -82,9 +82,9 @@ public static partial class OperationRunner
     }
 
     /// <summary>
-    /// Instala usando o handler configurado (API COM do WinGet, com fallback interno para a
+    /// Instala usando o handler configurado (API COM do gerenciador de pacotes, com fallback interno para a
     /// CLI). Sem handler configurado, usa o <see cref="WingetExecutor"/> diretamente. Usado
-    /// também pelo modo /auto, para que ele não rode sempre o winget.exe.
+    /// também pelo modo /auto, para que ele não rode sempre o cliente de pacotes.
     /// </summary>
     public static async Task<WingetExecutionResult> InstallWithConfiguredHandlerAsync(
         WingetExecutor executor,
@@ -247,7 +247,7 @@ public static partial class OperationRunner
 
     /// <summary>
     /// Mesmo padrão de <see cref="RunInstallAsync"/>, só que para atualização de um pacote
-    /// já instalado (winget update) — usado pela tela Atualizações. OperationKind.Update já
+    /// já instalado (gerenciador de pacotes update) — usado pela tela Atualizações. OperationKind.Update já
     /// existia no painel de fila (rótulo "Atualizando"), então isso só reaproveita a mesma
     /// exibição sem precisar de nada novo lá.
     /// </summary>
@@ -299,7 +299,7 @@ public static partial class OperationRunner
             var onProgress = new Action<InstallProgressUpdate>(update => ReportInstallProgress(item, update));
             onLogReceived($"Atualizando {appName} ({appId}) pela fonte {source}.");
 
-            // Se não há handler configurado, usa winget.exe diretamente
+            // Se não há handler configurado, usa cliente de pacotes diretamente
             // Os handlers de catálogo/API representam a atualização padrão. As variantes
             // precisam chegar aos argumentos da CLI para honrar elevação, escopo, arquitetura,
             // interação e hash.
@@ -375,7 +375,7 @@ public static partial class OperationRunner
 
     /// <summary>
     /// Mesmo padrão de <see cref="RunInstallAsync"/>, só que para remoção: enfileira no
-    /// painel flutuante, executa via WingetExecutor.UninstallAppAsync (winget uninstall
+    /// painel flutuante, executa via WingetExecutor.UninstallAppAsync (gerenciador de pacotes uninstall
     /// silencioso) e, em caso de sucesso, marca o app como não-instalado no cache
     /// compartilhado (InstalledAppsService) para o botão da UI voltar a "Instalar".
     /// </summary>
@@ -491,6 +491,7 @@ public static partial class OperationRunner
                 if (removed) installedAppsService?.MarkUninstalled();
                 return removed;
             }
+
             if (!requiresElevation && apiService is not null && OperatingSystem.IsWindows())
             {
                 bool? apiUninstall = await apiService.UninstallAsync(
@@ -523,9 +524,9 @@ public static partial class OperationRunner
                 }
             }
 
-            // WinGet --silent não repassa necessariamente /SUPPRESSMSGBOXES ao
-            // desinstalador Inno. Use o comando registrado com os switches Inno
-            // antes de entregar a remoção ao WinGet, para suprimir perguntas
+            // gerenciador de pacotes --silent não repassa necessariamente /SUPPRESSMSGBOXES ao
+            // desinstalador identificado. Use o comando registrado com os parâmetros correspondentes
+            // antes de entregar a remoção ao gerenciador de pacotes, para suprimir perguntas
             // personalizadas e manter a resposta padrão do fabricante.
             if (UninstallerEngineService.HasInnoSetupUninstaller(appDetail))
             {
@@ -610,6 +611,111 @@ public static partial class OperationRunner
                 ? "Acompanhamento cancelado. Confira a remoção no desinstalador."
                 : "Não foi possível desinstalar. Confira os detalhes da operação.";
             item.IsIndeterminate = false;
+            throw;
+        }
+    }
+
+    public static async Task<WingetExecutionResult> RunUninstallWithServiceAsync(
+        OperationsQueueService queue,
+        PackageUninstallService service,
+        InstalledAppDetail app,
+        string? source,
+        InstalledAppsService? installedAppsService = null,
+        bool interactive = false,
+        bool requiresElevation = false)
+    {
+        var item = queue.Enqueue(app.DisplayName, OperationKind.Uninstall);
+        item.StatusText = "Preparando remoção...";
+
+        try
+        {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
+            var result = await service.UninstallAsync(
+                app,
+                source,
+                line => ReportProgress(item, line),
+                item.CancellationTokenSource.Token,
+                interactive,
+                requiresElevation).ConfigureAwait(false);
+
+            AppendResultLog(item, source ?? "automática", result);
+            item.IsIndeterminate = false;
+            if (result.Success)
+            {
+                item.Progress = 100;
+                item.State = OperationState.Completed;
+                installedAppsService?.MarkUninstalled();
+                InstalledPackageMethodHistory.Forget(app.Id);
+            }
+            else
+            {
+                item.State = item.CancellationTokenSource.IsCancellationRequested
+                    ? OperationState.Canceled
+                    : OperationState.Failed;
+                item.StatusText = WingetErrorTranslator.ToMessage(
+                    result.FailureReason,
+                    "desinstalar",
+                    app.DisplayName);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            item.AppendLog($"Exceção durante a remoção: {ex.GetType().Name}: {ex.Message}");
+            item.State = item.CancellationTokenSource.IsCancellationRequested
+                ? OperationState.Canceled
+                : OperationState.Failed;
+            throw;
+        }
+    }
+
+    public static async Task<WingetExecutionResult> RunUninstallWithHandlerAsync(
+        OperationsQueueService queue,
+        InstalledAppDetail app,
+        Func<Action<string>, CancellationToken, Task<WingetExecutionResult>> handler,
+        InstalledAppsService? installedAppsService = null)
+    {
+        var item = queue.Enqueue(app.DisplayName, OperationKind.Uninstall);
+        item.StatusText = "Preparando remoção...";
+
+        try
+        {
+            using var slot = await OperationLimits.Packages.EnterAsync(item.CancellationTokenSource.Token);
+            item.State = OperationState.Running;
+            var result = await handler(
+                line => ReportProgress(item, line),
+                item.CancellationTokenSource.Token).ConfigureAwait(false);
+
+            AppendResultLog(item, "automática", result);
+            item.IsIndeterminate = false;
+            if (result.Success)
+            {
+                item.Progress = 100;
+                item.State = OperationState.Completed;
+                installedAppsService?.MarkUninstalled();
+                InstalledPackageMethodHistory.Forget(app.Id);
+            }
+            else
+            {
+                item.State = item.CancellationTokenSource.IsCancellationRequested
+                    ? OperationState.Canceled
+                    : OperationState.Failed;
+                item.StatusText = WingetErrorTranslator.ToMessage(
+                    result.FailureReason,
+                    "desinstalar",
+                    app.DisplayName);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            item.AppendLog($"Exceção durante a remoção: {ex.GetType().Name}: {ex.Message}");
+            item.State = item.CancellationTokenSource.IsCancellationRequested
+                ? OperationState.Canceled
+                : OperationState.Failed;
             throw;
         }
     }
@@ -731,7 +837,7 @@ public static partial class OperationRunner
 
     /// <summary>
     /// Mesmo padrão de enfileiramento do RunInstallAsync, só que para o pipeline do
-    /// Office (ODT + configuration.xml) em vez do winget. O Viper fornece progresso por bytes;
+    /// Office (ODT + configuration.xml) em vez do gerenciador de pacotes. O Viper fornece progresso por bytes;
     /// o setup.exe do ODT não imprime progresso incremental, então o item fica
     /// indeterminado até terminar.
     /// </summary>
@@ -787,7 +893,7 @@ public static partial class OperationRunner
     /// <summary>
     /// Mesmo padrão de RunOfficeInstallAsync, para o pipeline de remoção (ODT +
     /// configuration.xml com &lt;Remove&gt;/RemoveAll, mais limpeza opcional da edição
-    /// Microsoft Store).
+    /// catálogo visual).
     /// </summary>
     public static async Task<bool> RunOfficeRemoveAsync(
         OperationsQueueService queue,
@@ -936,7 +1042,7 @@ public static partial class OperationRunner
         };
         if (item.Method == WingetMethod.WingetExe)
         {
-            // A saída capturada do winget.exe não expõe uma medição confiável dos bytes.
+            // A saída capturada do cliente de pacotes não expõe uma medição confiável dos bytes.
             // Mantém a barra indeterminada em vez de interpretar percentuais arbitrários.
             item.StatusText = $"{activity}...";
         }
@@ -946,7 +1052,7 @@ public static partial class OperationRunner
         }
 
         // O ODT fornece progresso real em suas mensagens; não inferir progresso dos logs
-        // do WinGet, COM ou da API própria (esses métodos publicam progresso tipado).
+        // do gerenciador de pacotes, COM ou da API própria (esses métodos publicam progresso tipado).
         var match = item.Method == WingetMethod.Unknown ? PercentRegex().Match(logLine) : Match.Empty;
         if (match.Success && int.TryParse(match.Groups[1].Value, out int percent))
         {

@@ -60,7 +60,7 @@ internal static partial class SmokeTest
             listener.Stop();
             try { await server; } catch (Exception) when (timeout.IsCancellationRequested) { }
             AsyncImage.ClearMemoryCache();
-            // Only this probe's unique URL hash is removed; other cache entries are untouched.
+            // Only this sondagem's unique URL hash is removed; other cache entries are untouched.
             File.Delete(path);
             File.Delete(path + ".meta.json");
         }

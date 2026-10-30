@@ -8,7 +8,7 @@ internal static partial class Program
 {
     private static int Main()
     {
-        // This harness removes/reinstalls 7-Zip. It must never run on a developer/user PC.
+        // This ambiente de validação removes/reinstalls 7-Zip. It must never run on a computador de uso cotidiano.
         if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true"
             || Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted") return 2;
         using var identity = WindowsIdentity.GetCurrent();

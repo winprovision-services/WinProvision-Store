@@ -13,8 +13,8 @@ using WinProvision.Viper;
 namespace WinProvision.Core.Services.Office;
 
 /// <summary>
-/// Obtém o Office Deployment Tool pelo fluxo de instalação do WinGet (incluindo a API
-/// própria); se esse fluxo falhar, baixa o instalador atual do Centro de Download Microsoft.
+/// Obtém o Office Deployment Tool pelo fluxo de instalação do gerenciador de pacotes (incluindo a API
+/// própria); se esse fluxo falhar, baixa o instalador atual do Centro de Download plataforma do sistema.
 ///
 /// O configuration.xml não precisa ficar do lado do setup.exe: passamos o caminho
 /// completo de cada um como argumento, então tanto faz onde o setup.exe está localizado.
@@ -23,7 +23,7 @@ namespace WinProvision.Core.Services.Office;
 public class OfficeDeploymentToolService : IDisposable
 {
     internal const string OdtWingetPackageId = "Microsoft.OfficeDeploymentTool";
-    private const string OdtOfficialDownloadUrl = "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_20326-20112.exe";
+    private const string OdtOfficialDownloadUrl = NetworkEndpoints.OfficeDeploymentToolUrl;
     private static readonly SemaphoreSlim ConfigurationGate = new(1, 1);
     private static readonly SemaphoreSlim SetupGate = new(1, 1);
     private static readonly SemaphoreSlim SourceGate = new(1, 1);
@@ -71,18 +71,18 @@ public class OfficeDeploymentToolService : IDisposable
 
     /// <summary>
     /// Locais conhecidos onde o setup.exe pode estar encontrado:
-    /// 1. Pasta local do WinProvision (extração do instalador oficial Microsoft)
-    /// 2. Program Files (instalação via winget)
-    /// 3. Program Files (x86) (instalação via winget em sistemas 64-bit)
+    /// 1. Pasta local do WinProvision (extração do instalador oficial plataforma do sistema)
+    /// 2. Program Files (instalação via gerenciador de pacotes)
+    /// 3. Program Files (x86) (instalação via gerenciador de pacotes em sistemas 64-bit)
     /// </summary>
     private static IEnumerable<string> KnownInstallPaths()
     {
-        // Local da extração do instalador oficial Microsoft
+        // Local da extração do instalador oficial plataforma do sistema
         yield return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "WinProvision", "OfficeDeploymentTool", "setup.exe");
 
-        // Locais de instalação via winget
+        // Locais de instalação via gerenciador de pacotes
         yield return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             "OfficeDeploymentTool", "setup.exe");
@@ -107,7 +107,7 @@ public class OfficeDeploymentToolService : IDisposable
 
     /// <summary>
     /// Garante que setup.exe existe localmente, tentando primeiro a cadeia de instalação
-    /// do WinGet/API e usando o Centro de Download Microsoft como alternativa.
+    /// do gerenciador de pacotes/API e usando o Centro de Download plataforma do sistema como alternativa.
     /// </summary>
     public async Task<string> EnsureSetupExeAsync(Action<string>? onStatus = null, CancellationToken cancellationToken = default)
     {
@@ -525,7 +525,7 @@ public class OfficeDeploymentToolService : IDisposable
                 return Fail("São necessários pelo menos 3 GB livres para preparar os arquivos do Office.");
             }
 
-            // Evita disputar a instalação de pacotes WinGet em paralelo; caso setup.exe
+            // Evita disputar a instalação de pacotes do gerenciador de pacotes em paralelo; caso setup.exe
             // ainda não esteja no cache local, usa diretamente o download oficial.
             string setupPath = await EnsureDownloadSetupAsync(onStatus, cancellationToken).ConfigureAwait(false);
 
@@ -699,7 +699,7 @@ public class OfficeDeploymentToolService : IDisposable
         string channel = request.ChannelOverride ?? request.Plan.Channel ?? "Current";
         string language = System.Globalization.CultureInfo.GetCultureInfo(request.LanguageId).Name.ToLowerInvariant();
         string architecture = request.Architecture == 32 ? "x86" : "x64";
-        string api = $"https://clients.config.office.net/releases/v1.0/filelist?Channel={Uri.EscapeDataString(channel)}&Arch={architecture}&Lid={Uri.EscapeDataString(language)}";
+        string api = $"{NetworkEndpoints.OfficeFileListUrl}?Channel={Uri.EscapeDataString(channel)}&Arch={architecture}&Lid={Uri.EscapeDataString(language)}";
         using JsonDocument release = JsonDocument.Parse(await ReadOfficeResponseAsync(new Uri(api), 4 * 1024 * 1024, token).ConfigureAwait(false));
         JsonElement root = release.RootElement;
         string version = root.GetProperty("version").GetString() ?? throw new InvalidDataException("A lista oficial do Office não informou uma versão.");
@@ -1072,7 +1072,7 @@ public class OfficeDeploymentToolService : IDisposable
     }
 
     /// <summary>
-    /// Remove a edição UWP/AppX do Office (distribuída pela Microsoft Store), que pode
+    /// Remove a edição UWP/AppX do Office (distribuída pela catálogo visual), que pode
     /// coexistir e conflitar com uma instalação Click-to-Run. Usa apenas o cmdlet
     /// nativo do PowerShell Remove-AppxPackage — nenhuma interação com licenciamento.
     /// Não falha a operação inteira se o pacote simplesmente não estiver presente.

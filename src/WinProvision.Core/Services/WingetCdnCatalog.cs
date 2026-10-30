@@ -5,7 +5,7 @@ using WinProvision.Core.Models;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Leitor do contrato público winget/v1. Os caminhos são sempre relativos à CDN.</summary>
+/// <summary>Leitor do contrato público gerenciador de pacotes/v1. Os caminhos são sempre relativos à CDN.</summary>
 public static class WingetCdnCatalog
 {
     public const string BaseUrl = CatalogEndpoints.PublicBaseUrl + "/winget/v1/";
@@ -165,8 +165,21 @@ public static class WingetCdnCatalog
             {
                 Architecture = Optional(item, "architecture"), Type = Optional(item, "type"),
                 NestedType = Optional(item, "nestedType"), NestedInstallerFile = Optional(item, "nestedInstallerFile"),
+                NestedInstallerFiles = Strings(item, "nestedInstallerFiles"),
                 PortableCommandAlias = Optional(item, "portableCommandAlias"),
                 Scope = Optional(item, "scope"), ElevationRequirement = Optional(item, "elevationRequirement"),
+                Locale = Optional(item, "locale"), Platforms = Strings(item, "platforms"),
+                MinimumOsVersion = Optional(item, "minimumOsVersion"),
+                InstallModes = Strings(item, "installModes"),
+                UpgradeBehavior = Optional(item, "upgradeBehavior"),
+                Dependencies = Strings(item, "dependencies"),
+                UnsupportedArguments = Strings(item, "unsupportedArguments"),
+                DownloadCommandProhibited = Bool(item, "downloadCommandProhibited"),
+                AppsAndFeaturesEntries = ReadAppsAndFeatures(item),
+                Commands = Strings(item, "commands"), FileExtensions = Strings(item, "fileExtensions"),
+                Protocols = Strings(item, "protocols"), Capabilities = Strings(item, "capabilities"),
+                UnsupportedOsArchitectures = Strings(item, "unsupportedOsArchitectures"),
+                ErrorCodes = Integers(item, "errorCodes"),
                 ProductCode = Optional(item, "productCode"), Url = Required(item, "url"),
                 Sha256 = Required(item, "sha256"), SilentArgs = Optional(silent, "arguments"),
                 SilentSource = Optional(silent, "source") ?? "none",
@@ -321,6 +334,25 @@ public static class WingetCdnCatalog
             || value.ValueKind != JsonValueKind.Array) return result;
         foreach (JsonElement item in value.EnumerateArray())
             if (item.TryGetInt32(out int number)) result.Add(number);
+        return result;
+    }
+
+    private static List<CatalogAppsAndFeaturesEntry> ReadAppsAndFeatures(JsonElement obj)
+    {
+        var result = new List<CatalogAppsAndFeaturesEntry>();
+        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty("appsAndFeaturesEntries", out JsonElement value)
+            || value.ValueKind != JsonValueKind.Array) return result;
+        foreach (JsonElement item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            result.Add(new CatalogAppsAndFeaturesEntry
+            {
+                DisplayName = Optional(item, "displayName"), Publisher = Optional(item, "publisher"),
+                DisplayVersion = Optional(item, "displayVersion"), ProductCode = Optional(item, "productCode"),
+                UpgradeCode = Optional(item, "upgradeCode"), InstallerType = Optional(item, "installerType"),
+                Language = Optional(item, "language")
+            });
+        }
         return result;
     }
 }

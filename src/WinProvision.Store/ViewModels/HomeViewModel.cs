@@ -8,7 +8,7 @@ namespace WinProvision.Store.ViewModels;
 [WinRT.GeneratedBindableCustomProperty]
 public sealed partial class HomeViewModel : PageViewModel, IDisposable
 {
-    private readonly StoreService _store;
+    private readonly IStoreCatalog _store;
     private readonly InstalledAppsService _installed;
     private readonly IPackageBackend _backend;
     private readonly IPresentationService _presentation;
@@ -27,7 +27,7 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
     public IAsyncRelayCommand RefreshCommand { get; }
     public IRelayCommand LoadMoreCommand { get; }
     public IRelayCommand CancelCommand { get; }
-    public HomeViewModel(StoreService store, InstalledAppsService installed, IPackageBackend backend, IPresentationService presentation, CollectionsViewModel collections, IUiDispatcher dispatcher, StorefrontViewModel storefront, ApplicationPreferencesService preferences)
+    public HomeViewModel(IStoreCatalog store, InstalledAppsService installed, IPackageBackend backend, IPresentationService presentation, CollectionsViewModel collections, IUiDispatcher dispatcher, StorefrontViewModel storefront, ApplicationPreferencesService preferences)
     {
         _store = store; _installed = installed; _backend = backend; _presentation = presentation; _collections = collections; _dispatcher = dispatcher;
         Storefront = storefront;

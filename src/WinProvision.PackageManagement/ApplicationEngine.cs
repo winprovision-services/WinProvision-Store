@@ -7,28 +7,41 @@ public sealed class ApplicationEngine : IAsyncDisposable
 {
     private readonly WingetBootstrapper _bootstrapper;
     private readonly WingetExecutor _executor;
-    private readonly WingetFallback _cli = new();
     private readonly WinProvisionApiService _api;
-    private readonly StoreService _catalog;
+    private readonly IStoreCatalog _catalog;
     private readonly WinGetService _packages;
+    private readonly PackageUninstallService _uninstall;
     private readonly Action<string> _diagnostic;
+    private readonly OperationPreferencesService _operationPreferences;
     private readonly bool _ownsServices;
     private readonly object _provisionGate = new();
     private Task<WingetBootstrapResult>? _provisionTask;
 
     public ApplicationEngine(Action<string> diagnostic, Func<PackageInstallMethod>? preferredMethod = null,
-        Func<PackageUpdateMethod>? preferredUpdateMethod = null)
+        Func<PackageUpdateMethod>? preferredUpdateMethod = null, OperationPreferencesService? operationPreferences = null)
     {
         _diagnostic = diagnostic;
-        _bootstrapper = new(); _executor = new(); _api = new(); _catalog = new(); _ownsServices = true;
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
+        _bootstrapper = new();
+        _executor = new(_bootstrapper, _operationPreferences);
+        _api = new(operationPreferences: _operationPreferences);
+        _catalog = new StoreService();
+        _uninstall = new(_executor,
+            new UninstallerEngineService(), _api, new InstalledAppsService());
+        _ownsServices = true;
         _packages = new(_executor, _api, _bootstrapper, preferredMethod,
             provision: ProvisionAsync, diagnostic: diagnostic, preferredUpdateMethod: preferredUpdateMethod);
     }
 
     public ApplicationEngine(WinGetService packages, WingetExecutor executor, WinProvisionApiService api,
-        WingetBootstrapper bootstrapper, StoreService catalog, Action<string> diagnostic)
+        WingetBootstrapper bootstrapper, IStoreCatalog catalog, Action<string> diagnostic,
+    OperationPreferencesService? operationPreferences = null,
+    PackageUninstallService? uninstall = null)
     {
-        _packages = packages; _executor = executor; _api = api; _bootstrapper = bootstrapper; _catalog = catalog; _diagnostic = diagnostic;
+    _packages = packages; _executor = executor; _api = api; _bootstrapper = bootstrapper; _catalog = catalog; _diagnostic = diagnostic;
+    _operationPreferences = operationPreferences ?? new OperationPreferencesService();
+    _uninstall = uninstall ?? new PackageUninstallService(
+        executor, new UninstallerEngineService(), api, new InstalledAppsService());
     }
 
     public Task<WingetExecutionResult> InstallPreferredAsync(string id, Action<string>? log = null, CancellationToken token = default,
@@ -70,7 +83,8 @@ public sealed class ApplicationEngine : IAsyncDisposable
             async ct => (await _packages.SearchComOnlyAsync(request.Id ?? request.Query, ct))
                 .Where(p => Matches(p.PackageId, p.Name, p.Source, request))
                 .Select(p => new UpgradablePackage { Id = p.PackageId, Name = p.Name, AvailableVersion = p.Version, Source = p.Source }).ToList(),
-            ct => _cli.SearchAsync(request, ct)
+            ct => _executor.SearchPackagesAsync(request.Id ?? request.Query, request.Source ?? "winget",
+                request.Exact || request.Id is not null, request.Id is not null, ct)
         ], items => items.Count > 0, _diagnostic, token).ConfigureAwait(false);
         return result;
     }
@@ -101,15 +115,15 @@ public sealed class ApplicationEngine : IAsyncDisposable
         if (request.Id is not null)
             return app.Id.Equals(request.Id, StringComparison.OrdinalIgnoreCase);
         return !request.Exact
-            || app.Id.Equals(request.Query, StringComparison.OrdinalIgnoreCase)
-            || app.Name.Equals(request.Query, StringComparison.OrdinalIgnoreCase);
+            || app.Id.Equals(request.Query, StringComparison.Ordinal)
+            || app.Name.Equals(request.Query, StringComparison.Ordinal);
     }
 
     private static bool Matches(string id, string name, string source, InteractiveCliRequest request)
     {
         if (request.Source is not null && !source.Equals(request.Source, StringComparison.OrdinalIgnoreCase)) return false;
         if (request.Id is not null) return id.Equals(request.Id, StringComparison.OrdinalIgnoreCase);
-        return request.Exact ? id.Equals(request.Query, StringComparison.OrdinalIgnoreCase) || name.Equals(request.Query, StringComparison.OrdinalIgnoreCase)
+        return request.Exact ? id.Equals(request.Query, StringComparison.Ordinal) || name.Equals(request.Query, StringComparison.Ordinal)
             : id.Contains(request.Query, StringComparison.OrdinalIgnoreCase) || name.Contains(request.Query, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -117,12 +131,24 @@ public sealed class ApplicationEngine : IAsyncDisposable
     {
         await EnsureAsync(token);
         return await PackageQueryFallback.RunAsync<List<UpgradablePackage>>(
-            [ct => _packages.ListComOnlyAsync(source, ct), ct => _cli.ListAsync(source, ct)], _ => true, _diagnostic, token);
+            [ct => _packages.ListComOnlyAsync(source, ct), ct => _executor.ListInstalledPackagesAsync(ct, source)],
+            _ => true, _diagnostic, token);
     }
     public async Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token)
     {
         return await _packages.GetUpgradablePackagesAsync(log, token);
     }
+    public Task<List<UpgradablePackage>> ScanUpdatesAsync(Action<string>? log, CancellationToken token) =>
+        _packages.GetUpgradablePackagesAsync(log, token);
+
+    public Task<WingetExecutionResult> DownloadInstallerAsync(
+        string id,
+        string? source,
+        string directory,
+        Action<string>? log,
+        CancellationToken token) =>
+        _executor.DownloadInstallerAsync(id, directory, source ?? "winget", onLogReceived: log, cancellationToken: token);
+
     public async Task<string> DetailsAsync(string id, string source, CancellationToken token)
     {
         await EnsureAsync(token);
@@ -132,7 +158,7 @@ public sealed class ApplicationEngine : IAsyncDisposable
                     ?? throw new NotSupportedException("Pacote não encontrado pela COM.");
                 return $"{match.Name}\nID: {match.PackageId}\nVersão: {match.Version}\nEditor: {match.Publisher}\nOrigem: {match.Source}";
             },
-            ct => _cli.DetailsAsync(id, source, ct),
+            ct => _executor.GetPackageDetailsAsync(id, source, ct),
             async ct => {
                 var manifest = await _api.GetPackageAsync(id, ct, source) ?? throw new NotSupportedException("Pacote ausente do catálogo próprio.");
                 return $"ID: {manifest.Id}\nVersão: {manifest.Version}\nOrigem: {manifest.Source}\nInstaladores: {manifest.Installers.Count}";
@@ -162,12 +188,12 @@ public sealed class ApplicationEngine : IAsyncDisposable
         { log("Catálogo próprio indisponível; tentando download pelo WinGet."); manifest = null; }
         if (manifest is not null && package.Source != "msstore" && WinProvisionApiService.PickInstaller(manifest) is { } installer)
         {
-            string folder = InstallerDownloadPolicy.ResolveDirectory(directory);
+            string folder = InstallerDownloadPolicy.ResolveDirectory(directory, _operationPreferences);
             Directory.CreateDirectory(folder);
             string extension = Path.GetExtension(new Uri(installer.Url).AbsolutePath);
             if (extension.Length > 12 || extension.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.')) extension = ".bin";
             string original = Path.GetFileName(new Uri(installer.Url).AbsolutePath);
-            string name = InstallerDownloadPolicy.FileName(new OperationPreferencesService().Load().InstallerNames, package.Id, manifest.Version, installer.Architecture, original);
+            string name = InstallerDownloadPolicy.FileName(_operationPreferences.Load().InstallerNames, package.Id, manifest.Version, installer.Architecture, original);
             string staging = Path.Combine(folder, ".winprovision-" + Guid.NewGuid().ToString("N") + extension);
             string file;
             try
@@ -180,7 +206,12 @@ public sealed class ApplicationEngine : IAsyncDisposable
             log($"Arquivo verificado: {file}");
             return new() { Success = true, ExitCode = 0, Output = file };
         }
-        return await _cli.DownloadAsync(package, InstallerDownloadPolicy.ResolveDirectory(directory), log, token);
+        return await _executor.DownloadPackageAsync(
+            package.Id,
+            package.Source,
+            InstallerDownloadPolicy.ResolveDirectory(directory, _operationPreferences),
+            log,
+            token);
     }
     public async Task<WingetExecutionResult> ExportAsync(string path, Action<string> log, CancellationToken token)
     {
@@ -190,7 +221,13 @@ public sealed class ApplicationEngine : IAsyncDisposable
         await File.WriteAllTextAsync(path, ProfileDocumentService.Serialize(profile), token);
         return new() { Success = true, ExitCode = 0, Output = path };
     }
-    public async Task<WingetExecutionResult> UninstallAsync(string id, string? source, Action<string> log, CancellationToken token)
+    public async Task<WingetExecutionResult> UninstallAsync(
+        string id,
+        string? source,
+        Action<string> log,
+        CancellationToken token,
+        bool interactive = false,
+        bool requiresElevation = false)
     {
         await EnsureAsync(token);
         var comResult = await _packages.UninstallComOnlyAsync(id, source, token);
@@ -199,15 +236,10 @@ public sealed class ApplicationEngine : IAsyncDisposable
             if (!CanFallbackAfterComUninstall(com)) return com;
             log("A COM falhou antes de iniciar o desinstalador; tentando a rota verificada do WinProvision.");
         }
-        var installed = new InstalledAppsService();
-        await installed.EnsureLoadedAsync(token);
-        var match = installed.GetAllInstalledApps().FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        var match = await _uninstall.FindInstalledAsync(id, null, token);
         if (match is not null && CanUseWinProvisionUninstall(source))
-        {
-            var ownResult = await _api.UninstallAsync(match, new UninstallerEngineService(), log, token);
-            if (ownResult is bool success) return new() { Success = success, ExitCode = success ? 0 : 1, InstallerStarted = true };
-        }
-        return await _cli.UninstallAsync(id, source, log, token);
+            return await _uninstall.UninstallAsync(match, source, log, token, interactive, requiresElevation);
+        return await _executor.UninstallExactPackageAsync(id, source, log, token);
     }
 
     internal static bool CanFallbackAfterComUninstall(WingetExecutionResult result) =>
@@ -256,7 +288,7 @@ public sealed class ApplicationEngine : IAsyncDisposable
         if (app.PinnedVersion is { } version)
         {
             await EnsureAsync(token);
-            return await _executor.DownloadPackageAsync(app.Id, app.Source!, InstallerDownloadPolicy.ResolveDirectory(directory), log, token, version);
+            return await _executor.DownloadPackageAsync(app.Id, app.Source!, InstallerDownloadPolicy.ResolveDirectory(directory, _operationPreferences), log, token, version);
         }
         return await DownloadAsync(new() { Id = app.Id, Name = app.Name ?? app.Id, Source = app.Source! }, directory, log, token);
     }

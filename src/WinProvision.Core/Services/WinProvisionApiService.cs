@@ -2,8 +2,8 @@
 // Cliente de instalação própria: lê os instaladores dos mesmos detalhes publicados pelo catálogo V2.
 //
 // Formato observado:
-//   Store/Catalog/manifest.json + Store/Catalog/manifest/search-index.json (WinGet)
-//   Store/Catalog/msstore/manifest.json + .../search-index.json (Microsoft Store)
+//   Store/Catalog/manifest.json + Store/Catalog/manifest/search-index.json (gerenciador de pacotes)
+//   Store/Catalog/msstore/manifest.json + .../search-index.json (catálogo visual)
 //   Cada detailPath aponta para o app.json que também contém "installers".
 //
 using System;
@@ -139,9 +139,9 @@ public static class WinProvisionInstallerCommandBuilder
 
 /// <summary>
 /// Cliente da API própria da WinProvision Store. Serve como:
-///  1) fallback direto quando o Winget COM API falha;
+///  1) fallback direto quando o gerenciador de pacotes COM API falha;
 ///  2) caminho primário quando a reelevação falha ou o processo já roda como SYSTEM
-///     (cenários em que a COM do winget não é viável).
+///     (cenários em que a COM do gerenciador de pacotes não é viável).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WinProvisionApiService : IAsyncDisposable
@@ -183,6 +183,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private readonly SemaphoreSlim _manifestCacheLock = new(1, 1);
     private readonly SemaphoreSlim _installRecordsLock = new(1, 1);
     private readonly string _installRecordsPath;
+    private readonly OperationPreferencesService _operationPreferences;
 
     private PackageIndex? _indexCache;
     private WingetCdnCatalog.Snapshot? _catalogSnapshot;
@@ -207,8 +208,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private static readonly TimeSpan InstallerCacheRetention = TimeSpan.FromDays(30);
     private static readonly SemaphoreSlim InstallerCacheGate = new(1, 1);
 
-    public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null, string? installRecordsPath = null)
+    public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null, string? installRecordsPath = null,
+        OperationPreferencesService? operationPreferences = null)
     {
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
         _ownsHttpClient = http is null;
         _http = http ?? new HttpClient(new SocketsHttpHandler
         {
@@ -478,7 +481,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            Debug.WriteLine("[WinProvisionAPI] Revalidação do catálogo cancelada durante o encerramento.");
+            WinProvision.Core.Services.CoreLog.Debug("[WinProvisionAPI] Revalidação do catálogo cancelada durante o encerramento.");
         }
         catch (Exception exception) { CoreLog.Warning(exception, "RevalidateCatalogIndex"); }
     }
@@ -881,7 +884,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         // Um instalador sem arquitetura declarada ainda pode ser selecionado. Não escolha
         // um binário marcado para uma arquitetura incompatível só por ser o único restante;
-        // o fallback WinGet sabe tratar manifests especiais e emulation melhor.
+        // o fallback gerenciador de pacotes sabe tratar manifests especiais e emulation melhor.
         return PreferScope(manifest.Installers.Where(i => string.IsNullOrWhiteSpace(i.Architecture)
                 || string.Equals(i.Architecture, "neutral", StringComparison.OrdinalIgnoreCase)), preferredScope)
             .OrderByDescending(i => i.SilentSupported)
@@ -984,12 +987,12 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
                 Message: "O manifesto não contém um SHA-256 válido; o instalador não será executado.");
 
-        // O catálogo WinGet já marca silentSupported=false pra tipos que
+        // O catálogo do gerenciador de pacotes já marca silentSupported=false para tipos que
         // não sabe instalar sem interação (msix, appx, portable, exe sem switch declarado
         // no manifesto, ou um zip cujo NestedInstallerType/NestedInstallerFiles não foi
         // resolvido). Baixar e tentar EXECUTAR esse arquivo sempre falha nesses casos —
-        // melhor falhar aqui, ANTES do download, e deixar o nível 3 (winget.exe) cuidar
-        // deles, já que o próprio winget sabe lidar com zip/portable/msix nativamente.
+        // melhor falhar aqui, ANTES do download, e deixar o nível 3 (cliente de pacotes) cuidar
+        // deles, já que o próprio gerenciador de pacotes sabe lidar com zip/portable/msix nativamente.
         if (!installer.SilentSupported && !installer.IsPortable)
             return new WinProvisionInstallResult(WinProvisionInstallOutcome.SilentInstallNotSupported,
                 Message: $"Installer tipo '{installer.Type}' de '{packageId}' não suporta instalação silenciosa pela API própria.");
@@ -1098,7 +1101,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 installerRequiresElevation, installerProhibitsElevation);
 
             // Códigos padrão do Windows Installer/Burn mais os códigos de sucesso
-            // adicionais declarados no manifesto WinGet.
+            // adicionais declarados no manifesto do gerenciador de pacotes.
             var ok = InstallerExitCodes.IsSuccess(exitCode) || installer.SuccessCodes.Contains(exitCode);
             if (ok && recordInstall)
                 await RememberApiInstallAsync(packageId, isPortable: false, CancellationToken.None).ConfigureAwait(false);
@@ -1156,7 +1159,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     /// <summary>
     /// Extrai só o instalador aninhado (não o zip inteiro) para uma pasta temporária
     /// dedicada. <paramref name="relativePath"/> vem tal como publicado no manifesto
-    /// (winget-pkgs usa "\" como separador); comparação por sufixo de caminho normalizado
+    /// (catálogo de pacotes usa "\" como separador); comparação por sufixo de caminho normalizado
     /// tolera zips onde o entry vem prefixado por uma pasta-raiz extra.
     /// </summary>
     private static void ValidateArchive(ZipArchive archive)
@@ -1252,7 +1255,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] Não foi possível salvar o registro da instalação: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível salvar o registro da instalação: {ex.Message}");
         }
         finally
         {
@@ -1262,7 +1265,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     /// <summary>
     /// A API própria só pode atualizar uma instalação que ela gerencia. Rodar seu
-    /// instalador sobre um pacote descoberto pelo WinGet pode criar uma segunda
+    /// instalador sobre um pacote descoberto pelo gerenciador de pacotes pode criar uma segunda
     /// instalação e deixar a versão original intacta.
     /// </summary>
     public async Task<bool> HasManagedInstallAsync(string packageId, CancellationToken ct = default) =>
@@ -1278,7 +1281,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] Não foi possível conferir ownership para updates: {ex.GetType().Name}: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível conferir ownership para updates: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
         finally
@@ -1332,7 +1335,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 string norm = NormalizeInstalledName(package.Name, package.CurrentVersion);
                 if (entriesByName.TryGetValue(norm, out var sameName))
                 {
-                    // Nomes compartilhados (Git.Git/Microsoft.Git) podem ser resolvidos
+                    // Nomes compartilhados (Git.Git/plataforma do sistema.Git) podem ser resolvidos
                     // pelo fabricante. Um fabricante ausente não desempata candidatos.
                     string publisher = NormalizeForMatching(package.Publisher);
                     var matchingPublisher = sameName.Where(entry => publisher.Length > 0
@@ -1418,17 +1421,17 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                     }
                     catch (OperationCanceledException) when (detailTimeout.IsCancellationRequested)
                     {
-                        Debug.WriteLine($"[WinProvisionAPI] Update detail timeout '{candidate.Entry.Id}'; mantendo as demais fontes.");
+                        WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Update detail timeout '{candidate.Entry.Id}'; mantendo as demais fontes.");
                     }
                     catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or TaskCanceledException)
                     {
-                        Debug.WriteLine($"[WinProvisionAPI] Update discovery isolou '{candidate.Entry.Id}': {ex.GetType().Name}: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Update discovery isolou '{candidate.Entry.Id}': {ex.GetType().Name}: {ex.Message}");
                     }
                 }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && detailScanTimeout.IsCancellationRequested)
         {
-            Debug.WriteLine("[WinProvisionAPI] O limite total de detalhes foi atingido; usando as ofertas já verificadas.");
+            WinProvision.Core.Services.CoreLog.Debug("[WinProvisionAPI] O limite total de detalhes foi atingido; usando as ofertas já verificadas.");
         }
 
         return offers.OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase).ToList();
@@ -1614,7 +1617,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or OperationCanceledException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] R2 indisponível/timeout durante discovery: {ex.GetType().Name}: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] R2 indisponível/timeout durante discovery: {ex.GetType().Name}: {ex.Message}");
             return await TryLoadCachedUpdateIndexAsync(ct).ConfigureAwait(false);
         }
     }
@@ -1643,7 +1646,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             }
             catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
             {
-                Debug.WriteLine($"[WinProvisionAPI] Índice local de updates inválido: {ex.GetType().Name}: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Índice local de updates inválido: {ex.GetType().Name}: {ex.Message}");
                 return null;
             }
         }
@@ -1681,7 +1684,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] Não foi possível ler o registro de instalações: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível ler o registro de instalações: {ex.Message}");
             return null;
         }
         finally
@@ -1701,7 +1704,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] Não foi possível atualizar o registro da instalação: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível atualizar o registro da instalação: {ex.Message}");
         }
         finally
         {
@@ -1741,7 +1744,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Debug.WriteLine($"[WinProvisionAPI] Não foi possível remover o pacote portátil: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível remover o pacote portátil: {ex.Message}");
             return false;
         }
     }
@@ -1765,7 +1768,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             }
             catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or ArgumentException)
             {
-                Debug.WriteLine($"[WinProvisionAPI] Ignorando atalho portátil inválido: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Ignorando atalho portátil inválido: {ex.Message}");
             }
         }
     }
@@ -1929,7 +1932,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         using var downloadSlot = await OperationLimits.Downloads.EnterAsync(ct).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(DownloadTimeout);
-        int parallel = new OperationPreferencesService().Load().ParallelDownloads;
+        int parallel = _operationPreferences.Load().ParallelDownloads;
         int connections = ConnectionsPerDownload(parallel);
         await using var viper = new ViperEngine(new ViperOptions
         {

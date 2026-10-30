@@ -8,7 +8,7 @@ public partial class IconService
 {
     private const string CatalogAppsBaseUrl = CatalogEndpoints.CatalogBaseUrl;
     // Exposto publicamente para compartilhar o fallback quando o app não tem
-    // ícone na mídia V2 nem URL fornecida pela Microsoft Store.
+    // ícone na mídia V2 nem URL fornecida pela catálogo visual.
     public const string DefaultIconPackUri = "pack://application:,,,/Assets/Icons/default_app.png";
 
     private readonly string _iconCacheFolder;
@@ -41,15 +41,15 @@ public partial class IconService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[IconService] Não foi possível limpar todos os ícones locais: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[IconService] Não foi possível limpar todos os ícones locais: {ex.Message}");
             throw;
         }
     }
 
     /// <summary>
     /// Retorna a melhor URL ou caminho local de ícone para o aplicativo.
-    /// Para o catálogo WinGet, usa a mídia declarada no próprio registro V2. Para a
-    /// Microsoft Store, usa o ícone fornecido por ela. Sem mídia associada, retorna o
+    /// Para o catálogo do gerenciador de pacotes, usa a mídia declarada no próprio registro V2. Para a
+    /// catálogo visual, usa o ícone fornecido por ela. Sem mídia associada, retorna o
     /// ícone genérico local.
     /// </summary>
     public string ResolveIconUrl(AppEntry app)
@@ -62,7 +62,7 @@ public partial class IconService
         if (ResolveCatalogMediaUrl(app, app.Media?.Icon, app.Media?.IconSha256) is { } catalogIcon)
             return catalogIcon;
 
-        // Apps "msstore" usam o ícone fornecido pela própria Microsoft Store.
+        // Apps "msstore" usam o ícone fornecido pela própria catálogo visual.
         if (!string.IsNullOrWhiteSpace(app.StoreIconUrl))
         {
             return CatalogEndpoints.ResolvePublicUrl(app.StoreIconUrl)!;

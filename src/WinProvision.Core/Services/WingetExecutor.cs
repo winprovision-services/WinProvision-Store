@@ -46,7 +46,7 @@ public class WingetExecutionResult
     /// <summary>
     /// Motivo canônico da falha (ver <see cref="WingetErrorTranslator"/>), já classificado a
     /// partir de <see cref="Output"/> — permite que a UI mostre sempre a mesma mensagem em
-    /// pt-BR em vez de repassar o texto cru do winget, cuja cobertura de tradução é
+    /// pt-BR em vez de repassar o texto cru do gerenciador de pacotes, cuja cobertura de tradução é
     /// inconsistente (a mesma falha às vezes sai em inglês, às vezes em português).
     /// Só é preenchido quando <see cref="Success"/> é false.
     /// </summary>
@@ -57,20 +57,22 @@ public class WingetExecutionResult
 public class WingetExecutor
 {
     private readonly WingetBootstrapper? _bootstrapper;
+    private readonly OperationPreferencesService _operationPreferences;
 
     /// <param name="bootstrapper">
     /// Opcional — quando presente (via injeção de dependência; ver App.xaml.cs), garante o
-    /// winget disponível antes da PRIMEIRA instalação da sessão (ver
+    /// gerenciador de pacotes disponível antes da PRIMEIRA instalação da sessão (ver
     /// <see cref="EnsureWingetBootstrappedOnceAsync"/>). Null mantém o comportamento sem
-    /// checagem prévia, chamando winget.exe diretamente.
+    /// checagem prévia, chamando cliente de pacotes diretamente.
     /// </param>
-    public WingetExecutor(WingetBootstrapper? bootstrapper = null)
+    public WingetExecutor(WingetBootstrapper? bootstrapper = null, OperationPreferencesService? operationPreferences = null)
     {
         _bootstrapper = bootstrapper;
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
     }
 
     /// <summary>
-    /// Instala um pacote do Winget e reporta o progresso em tempo real. Por padrão mantém
+    /// Instala um pacote do gerenciador de pacotes e reporta o progresso em tempo real. Por padrão mantém
     /// a instalação silenciosa existente; installLocation é opcional.
     /// </summary>
     public async Task<WingetExecutionResult> InstallAppAsync(
@@ -90,11 +92,11 @@ public class WingetExecutor
         bool force = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // Garante a resolução do WinGet para o
+        // Garante a resolução do gerenciador de pacotes para o
         // caminho da UI (usuário clicando "Instalar" no executável, sem CLI): a primeira
-        // instalação da sessão confirma que o winget está funcional (e baixa/instala o que
+        // instalação da sessão confirma que o gerenciador de pacotes está funcional (e baixa/instala o que
         // faltar, se não estiver) ANTES de tentar rodar o comando — evita que o usuário veja
-        // "winget.exe não encontrado" logo após o primeiro logon, quando o Windows ainda pode
+        // "cliente de pacotes não encontrado" logo após o primeiro logon, quando o Windows ainda pode
         // estar terminando de provisionar os pacotes APPX de sistema. Instalações seguintes
         // reaproveitam o resultado já checado (ver EnsureWingetBootstrappedOnceAsync) — não
         // roda de novo a cada clique em "Instalar".
@@ -110,12 +112,12 @@ public class WingetExecutor
             };
         }
 
-        // --source fixo (default "winget"): sem isso, o winget precisa resolver o --id
-        // consultando TODAS as sources configuradas (winget + msstore) antes de decidir
-        // qual usar. Em ambientes sem acesso íntegro aos serviços da Microsoft Store (ex.:
+        // --source fixo (default "gerenciador de pacotes"): sem isso, o gerenciador de pacotes precisa resolver o --id
+        // consultando TODAS as sources configuradas (gerenciador de pacotes + msstore) antes de decidir
+        // qual usar. Em ambientes sem acesso íntegro aos serviços da catálogo visual (ex.:
         // Windows Sandbox, redes restritas), a pesquisa na source "msstore" falha ("Falha
         // na pesquisa da origem: msstore") e derruba o comando inteiro mesmo quando o
-        // pacote existe na source "winget". Pra apps com AppEntry.Source == "msstore" (ver
+        // pacote existe na source "gerenciador de pacotes". Pra apps com AppEntry.Source == "msstore" (ver
         // MsStoreCatalogService), quem chama passa esse valor aqui pra fixar a source
         // correta em vez do padrão. UpdateAppAsync e o script exportado (PackagesPage) já
         // fixam a source por esse mesmo motivo — faltava só aqui. --disable-interactivity
@@ -137,7 +139,7 @@ public class WingetExecutor
         if (force) args += " --force";
         // Store packages are licensed and installed through the Store service. Forcing
         // silent mode can suppress the Store hand-off/consent UI and leave the request
-        // looking successful or stalled; let WinGet use its interactive Store flow.
+        // looking successful or stalled; let gerenciador de pacotes use its interactive Store flow.
         bool useInteractive = interactive || source.Equals("msstore", StringComparison.OrdinalIgnoreCase);
         args += useInteractive ? " --interactive" : " --silent --disable-interactivity";
         
@@ -173,10 +175,10 @@ public class WingetExecutor
         bool requiresElevation = false)
     {
         // Mesma garantia do InstallAppAsync (ver comentário lá) — faltava aqui. Sem essa
-        // checagem, se a desinstalação for a primeira operação da sessão (winget ainda não
-        // provisionado, ex.: logo após o primeiro logon), o processo "winget.exe" nem existe
+        // checagem, se a desinstalação for a primeira operação da sessão (gerenciador de pacotes ainda não
+        // provisionado, ex.: logo após o primeiro logon), o processo "cliente de pacotes" nem existe
         // no PATH e o comando abaixo falha sempre, pra qualquer app — não é um problema de
-        // pacote específico, é winget.exe simplesmente não estar disponível ainda.
+        // pacote específico, é cliente de pacotes simplesmente não estar disponível ainda.
         var bootstrapResult = await EnsureWingetBootstrappedOnceAsync(onLogReceived);
         if (!bootstrapResult.IsUsable)
         {
@@ -188,20 +190,20 @@ public class WingetExecutor
             };
         }
 
-        // SEM --source winget aqui, de propósito (diferente do Install/Update): esse é um
-        // bug conhecido do próprio winget-cli (ex.: microsoft/winget-cli#5683, #4875,
-        // #3690) — "uninstall --id X --exact --source winget" falha quase sempre com "No
+        // SEM --source gerenciador de pacotes aqui, de propósito (diferente do Install/Update): esse é um
+        // bug conhecido do próprio gerenciador de pacotes-cli (ex.: plataforma do sistema/gerenciador de pacotes-cli#5683, #4875,
+        // #3690) — "uninstall --id X --exact --source gerenciador de pacotes" falha quase sempre com "No
         // installed package found matching input criteria", mesmo com o pacote instalado
-        // e visível em "winget list", porque a correlação interna entre pacote instalado e
-        // a source de origem não é confiável. Pra uninstall/update, o winget já resolve o
+        // e visível em "gerenciador de pacotes list", porque a correlação interna entre pacote instalado e
+        // a source de origem não é confiável. Pra uninstall/update, o gerenciador de pacotes já resolve o
         // --exact contra a lista local de instalados sem precisar de --source; restringir
         // a source só quebra esse casamento. --accept-source-agreements continua aqui por
         // segurança (algumas builds ainda consultam a source pra outros metadados).
         //
         // ESCOPO: a Store não roda mais elevada por padrão (ver app.manifest) — rodar
-        // elevada fazia o winget se recusar a desinstalar pacotes em escopo "user" (a
-        // maioria, já que é o padrão de instalação), mesmo estando visíveis em "winget
-        // list". Sem --scope, deixamos o winget decidir primeiro (cobre o caso comum);
+        // elevada fazia o gerenciador de pacotes se recusar a desinstalar pacotes em escopo "user" (a
+        // maioria, já que é o padrão de instalação), mesmo estando visíveis em "gerenciador de pacotes
+        // list". Sem --scope, deixamos o gerenciador de pacotes decidir primeiro (cobre o caso comum);
         // falhando, força "user"; falhando ainda, tenta "machine" (cobre quem foi
         // instalado nesse escopo explicitamente, e ExecuteWithElevationFallbackAsync já
         // pede UAC pontual se for isso que falta). Cada tentativa é sequencial e para no
@@ -228,7 +230,7 @@ public class WingetExecutor
         string sourceIndependentArgs = BuildUninstallArguments(appId, true,
             effectiveVersion, interactive: interactive);
 
-        // An unelevated winget may invoke an uninstall.exe that raises its own UAC
+        // An unelevated gerenciador de pacotes may invoke an uninstall.exe that raises its own UAC
         // prompt. Start desktop removals through our elevator so the consent is
         // attributed to WinProvision. Store removals retain their user context.
         bool preferElevation = requiresElevation || !string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase);
@@ -285,7 +287,7 @@ public class WingetExecutor
 
         // UserScopeElevationConflict só deve aparecer se a Store for lançada elevada por
         // fora (ex.: "Executar como administrador" no menu de contexto) — por padrão ela
-        // não roda mais assim (ver app.manifest). Quando acontece, é um bloqueio do winget
+        // não roda mais assim (ver app.manifest). Quando acontece, é um bloqueio do gerenciador de pacotes
         // baseado no nível de privilégio do PROCESSO chamador, não no --scope do comando:
         // repetir com --scope user, --scope machine ou pelo Name (abaixo) bate na mesma
         // restrição pra esse pacote, só atrasando a resposta. Sai já
@@ -343,7 +345,7 @@ public class WingetExecutor
 
         }
 
-        // WinGet can fail to correlate a source for installed packages, so retry without
+        // gerenciador de pacotes can fail to correlate a source for installed packages, so retry without
         // it before changing
         // scope or falling back to the installed display name.
         if (hasSource)
@@ -373,13 +375,13 @@ public class WingetExecutor
 
         // Último recurso: casar por --id, mesmo com --exact e os 3 escopos, ainda pode
         // falhar com "No installed package found matching input criteria" mesmo com o
-        // pacote instalado e visível em "winget list" — bug real do winget-cli (ex.:
-        // microsoft/winget-cli#1711, #3093, #4066): a correlação entre o Id do manifesto e
+        // pacote instalado e visível em "gerenciador de pacotes list" — bug real do gerenciador de pacotes-cli (ex.:
+        // plataforma do sistema/gerenciador de pacotes-cli#1711, #3093, #4066): a correlação entre o Id do manifesto e
         // a entrada de Apps & Features local às vezes se perde (o Id do manifesto mudou,
         // ou o pacote nunca foi corretamente indexado por Id). Nesses relatos, desinstalar
-        // pelo NOME exibido em "winget list" (em vez do Id) segue funcionando, porque o
+        // pelo NOME exibido em "gerenciador de pacotes list" (em vez do Id) segue funcionando, porque o
         // Name vem direto da própria entrada local, sem depender dessa correlação. Por
-        // isso, buscamos o Name local via "winget list --id X --exact" e tentamos de novo
+        // isso, buscamos o Name local via "gerenciador de pacotes list --id X --exact" e tentamos de novo
         // com ele.
         string? localName = localPackage?.Name;
         if (string.IsNullOrWhiteSpace(localName) || localName == appId)
@@ -432,7 +434,7 @@ public class WingetExecutor
         return args + (interactive ? " --interactive" : " --silent --disable-interactivity") + " --accept-source-agreements";
     }
 
-    /// <summary>Baixa o instalador de um pacote e aguarda o resultado real do WinGet.</summary>
+    /// <summary>Baixa o instalador de um pacote e aguarda o resultado real do gerenciador de pacotes.</summary>
     public async Task<WingetExecutionResult> DownloadInstallerAsync(
         string appId,
         string destinationFolder,
@@ -470,9 +472,9 @@ public class WingetExecutor
         && value.IndexOfAny(['"', '\'', ';', '|', '&', '<', '>', '`', '\n', '\r', '$']) < 0;
 
     /// <summary>
-    /// Atualiza um pacote específico via "winget update" (alias de "winget upgrade"),
+    /// Atualiza um pacote específico via "gerenciador de pacotes update" (alias de "gerenciador de pacotes upgrade"),
     /// silenciosamente e sem interação — mesmos argumentos usados no InstallAppAsync,
-    /// mais --include-unknown (necessário pro winget atualizar apps cuja versão instalada
+    /// mais --include-unknown (necessário pro gerenciador de pacotes atualizar apps cuja versão instalada
     /// ele não consegue detectar com certeza) e --force. O hash só é ignorado quando
     /// solicitado explicitamente para esta operação.
     /// </summary>
@@ -594,7 +596,7 @@ public class WingetExecutor
     }
 
     /// <summary>
-    /// Roda o comando winget sem elevação (comportamento padrão desde que a Store deixou de
+    /// Roda o comando gerenciador de pacotes sem elevação (comportamento padrão desde que a Store deixou de
     /// exigir requireAdministrator — ver app.manifest). Se falhar por falta de privilégio
     /// (<see cref="WingetFailureReason.ElevationRequired"/> — típico de pacote em escopo
     /// "machine"), relança SÓ ESSE comando elevado via <see cref="ElevatedProcessRunner"/>
@@ -738,18 +740,18 @@ public class WingetExecutor
     };
 
     /// <summary>
-    /// Lista os pacotes com atualização pendente ("winget upgrade"). Diferente de
-    /// GetInstalledPackageIdsAsync (que usa "winget export", com saída JSON), esse comando
+    /// Lista os pacotes com atualização pendente ("gerenciador de pacotes upgrade"). Diferente de
+    /// GetInstalledPackageIdsAsync (que usa "gerenciador de pacotes export", com saída JSON), esse comando
     /// não tem opção de saída estruturada — a resposta é a tabela de texto padrão do
     /// console, parseada por WingetUpgradeListParser. --include-unknown inclui pacotes cuja
-    /// versão instalada o winget não consegue confirmar (comuns em apps instalados fora do
-    /// winget), pra não esconder atualizações reais só por causa disso.
+    /// versão instalada o gerenciador de pacotes não consegue confirmar (comuns em apps instalados fora do
+    /// gerenciador de pacotes), pra não esconder atualizações reais só por causa disso.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// O winget não está disponível e o bootstrap automático não conseguiu deixá-lo
+    /// O gerenciador de pacotes não está disponível e o bootstrap automático não conseguiu deixá-lo
     /// funcional (ver <see cref="WingetBootstrapResult.ErrorMessage"/>). Lançar aqui (em vez
     /// de devolver lista vazia) evita que "nenhuma atualização" seja confundido com "tudo em
-    /// dia" quando na verdade o winget nem rodou — quem chama já trata isso num try/catch
+    /// dia" quando na verdade o gerenciador de pacotes nem rodou — quem chama já trata isso num try/catch
     /// (ver UpdatesPage.CheckUpdatesButton_Click).
     /// </exception>
     public Task<List<UpgradablePackage>> SearchPackagesAsync(string query, CancellationToken cancellationToken = default)
@@ -824,10 +826,10 @@ public class WingetExecutor
     /// Obtém o tamanho do instalador sem baixar o pacote — usado só como fallback ao
     /// vivo para pacotes que não têm InstallerSizeBytes já calculado no catálogo (ver
     /// AppEntry.InstallerSizeBytes, preenchido pelo Indexer na sincronização diária a
-    /// partir da própria InstallerUrl do manifesto winget-pkgs — não existe um campo
-    /// de tamanho no schema oficial do winget, então essa é a única fonte confiável).
+    /// partir da própria InstallerUrl do manifesto catálogo de pacotes — não existe um campo
+    /// de tamanho no schema oficial do gerenciador de pacotes, então essa é a única fonte confiável).
     /// Consulta apenas os headers HTTP (HEAD/Range) das URLs de instalador reportadas
-    /// por "winget show", sem baixar o instalador inteiro.
+    /// por "gerenciador de pacotes show", sem baixar o instalador inteiro.
     /// </summary>
     public async Task<long?> GetPackageInstallerSizeAsync(string appId, CancellationToken cancellationToken = default)
     {
@@ -881,9 +883,9 @@ public class WingetExecutor
     }
 
     /// <summary>
-    /// Lista os Package Ids atualmente instalados via "winget export" (JSON estruturado
-    /// gerado pelo próprio winget), em vez de parsear a saída de texto do console —
-    /// evita quebra por locale/versão do winget. Usado pela reconciliação de perfis
+    /// Lista os Package Ids atualmente instalados via "gerenciador de pacotes export" (JSON estruturado
+    /// gerado pelo próprio gerenciador de pacotes), em vez de parsear a saída de texto do console —
+    /// evita quebra por locale/versão do gerenciador de pacotes. Usado pela reconciliação de perfis
     /// e pela contagem de updates.
     /// </summary>
     public async Task<List<UpgradablePackage>> ListInstalledPackagesAsync(CancellationToken cancellationToken = default, string? source = null)
@@ -904,7 +906,7 @@ public class WingetExecutor
     }
 
     /// <summary>
-    /// Reads the installed package snapshot from winget export and distinguishes a valid
+    /// Reads the installed package snapshot from gerenciador de pacotes export and distinguishes a valid
     /// empty inventory from a failed export, so callers can safely fall back to another source.
     /// </summary>
     public async Task<(bool Succeeded, List<string> PackageIds)> TryGetInstalledPackageIdsAsync(
@@ -992,16 +994,16 @@ public class WingetExecutor
 
     /// <summary>
     /// Passa pela porta única de provisionamento (<see cref="WingetBootstrapper.EnsureOnceAsync"/>),
-    /// compartilhada com WinGetService, App e /auto: o winget é provisionado uma única vez
+    /// compartilhada com WinGetService, App e /auto: o gerenciador de pacotes é provisionado uma única vez
     /// por sessão (sucesso em cache; falha reavaliada depois de um tempo), e quem chega
-    /// depois reaproveita o MESMO resultado em vez de rodar "winget --version" a cada clique.
+    /// depois reaproveita o MESMO resultado em vez de rodar "gerenciador de pacotes --version" a cada clique.
     /// O trabalho em si não é cancelado se a PRIMEIRA operação que o disparou for cancelada.
     /// </summary>
     private Task<WingetBootstrapResult> EnsureWingetBootstrappedOnceAsync(Action<string>? onLogReceived)
     {
         if (_bootstrapper is null)
         {
-            // Sem WingetBootstrapper injetado, tenta rodar o winget.exe diretamente.
+            // Sem WingetBootstrapper injetado, tenta rodar o cliente de pacotes diretamente.
             return Task.FromResult(new WingetBootstrapResult(WingetBootstrapStatus.AlreadyAvailable));
         }
 
@@ -1011,7 +1013,7 @@ public class WingetExecutor
     public async Task<WingetExecutionResult> DownloadPackageAsync(string id, string source, string? directory, Action<string>? log, CancellationToken token, string? version = null)
     {
         using var slot = await OperationLimits.Downloads.EnterAsync(token).ConfigureAwait(false);
-        string folder = InstallerDownloadPolicy.ResolveDirectory(directory);
+        string folder = InstallerDownloadPolicy.ResolveDirectory(directory, _operationPreferences);
         Directory.CreateDirectory(folder);
         string staging = Path.Combine(folder, ".winprovision-download-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
@@ -1022,7 +1024,7 @@ public class WingetExecutor
             if (version is not null) args.AddRange(["--version", version]);
             var result = await ExecuteWingetCommandAsync("", log, token, args).ConfigureAwait(false);
             if (!result.Success) return result;
-            var options = new OperationPreferencesService().Load();
+            var options = _operationPreferences.Load();
             var files = Directory.EnumerateFiles(staging, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }).ToArray();
             foreach (string file in files)
             {

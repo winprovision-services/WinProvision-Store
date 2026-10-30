@@ -12,7 +12,7 @@ namespace WinProvision.Core.Services;
 
 /// <summary>
 /// Tipos de instalador reconhecidos pela tabela de assinaturas.
-/// Expandido para incluir Squirrel/Electron, package managers e Windows Store Apps.
+/// Expandido para incluir atualizadores próprios, gerenciadores de pacotes e aplicativos modernos.
 /// </summary>
 public enum InstallerKind
 {
@@ -136,20 +136,20 @@ public class UninstallerEngineService
     // o UninstallString aponta pro setup.exe dentro dela.
     private const string InstallShieldFolderMarker = "installshield installation information";
 
-    // Squirrel/Electron auto-updater: Update.exe com --uninstall flag
+    // Atualizador próprio: Update.exe com a opção de remoção.
     private static readonly Regex SquirrelPattern = new(@"Update\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex SquirrelUninstallPattern = new(@"--uninstall", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Chocolatey: choco.exe uninstall command
+    // Comando de remoção do gerenciador de pacotes identificado pelo executável.
     private static readonly Regex ChocolateyPattern = new(@"choco\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Steam: steam.exe uninstall or steamapps deletion
+    // Remoção associada a um aplicativo que mantém seus próprios arquivos de instalação.
     private static readonly Regex SteamPattern = new(@"steam\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Windows Store: Get-AppxPackage or AppxPackage
+    // Remoção de pacotes modernos pelo mecanismo de aplicativos do Windows.
     private static readonly Regex WindowsStorePattern = new(@"(Get-AppxPackage|AppxPackage|PowerShell)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Scoop: scoop.exe uninstall
+    // Comando de remoção do gerenciador de pacotes identificado pelo executável.
     private static readonly Regex ScoopPattern = new(@"scoop\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
@@ -166,21 +166,21 @@ public class UninstallerEngineService
 
         if (string.IsNullOrWhiteSpace(rawCommand))
         {
-            Debug.WriteLine($"[UninstallerEngine] Sem UninstallString para {app.DisplayName}");
+            WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Sem UninstallString para {app.DisplayName}");
             return await TryFallbackUninstall(app, string.Empty, string.Empty, cancellationToken);
         }
 
         if (!TrySplitCommand(rawCommand, out string fileName, out string existingArguments)
             || !IsSafeUninstallTarget(fileName))
         {
-            Debug.WriteLine($"[UninstallerEngine] Não foi possível parsear UninstallString para {app.DisplayName}");
+            WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Não foi possível parsear UninstallString para {app.DisplayName}");
             return await TryFallbackUninstall(app, string.Empty, string.Empty, cancellationToken);
         }
 
         // Valida se o executável existe (exceto para comandos do sistema como msiexec, powershell, etc.)
         if (!IsSystemExecutable(fileName) && !File.Exists(fileName))
         {
-            Debug.WriteLine($"[UninstallerEngine] Executável não encontrado: {fileName}");
+            WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Executável não encontrado: {fileName}");
             return await TryFallbackUninstall(app, fileName, existingArguments, cancellationToken);
         }
 
@@ -211,7 +211,7 @@ public class UninstallerEngineService
                 return true;
             if (WinProvisionElevationState.HasFailedThisSession) return false;
 
-            Debug.WriteLine($"[UninstallerEngine] Tentativa {attempt}/{maxRetries} falhou para {app.DisplayName}: {result.ErrorMessage}");
+            WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Tentativa {attempt}/{maxRetries} falhou para {app.DisplayName}: {result.ErrorMessage}");
 
             // Se não for a última tentativa, espera antes de retry
             if (attempt < maxRetries)
@@ -296,7 +296,7 @@ public class UninstallerEngineService
             {
                 PowerShell7Runtime runtime = await _powerShell7Bootstrapper
                     .EnsureAvailableAsync(
-                        line => Debug.WriteLine($"[UninstallerEngine] {line}"),
+                        line => WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] {line}"),
                         cancellationToken);
                 fileName = runtime.ExecutablePath;
             }
@@ -345,7 +345,7 @@ public class UninstallerEngineService
     private async Task<bool> TryFallbackUninstall(
         InstalledAppDetail app, string fileName, string existingArguments, CancellationToken cancellationToken)
     {
-        Debug.WriteLine($"[UninstallerEngine] Tentando fallback para {app.DisplayName}");
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Tentando fallback para {app.DisplayName}");
 
         // Se não tiver UninstallString válido, tenta detectar o tipo pelo ID e usar métodos específicos
         if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(existingArguments))
@@ -366,7 +366,7 @@ public class UninstallerEngineService
     /// </summary>
     private async Task<bool> TryIdBasedUninstall(InstalledAppDetail app, CancellationToken cancellationToken)
     {
-        Debug.WriteLine($"[UninstallerEngine] Tentando desinstalação baseada no ID: {app.Id}");
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Tentando desinstalação baseada no ID: {app.Id}");
 
         // MSIX/Store apps
         if (app.Id.StartsWith("MSIX\\", StringComparison.OrdinalIgnoreCase) ||
@@ -397,7 +397,7 @@ public class UninstallerEngineService
             return result.Success;
         }
 
-        // Tenta winget se disponível
+        // Tenta gerenciador de pacotes se disponível
         if (IsSafeWingetId(app.Id))
         {
             var result = await TryRunUninstallProcess(
@@ -409,7 +409,7 @@ public class UninstallerEngineService
                 return true;
         }
 
-        Debug.WriteLine($"[UninstallerEngine] Desinstalação baseada no ID falhou para {app.DisplayName}");
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Desinstalação baseada no ID falhou para {app.DisplayName}");
         return false;
     }
 
@@ -442,15 +442,15 @@ public class UninstallerEngineService
         if (NsisPattern.IsMatch(fileName))
             return InstallerKind.Nsis;
 
-        // Squirrel/Electron detection: Update.exe with --uninstall
+        // Detecção de atualizador próprio por sua assinatura.
         if (SquirrelPattern.IsMatch(fileName) && SquirrelUninstallPattern.IsMatch(rawCommand))
             return InstallerKind.Squirrel;
 
-        // Chocolatey detection
+        // Detecção de um desinstalador específico por sua assinatura.
         if (ChocolateyPattern.IsMatch(fileName))
             return InstallerKind.Chocolatey;
 
-        // Steam detection
+        // Detecção de aplicativo com desinstalador próprio.
         if (SteamPattern.IsMatch(fileName))
             return InstallerKind.Steam;
 
@@ -458,7 +458,7 @@ public class UninstallerEngineService
         if (WindowsStorePattern.IsMatch(rawCommand))
             return InstallerKind.WindowsStore;
 
-        // Scoop detection
+        // Detecção de um desinstalador específico por sua assinatura.
         if (ScoopPattern.IsMatch(fileName))
             return InstallerKind.Scoop;
 
@@ -477,32 +477,29 @@ public class UninstallerEngineService
     /// <summary>
     /// Aplica os parâmetros silenciosos específicos de cada tecnologia. Nunca combina
     /// flags de tecnologias diferentes: instaladores costumam rejeitar (erro) um
-    /// parâmetro que não reconhecem. Expandido com parâmetros para Squirrel, Chocolatey,
-    /// Steam, Windows Store e Scoop.
+    /// parâmetro que não reconhecem. Expandido com os parâmetros das famílias de
+    /// desinstaladores identificadas pelo aplicativo.
     /// </summary>
     private static string AppendSilentSwitches(InstallerKind kind, string existingArguments, string? rawCommand = null, string? appId = null)
     {
         switch (kind)
         {
             case InstallerKind.Msiexec:
-                // https://learn.microsoft.com/windows/win32/msi/standard-installer-command-line-options
-                // Adicionado logging para debug e retry logic
+                // Usa o modo silencioso e impede a reinicialização durante a remoção.
                 return existingArguments.Contains("/qn", StringComparison.OrdinalIgnoreCase)
                     ? existingArguments
                     : $"{existingArguments} /qn /norestart REBOOT=ReallySuppress".Trim();
 
             case InstallerKind.InnoSetup:
-                // https://jrsoftware.org/ishelp/topic_uninstcmdline.htm
-                // Adicionado /SP- para pular páginas iniciais
+                // Usa a remoção silenciosa e evita páginas ou caixas de diálogo adicionais.
                 return $"{existingArguments} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-".Trim();
 
             case InstallerKind.Nsis:
-                // NSIS: /S é capital, adicionado /NCRC para skip CRC checks (melhor compatibilidade)
+                // Usa a opção silenciosa e mantém a verificação de integridade do instalador.
                 return $"{existingArguments} /S /NCRC".Trim();
 
             case InstallerKind.InstallShield:
-                // InstallScript: /s para basic silent, /f1 para response file, /f2 para log
-                // Sem response file (.iss) gravado previamente não há uninstall 100%
+                // Usa a opção silenciosa; arquivos de resposta e logs continuam opcionais.
                 // silencioso garantido para projetos InstallScript; "/s" é o melhor
                 // esforço documentado pela Revenera para suprimir o máximo de diálogos.
                 return $"{existingArguments} /s /sms".Trim();
@@ -512,19 +509,19 @@ public class UninstallerEngineService
                 return $"{existingArguments} /s /u".Trim();
 
             case InstallerKind.Squirrel:
-                // Squirrel/Electron: --uninstall -s para silent
+                // Opções de remoção silenciosa do atualizador identificado.
                 return existingArguments.Contains("--uninstall", StringComparison.OrdinalIgnoreCase)
                     ? $"{existingArguments} -s".Trim()
                     : $"{existingArguments} --uninstall -s".Trim();
 
             case InstallerKind.Chocolatey:
-                // Chocolatey: -y para yes, --force para force
+                // Parâmetros de confirmação e remoção forçada do desinstalador identificado.
                 return existingArguments.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
                     ? $"{existingArguments} -y --force".Trim()
                     : $"{existingArguments} uninstall -y --force".Trim();
 
             case InstallerKind.Steam:
-                // Steam: steam.exe uninstall <appid> /silent
+                // Comando silencioso do desinstalador identificado.
                 return existingArguments.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
                     ? $"{existingArguments} /silent".Trim()
                     : existingArguments;
@@ -533,7 +530,7 @@ public class UninstallerEngineService
                 return existingArguments;
 
             case InstallerKind.Scoop:
-                // Scoop: scoop uninstall já é silencioso
+                // O desinstalador identificado já executa a remoção sem interação.
                 return existingArguments;
 
             case InstallerKind.Nullsoft:
@@ -610,7 +607,7 @@ public class UninstallerEngineService
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[Cleanup] Não foi possível apagar a pasta de instalação: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Não foi possível apagar a pasta de instalação: {ex.Message}");
                         success = false;
                     }
                 }
@@ -633,7 +630,7 @@ public class UninstallerEngineService
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[Cleanup] Erro ao limpar diretório residual {path}: {ex.Message}");
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao limpar diretório residual {path}: {ex.Message}");
                         }
                     }
                 }
@@ -661,7 +658,7 @@ public class UninstallerEngineService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[AggressiveCleanup] Erro geral: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[AggressiveCleanup] Erro geral: {ex.Message}");
                 return false;
             }
         }, cancellationToken);
@@ -721,24 +718,24 @@ public class UninstallerEngineService
                                 });
                                 deleteProcess?.WaitForExit();
 
-                                Debug.WriteLine($"[Cleanup] Serviço removido: {serviceName}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Serviço removido: {serviceName}");
                             }
                             catch (Exception ex)
                             {
-                                Debug.WriteLine($"[Cleanup] Erro ao remover serviço {serviceName}: {ex.Message}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover serviço {serviceName}: {ex.Message}");
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Cleanup] Erro ao verificar serviço {serviceName}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao verificar serviço {serviceName}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Cleanup] Erro ao enumerar serviços: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao enumerar serviços: {ex.Message}");
         }
     }
 
@@ -783,11 +780,11 @@ public class UninstallerEngineService
                                 WindowStyle = ProcessWindowStyle.Hidden
                             });
                             deleteProcess?.WaitForExit();
-                            Debug.WriteLine($"[Cleanup] Tarefa agendada removida: {taskName}");
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Tarefa agendada removida: {taskName}");
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[Cleanup] Erro ao remover tarefa {taskName}: {ex.Message}");
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover tarefa {taskName}: {ex.Message}");
                         }
                     }
                 }
@@ -795,7 +792,7 @@ public class UninstallerEngineService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Cleanup] Erro ao enumerar tarefas agendadas: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao enumerar tarefas agendadas: {ex.Message}");
         }
     }
 
@@ -828,24 +825,24 @@ public class UninstallerEngineService
                             if (handlerName.Contains(appName, StringComparison.OrdinalIgnoreCase))
                             {
                                 key.DeleteSubKeyTree(handlerName, throwOnMissingSubKey: false);
-                                Debug.WriteLine($"[Cleanup] Context menu handler removido: {handlerName}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Context menu handler removido: {handlerName}");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[Cleanup] Erro ao remover context handler {handlerName}: {ex.Message}");
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover context handler {handlerName}: {ex.Message}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Cleanup] Erro ao acessar {contextMenuKey}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao acessar {contextMenuKey}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Cleanup] Erro geral ao limpar context menus: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro geral ao limpar context menus: {ex.Message}");
         }
     }
 
@@ -867,11 +864,11 @@ public class UninstallerEngineService
                 try
                 {
                     File.Delete(tempFile);
-                    Debug.WriteLine($"[Cleanup] Arquivo temporário removido: {tempFile}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Arquivo temporário removido: {tempFile}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Cleanup] Erro ao remover arquivo temporário {tempFile}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover arquivo temporário {tempFile}: {ex.Message}");
                 }
             }
 
@@ -882,17 +879,17 @@ public class UninstallerEngineService
                 try
                 {
                     Directory.Delete(tempDir, recursive: true);
-                    Debug.WriteLine($"[Cleanup] Diretório temporário removido: {tempDir}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Diretório temporário removido: {tempDir}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Cleanup] Erro ao remover diretório temporário {tempDir}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover diretório temporário {tempDir}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Cleanup] Erro ao limpar arquivos temporários: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao limpar arquivos temporários: {ex.Message}");
         }
     }
 
@@ -919,7 +916,7 @@ public class UninstallerEngineService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[RegistryCleanup] Erro ao limpar registo para {appName}: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[RegistryCleanup] Erro ao limpar registo para {appName}: {ex.Message}");
             }
             finally
             {
@@ -957,23 +954,23 @@ public class UninstallerEngineService
                             try
                             {
                                 Directory.Delete(emptyDir, recursive: false);
-                                Debug.WriteLine($"[EmptyDirCleanup] Diretório vazio removido: {emptyDir}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Diretório vazio removido: {emptyDir}");
                             }
                             catch (Exception ex)
                             {
-                                Debug.WriteLine($"[EmptyDirCleanup] Não foi possível remover {emptyDir}: {ex.Message}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Não foi possível remover {emptyDir}: {ex.Message}");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[EmptyDirCleanup] Erro ao varrer {baseDir}: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao varrer {baseDir}: {ex.Message}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[EmptyDirCleanup] Erro geral: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro geral: {ex.Message}");
             }
         }, cancellationToken);
     }
@@ -1008,13 +1005,13 @@ public class UninstallerEngineService
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[EmptyDirCleanup] Erro ao verificar {dir}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao verificar {dir}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[EmptyDirCleanup] Erro ao enumerar diretórios: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao enumerar diretórios: {ex.Message}");
         }
 
         return emptyDirs;
@@ -1062,7 +1059,7 @@ public class UninstallerEngineService
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[LeftoverDetection] Erro ao varrer {basePath}: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro ao varrer {basePath}: {ex.Message}");
                     }
                 }
 
@@ -1077,7 +1074,7 @@ public class UninstallerEngineService
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[LeftoverDetection] Erro ao varrer temp: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro ao varrer temp: {ex.Message}");
                     }
                 }
 
@@ -1087,7 +1084,7 @@ public class UninstallerEngineService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LeftoverDetection] Erro geral: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro geral: {ex.Message}");
             }
 
             return leftovers;
@@ -1194,7 +1191,7 @@ public class UninstallerEngineService
                     return true;
                 }
 
-                Debug.WriteLine($"[ForceUninstall] Desinstalação normal falhou, tentando force uninstall para {app.DisplayName}");
+                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Desinstalação normal falhou, tentando force uninstall para {app.DisplayName}");
 
                 // 2. Tenta matar processos relacionados ao aplicativo
                 KillRelatedProcesses(app.DisplayName);
@@ -1208,11 +1205,11 @@ public class UninstallerEngineService
                     try
                     {
                         Directory.Delete(app.InstallLocation, recursive: true);
-                        Debug.WriteLine($"[ForceUninstall] Pasta de instalação removida: {app.InstallLocation}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Pasta de instalação removida: {app.InstallLocation}");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[ForceUninstall] Não foi possível remover pasta de instalação: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Não foi possível remover pasta de instalação: {ex.Message}");
                     }
                 }
 
@@ -1228,7 +1225,7 @@ public class UninstallerEngineService
             catch (Exception ex)
             {
                 CoreLog.Error(ex, "ForceUninstall");
-                Debug.WriteLine($"[ForceUninstall] Erro ao executar force uninstall: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao executar force uninstall: {ex.Message}");
                 return false;
             }
         }, cancellationToken);
@@ -1268,18 +1265,18 @@ public class UninstallerEngineService
                         || process.ProcessName.StartsWith(token, StringComparison.OrdinalIgnoreCase))
                     {
                         process.Kill(entireProcessTree: true);
-                        Debug.WriteLine($"[ForceUninstall] Processo morto: {process.ProcessName}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Processo morto: {process.ProcessName}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ForceUninstall] Erro ao matar processo {process.ProcessName}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao matar processo {process.ProcessName}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[ForceUninstall] Erro ao enumerar processos: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao enumerar processos: {ex.Message}");
         }
     }
 
@@ -1312,24 +1309,24 @@ public class UninstallerEngineService
                             && fileName.Equals(appName, StringComparison.OrdinalIgnoreCase))
                         {
                             File.Delete(shortcut);
-                            Debug.WriteLine($"[ForceUninstall] Atalho removido: {shortcut}");
+                            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Atalho removido: {shortcut}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[ForceUninstall] Erro ao remover atalho {shortcut}: {ex.Message}");
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao remover atalho {shortcut}: {ex.Message}");
                     }
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[ForceUninstall] Erro ao remover atalhos: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao remover atalhos: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Remove chaves de registro do desinstalador (HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall
+    /// Remove chaves de registro do desinstalador (HKLM\Software\plataforma do sistema\Windows\CurrentVersion\Uninstall
     /// e HKCU equivalentes).
     /// </summary>
     private void RemoveUninstallerRegistryKeys(InstalledAppDetail app)
@@ -1363,20 +1360,20 @@ public class UninstallerEngineService
                                         displayName.Equals(app.DisplayName, StringComparison.OrdinalIgnoreCase))
                                     {
                                         hklmKey.DeleteSubKeyTree(subKeyName, throwOnMissingSubKey: false);
-                                        Debug.WriteLine($"[ForceUninstall] Chave de registro removida (HKLM): {subKeyName}");
+                                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Chave de registro removida (HKLM): {subKeyName}");
                                     }
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Debug.WriteLine($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ForceUninstall] Erro ao acessar HKLM {uninstallKey}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao acessar HKLM {uninstallKey}: {ex.Message}");
                 }
 
                 // HKCU
@@ -1398,26 +1395,26 @@ public class UninstallerEngineService
                                         displayName.Equals(app.DisplayName, StringComparison.OrdinalIgnoreCase))
                                     {
                                         hkcuKey.DeleteSubKeyTree(subKeyName, throwOnMissingSubKey: false);
-                                        Debug.WriteLine($"[ForceUninstall] Chave de registro removida (HKCU): {subKeyName}");
+                                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Chave de registro removida (HKCU): {subKeyName}");
                                     }
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Debug.WriteLine($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
+                                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ForceUninstall] Erro ao acessar HKCU {uninstallKey}: {ex.Message}");
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao acessar HKCU {uninstallKey}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[ForceUninstall] Erro geral ao remover chaves de registro: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro geral ao remover chaves de registro: {ex.Message}");
         }
     }
 }

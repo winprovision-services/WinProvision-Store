@@ -6,8 +6,8 @@ namespace WinProvision.Core.Models;
 
 /// <summary>
 /// Um item da lista de "Atualizações": um pacote já instalado que tem uma versão mais nova
-/// disponível. É montado em tempo de execução pelo catálogo local COM do WinGet, com fallback
-/// e/ou para a saída de <c>winget upgrade</c> (ver <c>WinGetService.GetUpgradablePackagesAsync</c>).
+/// disponível. É montado em tempo de execução pelo catálogo local COM do gerenciador de pacotes, com fallback
+/// e/ou para a saída textual do comando de atualização (ver <c>WinGetService.GetUpgradablePackagesAsync</c>).
 /// </summary>
 #if WINDOWS
 [WinRT.GeneratedBindableCustomProperty]
@@ -27,7 +27,7 @@ public partial class UpgradablePackage : INotifyPropertyChanged
     public string Description { get; set; } = string.Empty;
     [JsonIgnore]
     public List<string> AvailableVersions { get; set; } = [];
-    /// <summary>Alvo validado pelo catálogo WinProvision, independente da oferta do WinGet.</summary>
+    /// <summary>Alvo validado pelo catálogo WinProvision, independente da oferta do gerenciador de pacotes.</summary>
     [JsonIgnore]
     public string WinProvisionApiAvailableVersion { get; set; } = string.Empty;
     [JsonIgnore]

@@ -12,7 +12,7 @@ using WinProvision.Core.Models;
 namespace WinProvision.Core.Services;
 
 /// <summary>
-/// Atualização do próprio cliente: consulta releases GitHub, baixa e valida o SHA-256
+/// Atualização do próprio cliente: consulta releases serviço remoto, baixa e valida o SHA-256
 /// do instalador configurado e agenda sua execução silenciosa após o processo atual encerrar.
 /// </summary>
 public sealed class AppUpdateService : IDisposable
@@ -29,7 +29,7 @@ public sealed class AppUpdateService : IDisposable
     private const string NightlyTag = "nightly";
 
     // Publicação da release e timestamp de build do .exe local vêm de relógios diferentes
-    // (servidor do GitHub Actions vs. o file system do disco); essa margem evita marcar
+    // (servidor do serviço remoto Actions vs. o file system do disco); essa margem evita marcar
     // "atualização disponível" por causa de alguns segundos de diferença entre os dois,
     // já que o próprio build recém-instalado tende a ficar bem perto do published_at.
     private static readonly TimeSpan NightlyFreshnessMargin = TimeSpan.FromMinutes(3);
@@ -145,7 +145,7 @@ public sealed class AppUpdateService : IDisposable
     /// Data de modificação do executável atual — o mesmo dado que a Store já loga como
     /// "buildDate" na abertura (App.xaml.cs). O publish self-contained (ver csproj: single-file
     /// desligado de propósito) e o instalador Inno preservam esse timestamp do build original,
-    /// então ele fica bem próximo do published_at da release no GitHub Actions que o gerou —
+    /// então ele fica bem próximo do published_at da release no serviço remoto Actions que o gerou —
     /// é o que permite comparar "meu build é mais velho que o nightly publicado?" sem precisar
     /// embutir um número de versão no canal nightly.
     /// </summary>
@@ -158,7 +158,7 @@ public sealed class AppUpdateService : IDisposable
     }
 
     /// <summary>
-    /// Consulta a release mais recente no GitHub e compara com o build atual: primeiro o
+    /// Consulta a release mais recente no serviço remoto e compara com o build atual: primeiro o
     /// canal estável ("/releases/latest", por versão semântica da tag); se o repositório
     /// ainda não tiver nenhuma release estável publicada, cai para o canal nightly (tag fixa,
     /// comparado por data de publicação). Nunca lança: qualquer falha em ambos os canais vira
@@ -187,7 +187,7 @@ public sealed class AppUpdateService : IDisposable
         try
         {
             using var response = await GetMetadataAsync(
-                $"https://api.github.com/repos/{_repoSlug}/releases/latest", ct).ConfigureAwait(false);
+                NetworkEndpoints.GitHubRepositoryUrl(_repoSlug, "releases/latest"), ct).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -240,7 +240,7 @@ public sealed class AppUpdateService : IDisposable
         try
         {
             using var response = await GetMetadataAsync(
-                $"https://api.github.com/repos/{_repoSlug}/releases/tags/{NightlyTag}", ct).ConfigureAwait(false);
+                NetworkEndpoints.GitHubRepositoryUrl(_repoSlug, $"releases/tags/{NightlyTag}"), ct).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -319,7 +319,7 @@ public sealed class AppUpdateService : IDisposable
             return (null, null, $"O instalador da release {releaseLabel} não tem link de download.");
         }
 
-        // GitHub calcula e expõe o SHA-256 de todo asset carregado desde jun/2025
+        // serviço remoto calcula e expõe o SHA-256 de todo asset carregado desde jun/2025
         // (formato "sha256:<hex>"); releases mais antigas podem não ter o campo.
         string? sha256 = null;
         if (asset.Value.TryGetProperty("digest", out var digestProp))
@@ -337,7 +337,7 @@ public sealed class AppUpdateService : IDisposable
 
     /// <summary>
     /// Baixa o instalador de <paramref name="update"/> para uma pasta temporária e, se o
-    /// GitHub informou o SHA-256 do upload, confere o arquivo baixado contra ele — um
+    /// serviço remoto informou o SHA-256 do upload, confere o arquivo baixado contra ele — um
     /// instalador com hash divergente é apagado e a chamada lança em vez de seguir adiante.
     /// Sem SHA-256 válido, o download é bloqueado.
     /// </summary>

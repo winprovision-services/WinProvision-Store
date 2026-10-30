@@ -23,7 +23,7 @@ internal static class DebugMemoryTelemetry
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Debug.WriteLine($"Memory telemetry log unavailable: {ex.Message}");
+            WinProvision.Core.Services.CoreLog.Debug($"Memory telemetry log unavailable: {ex.Message}");
             return;
         }
 
@@ -50,7 +50,7 @@ internal static class DebugMemoryTelemetry
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                Debug.WriteLine($"Memory telemetry sample failed: {ex.Message}");
+                WinProvision.Core.Services.CoreLog.Debug($"Memory telemetry sample failed: {ex.Message}");
             }
         }
         while (await timer.WaitForNextTickAsync().ConfigureAwait(false));

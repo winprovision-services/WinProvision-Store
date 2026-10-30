@@ -26,8 +26,8 @@ public static class ElevatedProcessRunner
                 onLog: line => { lock (captured) captured.AppendLine(line); }).ConfigureAwait(false);
             bool ok = useWingetExitCodes ? InstallerExitCodes.IsWingetSuccess(code) : code == 0;
             string details = captured.ToString();
-            // Recusa/credencial inválida do UAC chegam como Win32Exception (ver GsudoElevationService);
-            // aqui o código é sempre o do processo elevado, inclusive um eventual 999 do instalador.
+            // Recusa, credencial inválida e falha do GSudo chegam como Win32Exception;
+            // códigos retornados aqui pertencem ao processo elevado.
             WingetCliAudit.Result($"{fileName} (elevado)", code, ok, auditTimer, arguments);
             return new WingetExecutionResult
             {

@@ -11,7 +11,7 @@ namespace WinProvision.Core.Services;
 /// Compartilhado entre duas pontas que precisavam exatamente da mesma lógica (antes
 /// duplicada em WingetExecutor):
 ///   - WinProvision.Indexer (Program.cs, passo 6): roda em sync-time, uma vez por
-///     pacote, direto contra a(s) InstallerUrl extraída(s) do manifesto winget-pkgs
+///     pacote, direto contra a(s) InstallerUrl extraída(s) do manifesto catálogo de pacotes
 ///     (ver ManifestMapper.GetInstallerUrls) — resultado persistido em
 ///     AppEntry.InstallerSizeBytes no apps.json.
 ///   - WingetExecutor.GetPackageInstallerSizeAsync: fallback ao vivo, só para o caso

@@ -18,8 +18,8 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
     private readonly CollectionsViewModel _collections;
     private readonly IUpdatesIgnoreStore _ignoredUpdates;
     private readonly ApplicationPreferencesService _preferences;
-    private readonly WingetExecutor _executor;
     private readonly WindowsAppNotificationService? _notifications;
+    private readonly OperationPreferencesService _operationPreferences;
 
     public ObservableCollection<InstalledPackageRow> Packages { get; } = new();
     public ObservableCollection<InstalledPackageRow> VisiblePackages { get; } = new();
@@ -55,7 +55,8 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         CollectionsViewModel collections,
         IUpdatesIgnoreStore ignoredUpdates,
         ApplicationPreferencesService preferences,
-        WingetExecutor executor, WindowsAppNotificationService? notifications = null)
+        WindowsAppNotificationService? notifications = null,
+        OperationPreferencesService? operationPreferences = null)
     {
         _installedPackages = installedPackages;
         _backend = backend;
@@ -64,8 +65,8 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         _collections = collections;
         _ignoredUpdates = ignoredUpdates;
         _preferences = preferences;
-        _executor = executor;
         _notifications = notifications;
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
 
         RefreshCommand = new AsyncRelayCommand(
             (CancellationToken cancellationToken) => LoadAsync(cancellationToken));
@@ -303,7 +304,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
                 else failures.Add("Microsoft Office");
             }
             selected = selected.Where(package => !package.IsOffice).ToArray();
-            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelOperations);
+            using var batchGate = new SemaphoreSlim(_operationPreferences.Load().ParallelOperations);
             await Task.WhenAll(selected.Select(async (package, index) =>
             {
                 await batchGate.WaitAsync(cancellationToken);
@@ -526,7 +527,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
             return;
         }
 
-        string? folder = new OperationPreferencesService().Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
+        string? folder = _operationPreferences.Load().DownloadDirectory ?? await _presentation.PickFolderAsync();
         if (string.IsNullOrWhiteSpace(folder))
             return;
 
@@ -535,7 +536,7 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
         var failures = new List<string>();
         try
         {
-            using var batchGate = new SemaphoreSlim(new OperationPreferencesService().Load().ParallelDownloads);
+            using var batchGate = new SemaphoreSlim(_operationPreferences.Load().ParallelDownloads);
             await Task.WhenAll(selected.Select(async (package, index) =>
             {
                 await batchGate.WaitAsync(cancellationToken);
@@ -543,11 +544,11 @@ public sealed partial class InstalledPackagesViewModel : ObservableObject
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     Status = $"Baixando instalador {index + 1} de {selected.Length}: {package.Name}…";
-                    var result = await _executor.DownloadInstallerAsync(
+                    var result = await _backend.DownloadAsync(
                         package.Id,
-                        folder,
                         package.SourceCategory == "Microsoft Store" ? "msstore" : "winget",
-                        cancellationToken: cancellationToken);
+                        folder,
+                        cancellationToken);
                     if (result.Success)
                         downloaded++;
                     else

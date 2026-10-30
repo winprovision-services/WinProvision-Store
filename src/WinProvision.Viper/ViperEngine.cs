@@ -6,7 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace WinProvision.Viper;
 
-/// <summary>Independent asynchronous HTTP downloader. No dependency on Store/Core or aria2 binaries.</summary>
+/// <summary>Independent asynchronous HTTP downloader. No dependency on Store/Core or implementações externas binaries.</summary>
 public sealed class ViperEngine : IAsyncDisposable
 {
     private readonly ViperOptions _options;
@@ -210,7 +210,7 @@ public sealed class ViperEngine : IAsyncDisposable
         if (response.StatusCode != HttpStatusCode.OK) throw new ViperProtocolException("Resposta inesperada ao consultar o arquivo.");
         return new(response.Content.Headers.ContentLength, false, StrongETag(response), lease.Uri);
     }
-    // URLs assinadas (GitHub Releases, Azure Blob, S3) mudam a query a cada requisição; a identidade do arquivo
+    // URLs assinadas (servidores de origem) mudam a query a cada requisição; a identidade do arquivo
     // vem do ETag forte e do tamanho. Sem ETag, exige o mesmo esquema/host/caminho, ignorando só a query.
     private static bool SameResource(Uri left, Uri right) =>
         left.Scheme == right.Scheme && left.IdnHost == right.IdnHost && left.Port == right.Port && left.AbsolutePath == right.AbsolutePath;

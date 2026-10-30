@@ -5,7 +5,7 @@ namespace WinProvision.Core.Services;
 /// <summary>
 /// Flag de sessão (processo) que registra quando uma reelevação (UAC) pontual já falhou
 /// (usuário clicou "Não", ou o próprio UAC não pôde ser exibido). Espelha o padrão já usado
-/// por WinGetFactoryHelper.DisableComForSession, só que pro lado da elevação: uma vez que o
+/// pelo mecanismo de ativação da API, só que pro lado da elevação: uma vez que o
 /// UAC falhou nesta sessão, instalações seguintes não tentam a API COM nem pedem UAC de
 /// novo — vão direto pra API própria da WinProvision Store (ver WinGetService.InstallAsync).
 /// </summary>

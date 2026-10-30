@@ -37,8 +37,8 @@ internal sealed class ViperTransport : IDisposable
     public async Task<ResponseLease> SendAsync(ViperRequest download, long? from, long? to, string? etag, CancellationToken token,
         Uri? resolvedUri = null)
     {
-        // Keep the original request identity for credential isolation even when the
-        // probe has resolved a mirror or a signed URL for this transfer.
+        // Keep the identidade da solicitação inicial for credential isolation even when the
+        // sondagem has resolved a mirror or a signed URL for this transfer.
         Uri uri = resolvedUri ?? download.Source;
         for (int redirect = 0; redirect <= 5; redirect++)
         {

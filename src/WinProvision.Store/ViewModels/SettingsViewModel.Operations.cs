@@ -190,10 +190,27 @@ public sealed partial class SettingsViewModel
     private void DarkTheme() => ApplyTheme(AppThemePreference.Dark);
     private void SystemTheme() => ApplyTheme(AppThemePreference.System);
     private void ApplyTheme(AppThemePreference theme) => SelectedThemeOption = ThemeOptions.Single(o => o.Preference == theme);
-    public void ChangeStartup(bool enabled)
+    public async void ChangeStartup(bool enabled)
     {
-        Run(() => _preferences.SetLaunchAtStartup(enabled), enabled ? "Inicialização automática ativada." : "Inicialização automática desativada.");
-        OnPropertyChanged(nameof(LaunchAtStartup));
+        try
+        {
+            var result = _backgroundUpdates is null
+                ? (true, (string?)null)
+                : await _backgroundUpdates.ConfigureApplicationStartupAsync(enabled);
+            if (!result.Item1)
+            {
+                StatusText = result.Item2 ?? "Não foi possível configurar a inicialização elevada.";
+                return;
+            }
+            _preferences.SetLaunchAtStartup(enabled);
+            StatusText = enabled ? "Inicialização elevada e minimizada ativada." : "Inicialização automática desativada.";
+            OnPropertyChanged(nameof(LaunchAtStartup));
+        }
+        catch (Exception ex)
+        {
+            WinProvisionLog.Error(ex, "Settings.ChangeStartup");
+            StatusText = "Não foi possível configurar a inicialização automática.";
+        }
     }
     private void ResetPreferences()
     {

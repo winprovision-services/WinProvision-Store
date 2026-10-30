@@ -47,7 +47,7 @@ public sealed class OfficeCliDownloadService(IOfflineOfficeSource source)
         }
         finally
         {
-            // Only the unique staging directory created for this call is removed.
+            // Only the unique diretório temporário created for this call is removed.
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         }
     }

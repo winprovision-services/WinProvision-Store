@@ -16,50 +16,50 @@ namespace WinProvision.Core.Services;
 /// <summary>Resultado de <see cref="WingetBootstrapper.EnsureWingetAsync"/>.</summary>
 public enum WingetBootstrapStatus
 {
-    /// <summary>Winget já estava disponível — nada precisou ser baixado/instalado.</summary>
+    /// <summary>gerenciador de pacotes já estava disponível — nada precisou ser baixado/instalado.</summary>
     AlreadyAvailable,
 
-    /// <summary>Winget não estava disponível, mas o bootstrap baixou e instalou as dependências com sucesso.</summary>
+    /// <summary>gerenciador de pacotes não estava disponível, mas o bootstrap baixou e instalou as dependências com sucesso.</summary>
     Bootstrapped,
 
-    /// <summary>Winget não estava disponível e o bootstrap não conseguiu deixá-lo funcional (ver ErrorMessage).</summary>
+    /// <summary>gerenciador de pacotes não estava disponível e o bootstrap não conseguiu deixá-lo funcional (ver ErrorMessage).</summary>
     Failed,
 }
 
 /// <summary>Resultado detalhado de uma tentativa de bootstrap.</summary>
 public record WingetBootstrapResult(WingetBootstrapStatus Status, string? ErrorMessage = null)
 {
-    /// <summary>True se, ao final, dá pra confiar que "winget.exe" funciona (já estava OK ou o bootstrap resolveu).</summary>
+    /// <summary>True se, ao final, dá pra confiar que "cliente de pacotes" funciona (já estava OK ou o bootstrap resolveu).</summary>
     public bool IsUsable => Status != WingetBootstrapStatus.Failed;
 }
 
 /// <summary>
-/// Garante que o winget (Microsoft.DesktopAppInstaller) está funcional antes do modo CLI
-/// /auto tentar instalar qualquer coisa com ele (apps winget e também Office/ODT — ver
-/// <see cref="Office.OfficeDeploymentToolService"/>, que também depende do winget pra obter
+/// Garante que o gerenciador de pacotes (plataforma do sistema.DesktopAppInstaller) está funcional antes do modo CLI
+/// /auto tentar instalar qualquer coisa com ele (apps gerenciador de pacotes e também Office/ODT — ver
+/// <see cref="Office.OfficeDeploymentToolService"/>, que também depende do gerenciador de pacotes pra obter
 /// o Office Deployment Tool).
 ///
 /// Cenário-alvo: First Logon Commands numa sessão interativa recém-criada — nesse ponto o
 /// Windows pode ainda não ter terminado de provisionar os pacotes APPX de sistema (inclusive
-/// o próprio App Installer), então "winget" simplesmente não existe ainda, mesmo em imagens
+/// o próprio App Installer), então "gerenciador de pacotes" simplesmente não existe ainda, mesmo em imagens
 /// onde ele normalmente estaria presente (ex.: Windows Sandbox, imagens enxutas/customizadas,
 /// contas novas). Em vez de deixar o /auto inteiro falhar por causa disso, este serviço
 /// detecta a ausência e baixa/instala offline os artefatos oficiais publicados pelo próprio
-/// time do winget-cli, direto do GitHub, sempre da MESMA release (via "/latest/download",
-/// que redireciona pro asset mais recente sem precisar consultar a API do GitHub antes):
+/// time do gerenciador de pacotes-cli, direto do serviço remoto, sempre da MESMA release (via "/latest/download",
+/// que redireciona pro asset mais recente sem precisar consultar a API do serviço remoto antes):
 ///
 ///   1. <c>DesktopAppInstaller_Dependencies.zip</c> — contém, por arquitetura (x86/x64/arm64),
 ///      os .appx de framework (VCLibs, WindowsAppRuntime/UI.Xaml conforme a release) já na
-///      versão EXATA que aquele build específico do winget espera. Isso é o que resolve o
+///      versão EXATA que aquele build específico do gerenciador de pacotes espera. Isso é o que resolve o
 ///      erro clássico "HRESULT 0x80073CF3 — falha na dependência ou validação de conflito":
 ///      ele geralmente não é "a dependência está faltando", e sim "a versão instalada não
 ///      bate com a que o bundle exige" — algo que só acontece quando as dependências são
 ///      baixadas de um lugar separado/pinado manualmente, fora de sincronia com a versão do
-///      winget. A QUANTIDADE e os NOMES desses .appx mudam entre releases sem aviso (ex.: uma
-///      release trocou Microsoft.UI.Xaml.2.8 por Microsoft.WindowsAppRuntime.1.8 e passou a
+///      gerenciador de pacotes. A QUANTIDADE e os NOMES desses .appx mudam entre releases sem aviso (ex.: uma
+///      release trocou plataforma do sistema.UI.Xaml.2.8 por plataforma do sistema.WindowsAppRuntime.1.8 e passou a
 ///      trazer o VCLibs em dois arquivos em vez de um) — por isso o bootstrap não fixa nomes
 ///      específicos, instala TODOS os .appx que existirem na pasta da arquitetura.
-///   2. <c>Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle</c> — o próprio winget.
+///   2. <c>plataforma do sistema.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle</c> — o próprio gerenciador de pacotes.
 ///
 /// Os dois arquivos (.zip + .msixbundle) são baixados em paralelo (não há dependência entre
 /// os downloads em si, só na instalação) pra minimizar o tempo total. Usa "Add-AppxPackage"
@@ -72,13 +72,13 @@ public record WingetBootstrapResult(WingetBootstrapStatus Status, string? ErrorM
 [SupportedOSPlatform("windows")]
 public class WingetBootstrapper
 {
-    // Nomes de asset fixos entre releases do winget-cli — dá pra confiar no redirecionamento
-    // "/latest/download" do GitHub pra sempre pegar a build mais recente, e como os dois vêm
+    // Nomes de asset fixos entre releases do gerenciador de pacotes-cli — dá pra confiar no redirecionamento
+    // "/latest/download" do serviço remoto pra sempre pegar a build mais recente, e como os dois vêm
     // da MESMA release, as dependências dentro do .zip sempre batem com o que o .msixbundle
     // daquela release espera (é essa sincronia que corrige o 0x80073CF3) — mesmo quando a
     // composição interna do .zip muda entre releases (ver comentário da classe).
-    private const string DependenciesZipUrl = "https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip";
-    private const string DesktopAppInstallerUrl = "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle";
+    private const string DependenciesZipUrl = NetworkEndpoints.WingetDependenciesUrl;
+    private const string DesktopAppInstallerUrl = NetworkEndpoints.WingetBundleUrl;
 
     private static readonly TimeSpan VersionCheckTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(3);
@@ -86,8 +86,8 @@ public class WingetBootstrapper
     private static readonly TimeSpan ProvisionAppxTimeout = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RegisterTimeout = TimeSpan.FromSeconds(60);
 
-    // Depois do install o alias/pasta do winget pode levar alguns segundos pra aparecer
-    // (relatado em microsoft/winget-cli discussions #1956), então reconfirma algumas vezes.
+    // Depois do install o alias/pasta do gerenciador de pacotes pode levar alguns segundos pra aparecer
+    // (relatado em plataforma do sistema/gerenciador de pacotes-cli discussions #1956), então reconfirma algumas vezes.
     private const int PostInstallCheckAttempts = 5;
     private static readonly TimeSpan PostInstallCheckDelay = TimeSpan.FromSeconds(2);
 
@@ -101,16 +101,16 @@ public class WingetBootstrapper
     private long _onceFailedAtTicks;
     private bool _lateReplayDone;
 
-    // Sem fallback de URL (as duas fontes já são os assets oficiais do winget-cli, via
-    // redirect "/latest/download" do GitHub) — só retry simples, mesma ideia do
+    // Sem fallback de URL (as duas fontes já são os assets oficiais do gerenciador de pacotes-cli, via
+    // redirect "/latest/download" do serviço remoto) — só retry simples, mesma ideia do
     // -MaximumRetryCount/-RetryIntervalSec do Invoke-WebRequest: rede instável logo após o
     // primeiro logon (adaptador ainda subindo, DNS resolvendo) é o caso comum que isso cobre.
     private const int MaxDownloadAttempts = 3;
     private static readonly TimeSpan DownloadRetryDelay = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Confirma que o winget roda: tenta o caminho atual (<see cref="WingetLocator.ExecutablePath"/>,
-    /// por padrão o alias "winget.exe") e, se falhar, o winget.exe do pacote App Installer em
+    /// Confirma que o gerenciador de pacotes roda: tenta o caminho atual (<see cref="WingetLocator.ExecutablePath"/>,
+    /// por padrão o alias "cliente de pacotes") e, se falhar, o cliente de pacotes do pacote App Installer em
     /// "Program Files\WindowsApps" (SYSTEM não tem o alias por usuário). Quando só o pacote
     /// responde, ele passa a ser o executável usado pelo app inteiro.
     /// </summary>
@@ -133,7 +133,7 @@ public class WingetBootstrapper
 
     /// <summary>
     /// Roda "&lt;fileName&gt; --version" e só considera disponível se o processo iniciar E retornar
-    /// código de saída 0 — cobre tanto "winget.exe não existe no PATH" (Process.Start lança)
+    /// código de saída 0 — cobre tanto "cliente de pacotes não existe no PATH" (Process.Start lança)
     /// quanto "existe o stub da Store mas o App Installer de verdade ainda não terminou de
     /// provisionar por trás dele" (esse stub roda e falha rápido com código != 0, não trava
     /// esperando input, então o timeout aqui é só uma rede de segurança extra).
@@ -191,8 +191,8 @@ public class WingetBootstrapper
     }
 
     /// <summary>
-    /// PORTA ÚNICA de provisionamento do winget: todo caminho que possa precisar dele (COM,
-    /// API própria, winget.exe, Office/ODT) espera por esta chamada ANTES de tentar qualquer
+    /// PORTA ÚNICA de provisionamento do gerenciador de pacotes: todo caminho que possa precisar dele (COM,
+    /// API própria, cliente de pacotes, Office/ODT) espera por esta chamada ANTES de tentar qualquer
     /// coisa. A primeira chamada dispara <see cref="EnsureWingetAsync"/>; as seguintes (mesmo
     /// concorrentes) reaproveitam o mesmo resultado. Sucesso fica em cache pra sempre;
     /// depois de uma falha, uma nova tentativa roda em segundo plano a cada
@@ -219,7 +219,7 @@ public class WingetBootstrapper
             {
                 // Uma nova tentativa (só depois de uma falha antiga) roda em SEGUNDO PLANO:
                 // quem chama agora recebe o resultado anterior na hora, sem ficar preso
-                // esperando (a API própria não precisa do winget). Ao concluir, a próxima
+                // esperando (a API própria não precisa do gerenciador de pacotes). Ao concluir, a próxima
                 // chamada adota o resultado da tentativa (sucesso ou nova falha).
                 if (_retryTask is { IsCompleted: true })
                 {
@@ -297,7 +297,7 @@ public class WingetBootstrapper
 
     private void BufferedLog(string message)
     {
-        Trace.WriteLine(message);
+        WinProvision.Core.Services.CoreLog.Debug(message);
         Action<string>[] sinks;
         lock (_gate)
         {
@@ -340,8 +340,8 @@ public class WingetBootstrapper
     }
 
     /// <summary>
-    /// Garante que o winget está utilizável: se já estiver, não faz nada e retorna na hora.
-    /// Se não estiver, baixa o pacote oficial de dependências + o instalador do winget (em
+    /// Garante que o gerenciador de pacotes está utilizável: se já estiver, não faz nada e retorna na hora.
+    /// Se não estiver, baixa o pacote oficial de dependências + o instalador do gerenciador de pacotes (em
     /// paralelo), instala tudo na ordem certa e reconfirma no final.
     /// </summary>
     public virtual async Task<WingetBootstrapResult> EnsureWingetAsync(Action<string>? log = null, CancellationToken ct = default, bool repair = false)
@@ -357,7 +357,7 @@ public class WingetBootstrapper
 
         // Atalho barato, sem download: o App Installer costuma já estar provisionado na imagem
         // e só faltar registrar pro usuário (Add-AppxPackage -RegisterByFamilyName, documentado
-        // na Microsoft Learn). Não vale pra SYSTEM: o Windows rejeita esse registro pra Local System.
+        // na plataforma do sistema Learn). Não vale pra SYSTEM: o Windows rejeita esse registro pra Local System.
         if (!isSystem && !repair)
         {
             Log("[WinProvision] Winget ainda não está disponível. Tentando registrar o App Installer já presente no Windows...");
@@ -423,12 +423,12 @@ public class WingetBootstrapper
             }
 
             // Não fixa nomes/keywords específicos (ex.: "VCLibs", "UI.Xaml") de propósito —
-            // a composição desse .zip já mudou entre releases do winget-cli sem aviso (na
+            // a composição desse .zip já mudou entre releases do gerenciador de pacotes-cli sem aviso (na
             // release atual, por exemplo, o UI.Xaml.2.8 foi substituído pelo
-            // Microsoft.WindowsAppRuntime.1.8, e o VCLibs passou a vir em dois arquivos
+            // plataforma do sistema.WindowsAppRuntime.1.8, e o VCLibs passou a vir em dois arquivos
             // separados: o "base" e o ".UWPDesktop"). Em vez de tentar prever a composição,
             // instala TODOS os .appx que existirem na pasta da arquitetura — o que estiver
-            // lá é, por definição, o que aquela release específica do winget espera.
+            // lá é, por definição, o que aquela release específica do gerenciador de pacotes espera.
             string[] dependencyAppxFiles = Directory.EnumerateFiles(archDir, "*.appx")
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -445,7 +445,7 @@ public class WingetBootstrapper
 
             // Instala o bundle do App Installer e TODAS as dependências numa única transação
             // de deployment (-DependencyPath com a lista inteira) — é a forma recomendada pela
-            // própria Microsoft pra instalação manual do winget, e evita qualquer problema de
+            // própria plataforma do sistema pra instalação manual do gerenciador de pacotes, e evita qualquer problema de
             // ordem entre os framework packages (ex.: VCLibs.UWPDesktop pode depender do VCLibs
             // "base" já estar resolvido na mesma transação; registrar cada um em chamadas
             // separadas, como antes, arrisca instalar fora de ordem).
@@ -470,10 +470,10 @@ public class WingetBootstrapper
             TryDeleteDirectory(workDir);
         }
 
-        // Reconfirma no final — o App Installer registra o alias "winget.exe" dentro de
-        // %LocalAppData%\Microsoft\WindowsApps, pasta que já costuma estar no PATH do
+        // Reconfirma no final — o App Installer registra o alias "cliente de pacotes" dentro de
+        // %LocalAppData%\plataforma do sistema\WindowsApps, pasta que já costuma estar no PATH do
         // usuário por padrão mesmo antes de o arquivo existir lá dentro, então o processo
-        // atual normalmente já enxerga o winget recém-instalado sem precisar reiniciar nada.
+        // atual normalmente já enxerga o gerenciador de pacotes recém-instalado sem precisar reiniciar nada.
         if (await WaitForWingetAsync(ct))
         {
             Log("[WinProvision] Winget instalado e funcional.");
@@ -516,7 +516,7 @@ public class WingetBootstrapper
             {
                 using var http = new HttpClient { Timeout = DownloadTimeout };
 
-                // App Installer/GitHub servem esses assets via redirect ("/latest/download");
+                // App Installer/serviço remoto servem esses assets via redirect ("/latest/download");
                 // HttpClient segue redirects por padrão, então não precisa de tratamento especial aqui.
                 using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
@@ -558,7 +558,7 @@ public class WingetBootstrapper
     }
 
     /// <summary>
-    /// Reconfirma o winget algumas vezes depois de instalar/registrar: o alias (ou a pasta do
+    /// Reconfirma o gerenciador de pacotes algumas vezes depois de instalar/registrar: o alias (ou a pasta do
     /// pacote) pode levar alguns segundos pra aparecer logo após o deployment.
     /// </summary>
     private async Task<bool> WaitForWingetAsync(CancellationToken ct)

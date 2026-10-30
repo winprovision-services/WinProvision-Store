@@ -150,7 +150,7 @@ public sealed partial class WinUiBackupSyncService : IAsyncDisposable
             if (_backup.IsConnected && (waitForTurn || _preferences.AutomaticCloudBackupEnabled))
             {
                 cloudAttempted = true;
-                GitHubBackupUploadResult result = await _backup.UploadCloudAsync(snapshot, cancellationToken).ConfigureAwait(false);
+                CloudBackupUploadResult result = await _backup.UploadCloudAsync(snapshot, cancellationToken).ConfigureAwait(false);
                 cloudSucceeded = result.Success;
                 errorMessage = result.ErrorMessage;
             }

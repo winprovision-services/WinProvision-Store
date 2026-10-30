@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace WinProvision.Core.Services;
 
-/// <summary>Política conservadora de repetição automática para falhas transitórias do WinGet.</summary>
+/// <summary>Política conservadora de repetição automática para falhas transitórias do gerenciador de pacotes.</summary>
 internal static class WingetAutoRetryPolicy
 {
     public const int MaxRetriesPerOperation = 6;

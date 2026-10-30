@@ -16,7 +16,7 @@ public static class PackageDiagnostics
     public static void Write(string message)
     {
         string safe = SensitiveDataRedactor.Redact(message);
-        if (_write is { } sink) sink(safe); else Trace.WriteLine(safe);
+        if (_write is { } sink) sink(safe); else WinProvision.Core.Services.CoreLog.Debug(safe);
     }
     public static void Warning(Exception exception, string operation) => CoreLog.Warning(exception, operation);
     public static void Error(Exception exception, string operation) => CoreLog.Error(exception, operation);

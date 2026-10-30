@@ -24,7 +24,7 @@ public sealed record InstalledPackageInfo(
 public sealed partial class InstalledPackagesService(
     WingetBootstrapper bootstrapper,
     WingetExecutor executor,
-    StoreService store,
+    IStoreCatalog store,
     InstalledAppsService installedApps, InstalledIconResolver icons) : IInstalledPackagesService, IAsyncDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
@@ -427,7 +427,7 @@ public sealed partial class InstalledPackagesService(
 
     // PackageFamilyName clássico: "Publicador.NomeDoApp_" + 13 caracteres em
     // base32 (0-9, a-h, j-k, m-n, p-t, v-z — sem i/l/o/u) identificando o publisher.
-    // Nenhum PackageIdentifier do catálogo winget tem essa forma; só aparece quando
+    // Nenhum PackageIdentifier do catálogo gerenciador de pacotes tem essa forma; só aparece quando
     // o catálogo COM devolve o nome de família de um pacote MSIX/AppX diretamente.
     private static readonly Regex PackageFamilyNamePattern =
         new(@"^[\w.]+_[0-9a-hj-km-np-tv-z]{13}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -461,7 +461,7 @@ public sealed partial class InstalledPackagesService(
         if (systemAppNames.Any(name => value.Contains(name, StringComparison.Ordinal)))
             return true;
 
-        // Componente da própria Microsoft sem nenhuma entrada clássica de
+        // Componente da própria plataforma do sistema sem nenhuma entrada clássica de
         // desinstalação (sem ícone, sem pasta de instalação navegável) — sobra do
         // catálogo COM completo (host interno, framework não listado acima etc.),
         // não um app que o usuário reconheceria ou instalou de propósito.

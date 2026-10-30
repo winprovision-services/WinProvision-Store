@@ -12,7 +12,7 @@ import time
 def main():
     executable = pathlib.Path(sys.argv[1]).resolve()
     root = pathlib.Path(__file__).resolve().parent.parent / "artifacts" / "viper" / "http-validation"
-    # Each run owns its outputs and never deletes prior downloads.
+    # Each run owns its outputs and never deletes downloads anteriores.
     output = root / time.strftime("%Y%m%d-%H%M%S")
     output.mkdir(parents=True, exist_ok=False)
     payload = bytes(range(256)) * (16 * 1024 * 1024 // 256)

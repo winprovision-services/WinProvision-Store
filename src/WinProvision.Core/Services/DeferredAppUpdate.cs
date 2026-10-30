@@ -43,7 +43,7 @@ internal static class DeferredAppUpdate
         string root = Path.Combine(Path.GetTempPath(), "WinProvisionUpdate", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         string helper = Path.Combine(root, "WinProvision Elevator.exe");
-        // A distinct verified path also isolates its gsudo pipe/cache from the app being replaced.
+        // A distinct verified path also isolates its helper de elevação pipe/cache from the app being replaced.
         GsudoElevationService.VerifyHelper(GsudoElevationService.HelperPath, GsudoBinary.Sha256);
         File.Copy(GsudoElevationService.HelperPath, helper);
         GsudoElevationService.VerifyHelper(helper, GsudoBinary.Sha256);
