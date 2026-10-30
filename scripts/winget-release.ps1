@@ -12,16 +12,19 @@ $taskInstaller = (Resolve-Path -LiteralPath $InstallerPath).Path
 $taskHash = (Get-FileHash -LiteralPath $taskInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
 $taskOutput = Join-Path $taskRoot "artifacts/winget/$taskPackageId/$AppVersion"
 New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
+$taskVersionSchema = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json'
+$taskInstallerSchema = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json'
+$taskLocaleSchema = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json'
 $taskHeader = "PackageIdentifier: $taskPackageId`nPackageVersion: $AppVersion"
 @"
-# O manifesto segue o esquema de validação correspondente.
+$taskVersionSchema
 $taskHeader
 DefaultLocale: pt-BR
 ManifestType: version
 ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.yaml") -Encoding utf8NoBOM
 @"
-# O manifesto segue o esquema de validação correspondente.
+$taskInstallerSchema
 $taskHeader
 InstallerLocale: pt-BR
 MinimumOSVersion: 10.0.17763.0
@@ -44,7 +47,7 @@ ManifestType: installer
 ManifestVersion: 1.12.0
 "@ | Set-Content -LiteralPath (Join-Path $taskOutput "$taskPackageId.installer.yaml") -Encoding utf8NoBOM
 @"
-# O manifesto segue o esquema de validação correspondente.
+$taskLocaleSchema
 $taskHeader
 PackageLocale: pt-BR
 Publisher: WinProvision Store
