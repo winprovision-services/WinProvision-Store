@@ -66,6 +66,13 @@
         "type": "Project"
       }
     },
+    "net10.0/win-x64": {
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "kdj5cqOwgZCMltEhQ4+WVUoFkMHG08EJfy1MDyS9H+FBg66vTTFyX8YcNl8IQh5wRQv79P+iduQgDGY8ucBR+w=="
+      }
+    },
     "net10.0-windows7.0": {
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "Direct",
@@ -135,6 +142,13 @@
       },
       "winprovision.viper": {
         "type": "Project"
+      }
+    },
+    "net10.0-windows7.0/win-x64": {
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "kdj5cqOwgZCMltEhQ4+WVUoFkMHG08EJfy1MDyS9H+FBg66vTTFyX8YcNl8IQh5wRQv79P+iduQgDGY8ucBR+w=="
       }
     }
   }
