@@ -902,7 +902,7 @@ public class WingetExecutor
         string arguments = "list --accept-source-agreements --disable-interactivity" + (source is null ? "" : " --source " + source);
         var result = await ExecuteWingetCommandAsync(arguments, null, cancellationToken);
         if (!result.Success || !WingetUpgradeListParser.TryParse(result.Output, out var packages,
-            requireAvailableVersion: false, allowMissingAvailableColumn: true))
+            requireAvailableVersion: false, allowMissingAvailableColumn: true, sourceIfMissing: source))
             throw new InvalidOperationException("Não foi possível interpretar o inventário WinGet: " + result.Output);
         return packages;
     }
