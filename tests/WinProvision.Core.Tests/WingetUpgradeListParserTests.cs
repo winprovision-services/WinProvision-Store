@@ -125,6 +125,25 @@ public sealed class WingetUpgradeListParserTests
         Assert.Empty(package.AvailableVersion);
     }
 
+    [Fact]
+    public void TryParse_UsesFilteredSourceWhenInstalledListingOmitsSourceColumn()
+    {
+        string output = string.Join(Environment.NewLine,
+            "Name                          Id                            Version",
+            "--------------------------------------------------------------------------------",
+            "7-Zip                         7zip.7zip                     25.01");
+
+        bool parsed = WingetUpgradeListParser.TryParse(
+            output,
+            out var packages,
+            requireAvailableVersion: false,
+            allowMissingAvailableColumn: true,
+            sourceIfMissing: "winget");
+
+        Assert.True(parsed);
+        Assert.Equal("winget", Assert.Single(packages).Source);
+    }
+
     private static string CreateTable(
         string nameHeader,
         string idHeader,

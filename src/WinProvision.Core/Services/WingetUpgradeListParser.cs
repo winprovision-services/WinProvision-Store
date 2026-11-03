@@ -40,7 +40,8 @@ public static class WingetUpgradeListParser
         string rawOutput,
         out List<UpgradablePackage> packages,
         bool requireAvailableVersion,
-        bool allowMissingAvailableColumn)
+        bool allowMissingAvailableColumn,
+        string? sourceIfMissing = null)
     {
         packages = [];
         var parsedPackages = new List<UpgradablePackage>();
@@ -157,6 +158,8 @@ public static class WingetUpgradeListParser
             string currentVersion = versionCol >= 0 && versionCol < columns.Length ? columns[versionCol].Trim() : string.Empty;
             string availableVersion = availableCol >= 0 && availableCol < columns.Length ? columns[availableCol].Trim() : string.Empty;
             string source = sourceCol >= 0 && sourceCol < columns.Length ? columns[sourceCol].Trim() : string.Empty;
+            if (string.IsNullOrWhiteSpace(source))
+                source = sourceIfMissing ?? string.Empty;
 
             // Se a tabela possui coluna de versão disponível,
             // a linha precisa obrigatoriamente ter uma versão disponível válida.
