@@ -40,9 +40,12 @@ jobs:
         uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4
         with:
           languages: ${{ matrix.language }}
+      - name: Restore dependencies
+        if: matrix.language == 'csharp'
+        run: dotnet restore WinProvision.Store.sln --locked-mode
       - name: Build C# code
         if: matrix.language == 'csharp'
-        uses: github/codeql-action/autobuild@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4
+        run: dotnet build WinProvision.Store.sln --configuration Release --no-restore -p:Platform=x64 -p:WindowsAppSDKSelfContained=false -p:EnableValidationHarness=true
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4
         with:
