@@ -267,15 +267,20 @@ public sealed partial class WinGetService
         return PackageMatchDeduplicator.Deduplicate([results, storeResults], cancellationToken);
     }
 
-    public Task<WingetExecutionResult> InstallAsync(
+    public async Task<WingetExecutionResult> InstallAsync(
         string packageId,
         Action<string>? onLogReceived = null,
         CancellationToken cancellationToken = default,
         string? installLocation = null,
         Action<InstallProgressUpdate>? onProgress = null,
         string source = "winget")
-        => RunInstallOrUpgradeAsync(
-            ComOperationKind.Install, packageId, onLogReceived, cancellationToken, installLocation, onProgress, source);
+    {
+        var result = await RunInstallOrUpgradeAsync(
+            ComOperationKind.Install, packageId, onLogReceived, cancellationToken, installLocation, onProgress, source)
+            .ConfigureAwait(false);
+        return await VerifyInstallResultAsync(packageId, source, null, result, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     public Task<WingetExecutionResult> InstallPreferredAsync(
         string packageId,
@@ -298,6 +303,27 @@ public sealed partial class WinGetService
                 InstallLocation: installLocation, Version: version), onProgress, source);
 
     public async Task<WingetExecutionResult> InstallWithMethodAsync(
+        string packageId,
+        PackageInstallMethod method,
+        Action<string>? onLogReceived = null,
+        CancellationToken cancellationToken = default,
+        string? installLocation = null,
+        Action<InstallProgressUpdate>? onProgress = null,
+        string source = "winget",
+        string? version = null,
+        string? preferredScope = null,
+        string? preferredArchitecture = null,
+        PackageInstallOptions? options = null)
+    {
+        string? requestedVersion = options?.Version ?? version;
+        var result = await InstallWithMethodCoreAsync(packageId, method, onLogReceived, cancellationToken,
+            installLocation, onProgress, source, version, preferredScope, preferredArchitecture, options)
+            .ConfigureAwait(false);
+        return await VerifyInstallResultAsync(packageId, source, requestedVersion, result, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<WingetExecutionResult> InstallWithMethodCoreAsync(
         string packageId,
         PackageInstallMethod method,
         Action<string>? onLogReceived = null,
@@ -395,7 +421,7 @@ public sealed partial class WinGetService
                             InstallProgressPhase.Preparing,
                             Method: WingetMethod.WingetExe));
                         await EnsureWingetProvisionedAsync(onLogReceived, cancellationToken).ConfigureAwait(false);
-                        return await _wingetExecutor.InstallAppAsync(
+                        var fallbackResult = await _wingetExecutor.InstallAppAsync(
                             packageId,
                             onLogReceived,
                             cancellationToken,
@@ -408,6 +434,8 @@ public sealed partial class WinGetService
                             ignoreSecurityHash: options.IgnoreSecurityHash,
                             requiresElevation: options.RequiresElevation,
                             customArguments: options.CustomArguments).ConfigureAwait(false);
+                        fallbackResult.EffectiveSource = fallbackSource;
+                        return fallbackResult;
                     }
 
                     return new WingetExecutionResult
@@ -468,6 +496,106 @@ public sealed partial class WinGetService
             || options.Interactive
             || !string.IsNullOrWhiteSpace(options.CustomArguments)
             || options.IgnoreSecurityHash;
+    }
+
+    private async Task<WingetExecutionResult> VerifyInstallResultAsync(string packageId, string source,
+        string? requestedVersion, WingetExecutionResult result, CancellationToken cancellationToken)
+    {
+        if (result.InstallationVerified || result.IsUnconfirmed || (!result.Success && !result.InstallerStarted))
+            return result;
+
+        string effectiveSource = result.EffectiveSource ?? source;
+        bool installerReportedSuccess = result.Success;
+        string? lastError = null;
+        List<UpgradablePackage>? lastInventory = null;
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(20));
+                lastInventory = await _wingetExecutor.ListInstalledPackagesAsync(timeout.Token, effectiveSource)
+                    .ConfigureAwait(false);
+                var matchingPackages = lastInventory.Where(item =>
+                    item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)
+                    && item.Source.Equals(effectiveSource, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (installerReportedSuccess && matchingPackages.Length == 1
+                    && (string.IsNullOrWhiteSpace(requestedVersion)
+                        || VersionsMatch(matchingPackages[0].CurrentVersion, requestedVersion)))
+                    return ConfirmInstallResult(packageId, effectiveSource, requestedVersion, result, lastInventory);
+                lastError = matchingPackages.Length > 1
+                    ? $"O inventário retornou mais de uma entrada para {packageId}."
+                    : matchingPackages.Length == 1 && !string.IsNullOrWhiteSpace(requestedVersion)
+                        ? $"A versão encontrada ({matchingPackages[0].CurrentVersion}) difere da versão solicitada ({requestedVersion})."
+                        : $"O pacote {packageId} ainda não foi localizado na origem {effectiveSource}.";
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                lastError = $"Não foi possível consultar o inventário após a instalação ({exception.GetType().Name}).";
+                _diagnostic($"INSTALL VERIFY falhou packageId=\"{packageId}\" source=\"{effectiveSource}\": {exception}");
+            }
+
+            if (attempt < 2)
+                await Task.Delay(TimeSpan.FromMilliseconds(attempt == 0 ? 250 : 750), cancellationToken)
+                    .ConfigureAwait(false);
+        }
+
+        if (lastInventory is not null)
+            return ConfirmInstallResult(packageId, effectiveSource, requestedVersion, result, lastInventory);
+        if (installerReportedSuccess || result.InstallerStarted)
+            return MarkInstallUnconfirmed(result, lastError
+                ?? "O inventário não confirmou a identidade e a versão do pacote.");
+        return result;
+    }
+
+    internal static WingetExecutionResult ConfirmInstallResult(string packageId, string source,
+        string? requestedVersion, WingetExecutionResult result, IReadOnlyList<UpgradablePackage> installed)
+    {
+        source = result.EffectiveSource ?? source;
+        var matches = installed.Where(item =>
+            item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)
+            && item.Source.Equals(source, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length == 1
+            && (string.IsNullOrWhiteSpace(requestedVersion)
+                || VersionsMatch(matches[0].CurrentVersion, requestedVersion)))
+        {
+            if (!result.Success)
+                return MarkInstallUnconfirmed(result,
+                    "O WinGet informou falha, mas o pacote aparece no inventário; o resultado da operação é inconclusivo.");
+            result.InstallationVerified = true;
+            result.VerificationStatus = OperationVerificationStatus.Confirmed;
+            return result;
+        }
+
+        if (!result.Success && matches.Length == 0 && !result.InstallerStarted)
+            return result;
+
+        string observed = matches.Length switch
+        {
+            0 => "não encontrado",
+            1 when !string.IsNullOrWhiteSpace(requestedVersion) => $"versão {matches[0].CurrentVersion}",
+            1 => matches[0].CurrentVersion,
+            _ => "identidade ambígua"
+        };
+        return MarkInstallUnconfirmed(result,
+            $"A instalação não foi confirmada para {packageId} (esperado: {requestedVersion ?? "qualquer versão"}; encontrado: {observed}).");
+    }
+
+    private static WingetExecutionResult MarkInstallUnconfirmed(WingetExecutionResult result, string reason)
+    {
+        string originalOutput = result.Output;
+        result.Success = false;
+        result.VerificationStatus = OperationVerificationStatus.Unconfirmed;
+        result.FailureReason = WingetFailureReason.Unknown;
+        result.Output = string.IsNullOrWhiteSpace(originalOutput)
+            ? $"Resultado não confirmado. {reason}"
+            : $"Resultado não confirmado. {reason}{Environment.NewLine}{originalOutput}";
+        return result;
     }
 
     /// <summary>
@@ -803,7 +931,8 @@ public sealed partial class WinGetService
     {
         result.Success = false;
         result.InstallerStarted = true;
-        result.FailureReason = WingetFailureReason.InstallError;
+        result.VerificationStatus = OperationVerificationStatus.Unconfirmed;
+        result.FailureReason = WingetFailureReason.Unknown;
         result.Output = $"A atualização foi executada, mas não foi confirmada. {reason}";
         return result;
     }
@@ -2147,6 +2276,7 @@ public sealed partial class WinGetService
                     };
                 }
             }
+
             else
             {
                 PackageDiagnostics.Write($"{comTag} installer-metadata unavailable; WinGet will select scope/architecture");

@@ -74,7 +74,12 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
     private void InstalledChanged() => _dispatcher.Post(RefreshInstalled);
     private void RefreshInstalled()
     {
-        foreach (var item in Apps) item.IsInstalled = item.App.IsSelf || _installed.IsInstalled(item.Name, item.Id);
+        foreach (var item in Apps)
+        {
+            _installed.ApplyInstallationStatus(item.App);
+            item.IsInstalled = item.App.IsInstalled;
+            item.IsInstalledUnconfirmed = item.App.IsInstalledUnconfirmed;
+        }
     }
     partial void OnSearchTextChanged(string value) { _limit = 80; ApplyFilter(); }
     partial void OnSelectedSourceChanged(string value) { _limit = 80; ApplyFilter(); }
@@ -109,7 +114,14 @@ public sealed partial class HomeViewModel : PageViewModel, IDisposable
         {
             var result = await _backend.InstallAsync(item.App);
             item.IsInstalled = result.Success;
-            StatusText = result.Success ? $"{item.Name} instalado." : WingetErrorTranslator.ToMessage(result.FailureReason, "instalar", item.Name);
+            item.App.IsInstalled = result.Success;
+            item.App.IsInstalledUnconfirmed = result.IsUnconfirmed;
+            item.IsInstalledUnconfirmed = result.IsUnconfirmed;
+            StatusText = result.Success
+                ? $"{item.Name} instalado."
+                : result.IsUnconfirmed
+                    ? $"{item.Name}: {result.Output}"
+                    : WingetErrorTranslator.ToMessage(result.FailureReason, "instalar", item.Name);
         }
         catch (Exception exception) { ReportError(exception); }
         finally { item.IsWorking = false; }

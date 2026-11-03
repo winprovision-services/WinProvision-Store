@@ -76,19 +76,22 @@ public sealed partial class WindowsAppNotificationService : IDisposable
         => ShowBackgroundUpdateSummary(updated, failed, 0);
 
     public void ShowBackgroundUpdateSummary(int updated, int failed, int unselected)
+        => ShowBackgroundUpdateSummary(updated, failed, unselected, 0);
+
+    public void ShowBackgroundUpdateSummary(int updated, int failed, int unselected, int unconfirmed)
     {
         if (!(failed > 0 ? Allows(NotificationCategory.Errors) : AllowsSuccessfulOperation(isBatch: true)) || (!_registered && !TryRegister()))
             return;
 
-        string message = updated == 0 && failed == 0
+        string message = updated == 0 && failed == 0 && unconfirmed == 0
             ? unselected > 0
                 ? $"Nenhum aplicativo selecionado para atualizar; {unselected} atualização(ões) ficou(aram) de fora."
                 : "Seus aplicativos já estão atualizados."
-            : failed == 0
+            : failed == 0 && unconfirmed == 0
                 ? unselected > 0
                     ? $"{updated} atualizado(s); {unselected} atualização(ões) ficou(aram) de fora."
                     : $"{updated} aplicativo(s) atualizado(s) com sucesso."
-                : $"{updated} atualizado(s); {failed} falharam; {unselected} ficaram de fora. Abra o app para ver os detalhes.";
+                : $"{updated} atualizado(s); {failed} falharam; {unconfirmed} não confirmado(s); {unselected} ficaram de fora. Abra o app para ver os detalhes.";
 
         try
         {
@@ -98,7 +101,7 @@ public sealed partial class WindowsAppNotificationService : IDisposable
                 .AddText(message)
                 .BuildNotification();
             AppNotificationManager.Default.Show(notification);
-            Log($"APP NOTIFICATIONS background-update updated={updated} failed={failed}");
+            Log($"APP NOTIFICATIONS background-update updated={updated} failed={failed} unconfirmed={unconfirmed}");
         }
         catch (Exception ex)
         {

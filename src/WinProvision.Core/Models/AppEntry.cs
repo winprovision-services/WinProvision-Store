@@ -252,6 +252,23 @@ public partial class AppEntry : INotifyPropertyChanged
         }
     }
 
+    private bool _isInstalledUnconfirmed;
+
+    /// <summary>O Registro encontrou um nome semelhante, mas nenhuma identidade confiável confirmou o pacote.</summary>
+    [JsonIgnore]
+    public bool IsInstalledUnconfirmed
+    {
+        get => _isInstalledUnconfirmed;
+        set
+        {
+            if (_isInstalledUnconfirmed == value)
+                return;
+
+            _isInstalledUnconfirmed = value;
+            OnPropertyChanged();
+        }
+    }
+
     private bool _isInstalling;
 
     /// <summary>

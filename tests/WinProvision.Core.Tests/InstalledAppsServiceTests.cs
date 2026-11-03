@@ -48,7 +48,10 @@ public sealed class InstalledAppsServiceTests
 
         Assert.True(InstalledAppsService.IsInstalledByIdentity("Example App", "Vendor.Real", installedIds, idsByName, registryNames));
         Assert.False(InstalledAppsService.IsInstalledByIdentity("Example App", "Vendor.Other", installedIds, idsByName, registryNames));
-        Assert.True(InstalledAppsService.IsInstalledByIdentity("Example App", "Vendor.Unlisted", new HashSet<string>(),
+        var unverifiedStatus = InstalledAppsService.GetDetectionStatusByIdentity("Example App", "Vendor.Unlisted",
+            new HashSet<string>(), new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase), registryNames);
+        Assert.Equal(InstalledAppDetectionStatus.Unconfirmed, unverifiedStatus);
+        Assert.False(InstalledAppsService.IsInstalledByIdentity("Example App", "Vendor.Unlisted", new HashSet<string>(),
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase), registryNames));
     }
 

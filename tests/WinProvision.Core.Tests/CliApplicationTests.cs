@@ -67,6 +67,19 @@ public class CliApplicationTests
     }
 
     [Fact]
+    public async Task UnconfirmedInstallHasItsOwnStatusAndStillReturnsNonZero()
+    {
+        var fixture = new Fixture("");
+        fixture.Backend.UnconfirmedId = "Google.Chrome";
+
+        Assert.Equal(1, await fixture.App.RunAsync(["install", "--id", "Google.Chrome"], default));
+
+        Assert.Contains("Não confirmado", fixture.Error.ToString());
+        Assert.Contains("0 concluído(s), 0 falha(s), 1 não confirmado(s)", fixture.Output.ToString());
+        Assert.DoesNotContain("não foi possível concluir", fixture.Error.ToString());
+    }
+
+    [Fact]
     public async Task FilteredUpdatesRunWithoutMenus()
     {
         var fixture = new Fixture("");
@@ -151,6 +164,24 @@ public class CliApplicationTests
             Assert.Equal(0, await download.App.RunAsync(["import", path, "--download"], default));
             Assert.Empty(download.Backend.Executed);
             Assert.Equal(2, download.Backend.Downloaded.Count);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task ImportReportsUnconfirmedInstallSeparatelyAndReturnsNonZero()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(path, "[{\"id\":\"Google.Chrome\"}]");
+            var fixture = new Fixture("");
+            fixture.Backend.UnconfirmedId = "Google.Chrome";
+
+            Assert.Equal(1, await fixture.App.RunAsync(["import", path], default));
+
+            Assert.Contains("Não confirmado", fixture.Error.ToString());
+            Assert.Contains("0 concluído(s), 0 falha(s), 1 não confirmado(s)", fixture.Output.ToString());
         }
         finally { File.Delete(path); }
     }
@@ -334,6 +365,7 @@ public class CliApplicationTests
         { Removed.Add(id); return Task.FromResult(new WingetExecutionResult { Success = true }); }
         public string? DetailsId { get; private set; }
         public string? FailId { get; set; }
+        public string? UnconfirmedId { get; set; }
         public Task<List<UpgradablePackage>> SearchAsync(InteractiveCliRequest request, CancellationToken token)
             => Task.FromResult(Packages.Where(package => request.Id is not null || package.Name.Contains(request.Query)).ToList());
         public Task<List<UpgradablePackage>> ListAsync(string? source, CancellationToken token) => Task.FromResult(Packages);
@@ -342,6 +374,15 @@ public class CliApplicationTests
         public Task<string> DetailsAsync(string id, string source, CancellationToken token)
         { DetailsId = id; return Task.FromResult("Detalhes do pacote"); }
         public Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
-        { Executed.Add(package.Id); return Task.FromResult(new WingetExecutionResult { Success = package.Id != FailId, ExitCode = package.Id == FailId ? 1 : 0, Output = "COM HRESULT backend interno" }); }
+        {
+            Executed.Add(package.Id);
+            return Task.FromResult(package.Id == UnconfirmedId
+                ? new WingetExecutionResult
+                {
+                    Success = false, ExitCode = 0, InstallerStarted = true,
+                    VerificationStatus = OperationVerificationStatus.Unconfirmed, Output = "Resultado não confirmado."
+                }
+                : new WingetExecutionResult { Success = package.Id != FailId, ExitCode = package.Id == FailId ? 1 : 0, Output = "COM HRESULT backend interno" });
+        }
     }
 }

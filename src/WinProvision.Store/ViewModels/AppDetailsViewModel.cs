@@ -695,8 +695,15 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             if (result.Success)
             {
                 app.IsInstalled = true;
+                app.IsInstalledUnconfirmed = false;
                 if (_app == app)
                     StatusText = $"{app.Name} instalado.";
+            }
+            else if (result.IsUnconfirmed)
+            {
+                app.IsInstalled = false;
+                app.IsInstalledUnconfirmed = true;
+                if (_app == app) StatusText = result.Output;
             }
             else if (_app == app)
             {
@@ -742,7 +749,8 @@ public sealed partial class AppDetailsViewModel : ObservableObject, IDisposable
             {
                 StatusText = result.Success
                     ? $"{app.Name} atualizado."
-                    : result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
+                    : result.IsUnconfirmed
+                        || result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
                         ? result.Output
                         : WingetErrorTranslator.ToMessage(result.FailureReason, "atualizar", app.Name);
             }

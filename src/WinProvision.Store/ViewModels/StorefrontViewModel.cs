@@ -445,7 +445,7 @@ public sealed partial class FeaturedCategoryShelf
     {
         foreach (AppEntry app in apps)
         {
-            app.IsInstalled = app.IsSelf || _installedAppsService.IsInstalled(app.Name, app.Id);
+            _installedAppsService.ApplyInstallationStatus(app);
         }
     }
 
@@ -756,7 +756,7 @@ public sealed partial class FeaturedCategoryShelf
                     foreach (AppEntry app in _searchedStoreBannerApps)
                     {
                         app.IconUrl = _iconService.ResolveIconUrl(app);
-                        app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
+                        _installedAppsService.ApplyInstallationStatus(app);
                     }
                     if (_searchedStoreBannerApps.Count > 0) _storeBannerSearchWeek = week;
                 }
@@ -1465,7 +1465,7 @@ public sealed partial class FeaturedCategoryShelf
                 if (match.Source.Equals("msstore", StringComparison.OrdinalIgnoreCase) && storeById.TryGetValue(match.PackageId, out var storeEntry))
                 {
                     storeEntry.IconUrl = _iconService.ResolveIconUrl(storeEntry);
-                    storeEntry.IsInstalled = _installedAppsService.IsInstalled(storeEntry.Name, storeEntry.Id);
+                    _installedAppsService.ApplyInstallationStatus(storeEntry);
                     return storeEntry;
                 }
 
@@ -1478,12 +1478,12 @@ public sealed partial class FeaturedCategoryShelf
                     Source = match.Source,
                 };
                 app.IconUrl = _iconService.ResolveIconUrl(app);
-                app.IsInstalled = _installedAppsService.IsInstalled(app.Name, app.Id);
+                _installedAppsService.ApplyInstallationStatus(app);
                 return app;
             }).Concat(directStoreEntries.Select(storeEntry =>
             {
                 storeEntry.IconUrl = _iconService.ResolveIconUrl(storeEntry);
-                storeEntry.IsInstalled = _installedAppsService.IsInstalled(storeEntry.Name, storeEntry.Id);
+                _installedAppsService.ApplyInstallationStatus(storeEntry);
                 return storeEntry;
             })).GroupBy(app => $"{app.Source}\0{app.Id}", StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First())
@@ -1614,7 +1614,14 @@ public sealed partial class FeaturedCategoryShelf
             if (result.Success)
             {
                 app.IsInstalled = true;
+                app.IsInstalledUnconfirmed = false;
                 StatusText = $"{app.Name} instalado com sucesso.";
+            }
+            else if (result.IsUnconfirmed)
+            {
+                app.IsInstalled = false;
+                app.IsInstalledUnconfirmed = true;
+                StatusText = $"{app.Name}: {result.Output}";
             }
             else
             {
