@@ -26,12 +26,14 @@ public class CliConsoleTests
         console.Note("2 pacote(s) para instalar:");
         console.Summary(1, 1, 0);
         console.Result("App [red] — falhou", false);
+        console.Unconfirmed("Opera GX — Não confirmado");
         console.Cancelled();
         Assert.Contains("Ajuda [teste]", output.ToString());
         Assert.Contains("Resumo", output.ToString());
         Assert.Contains("--elevation-cache", output.ToString());
         Assert.DoesNotContain("App [red]", output.ToString());
         Assert.Contains("App [red] — falhou", error.ToString());
+        Assert.Contains("Opera GX — Não confirmado", error.ToString());
         Assert.Contains("Operação cancelada.", error.ToString());
         Assert.DoesNotContain('\u001b', output.ToString() + error);
         Assert.DoesNotContain("Confirmar", output.ToString());

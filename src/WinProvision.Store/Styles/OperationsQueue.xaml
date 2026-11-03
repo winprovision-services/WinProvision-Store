@@ -11,6 +11,8 @@
             <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#FFFFEFED"/>
             <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FF526274"/>
             <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#FFF0F3F6"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="#FF825B00"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="#FFFFF4CE"/>
             <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#FFD7E0E8"/>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
@@ -24,6 +26,8 @@
             <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#26FF8585"/>
             <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FFC6D1E0"/>
             <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#18C6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="#FFFFD37A"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="#26FFC857"/>
             <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#24FFFFFF"/>
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
@@ -37,6 +41,8 @@
             <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
             <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
             <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
             <SolidColorBrush x:Key="AppProgressTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
@@ -52,6 +58,7 @@
                     <VisualState x:Name="Completed"/>
                     <VisualState x:Name="Failed"><VisualState.Setters><Setter Target="StatusSurface.Background" Value="{ThemeResource AppOperationFailureSurfaceBrush}"/><Setter Target="StatusText.Foreground" Value="{ThemeResource AppOperationFailureBrush}"/></VisualState.Setters></VisualState>
                     <VisualState x:Name="Canceled"><VisualState.Setters><Setter Target="StatusSurface.Background" Value="{ThemeResource AppOperationCanceledSurfaceBrush}"/><Setter Target="StatusText.Foreground" Value="{ThemeResource AppOperationCanceledBrush}"/></VisualState.Setters></VisualState>
+                    <VisualState x:Name="Unconfirmed"><VisualState.Setters><Setter Target="StatusSurface.Background" Value="{ThemeResource AppOperationUnconfirmedSurfaceBrush}"/><Setter Target="StatusText.Foreground" Value="{ThemeResource AppOperationUnconfirmedBrush}"/></VisualState.Setters></VisualState>
                 </VisualStateGroup></VisualStateManager.VisualStateGroups>
                 <Border x:Name="StatusSurface" Padding="8,2" CornerRadius="6" Background="{ThemeResource AppOperationSuccessSurfaceBrush}" BorderBrush="{ThemeResource QueueSubtleBorderBrush}" BorderThickness="1">
                     <TextBlock x:Name="StatusText" Text="{TemplateBinding Text}" FontSize="10.5" FontWeight="SemiBold" Foreground="{ThemeResource AppOperationSuccessBrush}"/>

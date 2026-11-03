@@ -46,7 +46,7 @@ public sealed partial class CliApplication
         string action = request.Download ? "baixar" : "instalar";
         _console.Heading("Importação");
         _console.Note($"{packages.Count} pacote(s) para {action}:");
-        int succeeded = 0, failed = 0, reboot = 0;
+        int succeeded = 0, failed = 0, reboot = 0, unconfirmed = 0;
         for (int i = 0; i < packages.Count; i++)
         {
             token.ThrowIfCancellationRequested();
@@ -57,15 +57,23 @@ public sealed partial class CliApplication
                     () => request.Download
                         ? backend.DownloadProfileAsync(package, request.Output, Log, token)
                         : backend.ExecuteProfileAsync(package, Log, token), token, i, packages.Count);
-                if (Report(result, $"{package.Name ?? package.Id} — {(request.Download ? "download concluído" : "instalado")}", package.Name ?? package.Id) == 0) succeeded++; else failed++;
+                if (result.IsUnconfirmed && !request.Download)
+                {
+                    unconfirmed++;
+                    _console.Unconfirmed($"Não confirmado: {package.Name ?? package.Id} — {result.Output}");
+                }
+                else if (Report(result, $"{package.Name ?? package.Id} — {(request.Download ? "download concluído" : "instalado")}", package.Name ?? package.Id) == 0)
+                    succeeded++;
+                else
+                    failed++;
                 if (result.RebootRequired) reboot++;
                 if (result.RebootInitiated) break;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception exception) { failed++; Log(exception.ToString()); _console.Result(CliFailure.Message(CliFailure.Describe(exception), package.Name ?? package.Id), false); }
         }
-        _console.Summary(succeeded, failed, reboot);
-        return failed == 0 ? 0 : 1;
+        _console.Summary(succeeded, failed, reboot, unconfirmed);
+        return failed == 0 && unconfirmed == 0 ? 0 : 1;
     }
 
 }

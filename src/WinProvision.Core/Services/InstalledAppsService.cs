@@ -11,6 +11,13 @@ using WinProvision.Core.Services;
 
 namespace WinProvision.Core.Services;
 
+public enum InstalledAppDetectionStatus
+{
+    NotInstalled,
+    Confirmed,
+    Unconfirmed
+}
+
 /// <summary>
 /// Fonte única de verdade sobre quais aplicativos clássicos (EXE/MSI) estão instalados.
 /// Ignora aplicativos nativos do Windows (UWP/AppX) varrendo diretamente o Registro.
@@ -132,26 +139,52 @@ public class InstalledAppsService
     /// </summary>
     public bool IsInstalled(string displayName, string? packageId = null)
     {
-        return IsInstalledByIdentity(displayName, packageId, _wingetInstalledIds,
-            _wingetIdsByDisplayName, _installedDisplayNames);
+        return GetDetectionStatus(displayName, packageId) == InstalledAppDetectionStatus.Confirmed;
     }
 
+    public void ApplyInstallationStatus(AppEntry app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (app.IsSelf)
+        {
+            app.IsInstalled = true;
+            app.IsInstalledUnconfirmed = false;
+            return;
+        }
+
+        var status = GetDetectionStatus(app.Name, app.Id);
+        app.IsInstalled = status == InstalledAppDetectionStatus.Confirmed;
+        app.IsInstalledUnconfirmed = status == InstalledAppDetectionStatus.Unconfirmed;
+    }
+
+    public InstalledAppDetectionStatus GetDetectionStatus(string displayName, string? packageId = null)
+        => GetDetectionStatusByIdentity(displayName, packageId, _wingetInstalledIds,
+            _wingetIdsByDisplayName, _installedDisplayNames);
+
     internal static bool IsInstalledByIdentity(string displayName, string? packageId,
+        IReadOnlySet<string> installedIds, IReadOnlyDictionary<string, HashSet<string>> installedIdsByDisplayName,
+        IReadOnlySet<string> registryDisplayNames)
+        => GetDetectionStatusByIdentity(displayName, packageId, installedIds,
+            installedIdsByDisplayName, registryDisplayNames) == InstalledAppDetectionStatus.Confirmed;
+
+    internal static InstalledAppDetectionStatus GetDetectionStatusByIdentity(string displayName, string? packageId,
         IReadOnlySet<string> installedIds, IReadOnlyDictionary<string, HashSet<string>> installedIdsByDisplayName,
         IReadOnlySet<string> registryDisplayNames)
     {
         if (!string.IsNullOrWhiteSpace(packageId)
             && (installedIds.Contains(packageId.Trim()) || HasKnownPackageIdAlias(packageId, installedIds)))
-            return true;
-        if (string.IsNullOrWhiteSpace(displayName)) return false;
+            return InstalledAppDetectionStatus.Confirmed;
+        if (string.IsNullOrWhiteSpace(displayName)) return InstalledAppDetectionStatus.NotInstalled;
         string name = NormalizeDisplayName(displayName);
         if (!string.IsNullOrWhiteSpace(packageId)
             && installedIdsByDisplayName.TryGetValue(name, out var sameNameIds)
             && sameNameIds.Count > 0
             && !sameNameIds.Contains(packageId.Trim())
             && !sameNameIds.Any(id => AreKnownPackageIdAliases(packageId, id)))
-            return false;
-        return registryDisplayNames.Contains(name);
+            return InstalledAppDetectionStatus.NotInstalled;
+        return registryDisplayNames.Contains(name)
+            ? InstalledAppDetectionStatus.Unconfirmed
+            : InstalledAppDetectionStatus.NotInstalled;
     }
 
     private static bool HasKnownPackageIdAlias(string packageId, IReadOnlySet<string> installedIds) =>

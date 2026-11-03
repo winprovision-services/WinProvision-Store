@@ -7,6 +7,59 @@ namespace WinProvision.Core.Tests;
 
 public sealed class UpdateVersionVerificationTests
 {
+    [Fact]
+    public void InstallConfirmationRequiresExactIdentitySourceAndRequestedVersion()
+    {
+        var result = new WingetExecutionResult { Success = true };
+        var installed = new[]
+        {
+            new UpgradablePackage
+            {
+                Id = "Opera.OperaGX", Name = "Opera GX", Source = "winget", CurrentVersion = "1.2.3"
+            }
+        };
+
+        var confirmed = WinGetService.ConfirmInstallResult(
+            "Opera.OperaGX", "winget", "1.2.3.0", result, installed);
+        Assert.True(confirmed.Success);
+        Assert.True(confirmed.InstallationVerified);
+        Assert.Equal(OperationVerificationStatus.Confirmed, confirmed.VerificationStatus);
+
+        var fallbackSourceResult = WinGetService.ConfirmInstallResult(
+            "Opera.OperaGX", "winget", null,
+            new WingetExecutionResult { Success = true, EffectiveSource = "msstore" },
+            new[] { new UpgradablePackage
+            {
+                Id = "Opera.OperaGX", Name = "Opera GX", Source = "msstore", CurrentVersion = "1.2.3"
+            } });
+        Assert.True(fallbackSourceResult.Success);
+        Assert.True(fallbackSourceResult.InstallationVerified);
+
+        var wrongSource = WinGetService.ConfirmInstallResult(
+            "Opera.OperaGX", "msstore", "1.2.3.0", new WingetExecutionResult { Success = true }, installed);
+        Assert.False(wrongSource.Success);
+        Assert.True(wrongSource.IsUnconfirmed);
+        Assert.Contains("não encontrado", wrongSource.Output);
+
+        var wrongVersion = WinGetService.ConfirmInstallResult(
+            "Opera.OperaGX", "winget", "2.0", new WingetExecutionResult { Success = true }, installed);
+        Assert.False(wrongVersion.Success);
+        Assert.True(wrongVersion.IsUnconfirmed);
+        Assert.Contains("versão 1.2.3", wrongVersion.Output);
+    }
+
+    [Fact]
+    public void InstallConfirmationDoesNotConvertUnresolvedInstallerFailureIntoSuccessOrFailureClaim()
+    {
+        var failure = new WingetExecutionResult { Success = false, InstallerStarted = true, Output = "exit code 1" };
+        var result = WinGetService.ConfirmInstallResult(
+            "Opera.OperaGX", "winget", null, failure, Array.Empty<UpgradablePackage>());
+
+        Assert.False(result.Success);
+        Assert.True(result.IsUnconfirmed);
+        Assert.Contains("exit code 1", result.Output);
+    }
+
     [Theory]
     [InlineData(true, "26.9.3", false, true)]
     [InlineData(true, "26.10", false, true)]
@@ -143,6 +196,7 @@ public sealed class UpdateVersionVerificationTests
             new[] { new UpgradablePackage { Id = offer.Id, Name = offer.Name, CurrentVersion = "7.6.7.0" } });
         Assert.False(unchanged.Success);
         Assert.True(unchanged.InstallerStarted);
+        Assert.True(unchanged.IsUnconfirmed);
         Assert.Contains("7.6.7.0", unchanged.Output);
 
         var ambiguous = WinGetService.ConfirmUpgradeResult(offer,

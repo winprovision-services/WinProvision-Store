@@ -47,6 +47,9 @@ public sealed partial class PackageItemViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsInstalled { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsInstalledUnconfirmed { get; set; }
+
     public IAsyncRelayCommand InstallCommand { get; }
     public IAsyncRelayCommand DetailsCommand { get; }
     public IAsyncRelayCommand DownloadCommand { get; }
@@ -81,6 +84,7 @@ public sealed partial class PackageItemViewModel : ObservableObject
         AddCommand = new RelayCommand(() => _add(this));
         RemoveCommand = new RelayCommand(() => _remove(this), () => !IsWorking);
         IsInstalled = app.IsSelf || app.IsInstalled;
+        IsInstalledUnconfirmed = !app.IsSelf && app.IsInstalledUnconfirmed;
     }
 
     partial void OnIsSelectedChanged(bool value) => App.IsSelectedForInstall = value;

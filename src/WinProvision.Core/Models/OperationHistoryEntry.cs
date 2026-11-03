@@ -28,6 +28,7 @@ public sealed partial record OperationHistoryEntry(
         OperationState.Completed => "Concluída",
         OperationState.Failed => "Falhou",
         OperationState.Canceled => "Cancelada",
+        OperationState.Unconfirmed => "Não confirmado",
         _ => "Finalizada"
     };
 

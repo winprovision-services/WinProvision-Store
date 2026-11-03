@@ -81,10 +81,10 @@ public sealed class CliConsole
         }
     }
 
-    public void Summary(int succeeded, int failed, int reboot)
+    public void Summary(int succeeded, int failed, int reboot, int unconfirmed = 0)
     {
         Heading("Resumo");
-        _console.MarkupLine($"  [springgreen2]{succeeded} concluído(s)[/], [{(failed == 0 ? "grey" : "red")}]{failed} falha(s)[/], [grey]{reboot} exige(m) reinicialização.[/]");
+        _console.MarkupLine($"  [springgreen2]{succeeded} concluído(s)[/], [{(failed == 0 ? "grey" : "red")}]{failed} falha(s)[/], [yellow]{unconfirmed} não confirmado(s)[/], [grey]{reboot} exige(m) reinicialização.[/]");
     }
 
     public void Cancelled() => _errorConsole.MarkupLine("  [yellow]•[/] Operação cancelada.");
@@ -181,5 +181,11 @@ public sealed class CliConsole
         label = CliApplication.Clean(label);
         string suffix = reboot ? " Reinicie o Windows para concluir." : "";
         (success ? _console : _errorConsole).MarkupLine($"  [{(success ? "springgreen2" : "red")}]{(success ? "✔" : "✗")}[/] {Markup.Escape(label + suffix)}");
+    }
+
+    public void Unconfirmed(string label)
+    {
+        label = CliApplication.Clean(label);
+        _errorConsole.MarkupLine($"  [yellow]?[/] {Markup.Escape(label)}");
     }
 }

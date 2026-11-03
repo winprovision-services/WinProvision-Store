@@ -17,7 +17,15 @@ public enum OperationState
     Running,
     Completed,
     Failed,
-    Canceled
+    Canceled,
+    Unconfirmed
+}
+
+public enum OperationVerificationStatus
+{
+    NotChecked,
+    Confirmed,
+    Unconfirmed
 }
 
 /// <summary>
@@ -184,13 +192,17 @@ public partial class OperationItem : INotifyPropertyChanged, IDisposable
                 {
                     LiveLine = "Operação cancelada.";
                 }
+                else if (value == OperationState.Unconfirmed)
+                {
+                    LiveLine = "Resultado não confirmado.";
+                }
 
                 OnPropertyChanged(nameof(IsFinished));
             }
         }
     }
 
-    public bool IsFinished => State is OperationState.Completed or OperationState.Failed or OperationState.Canceled;
+    public bool IsFinished => State is OperationState.Completed or OperationState.Failed or OperationState.Canceled or OperationState.Unconfirmed;
 
 
     public bool CanCancel

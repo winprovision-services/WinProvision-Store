@@ -12,7 +12,7 @@ public static class BackgroundUpdateApplication
     public static async Task<int> RunAsync(ICliPackageBackend backend, ApplicationPreferencesService preferences,
         IgnoredUpdatesService ignored, Action<string> log, Action<int>? checkedSummary = null,
         Action<int, int, int>? completedSummary = null, CancellationToken token = default, bool force = false,
-        Action<int, string>? discovered = null)
+        Action<int, string>? discovered = null, Action<int, int, int, int>? completedSummaryDetailed = null)
     {
         token.ThrowIfCancellationRequested();
         if (!preferences.AutoUpdateAtStartup && !force) return 0;
@@ -30,7 +30,7 @@ public static class BackgroundUpdateApplication
         }
         var packages = candidates.Where(p => preferences.UpdateScope == BackgroundUpdateScope.AllSupportedPackages
             || preferences.IsAutoUpdatePackageSelected(p.Id, p.Source)).ToArray();
-        int succeeded = 0, failed = 0;
+        int succeeded = 0, failed = 0, unconfirmed = 0;
         foreach (var package in packages)
         {
             token.ThrowIfCancellationRequested();
@@ -44,6 +44,11 @@ public static class BackgroundUpdateApplication
                     result = await backend.ExecuteAsync(false, package, log, token);
                 }
                 if (result.Success) succeeded++;
+                else if (result.IsUnconfirmed)
+                {
+                    unconfirmed++;
+                    log(result.Output);
+                }
                 else
                 {
                     failed++;
@@ -60,8 +65,10 @@ public static class BackgroundUpdateApplication
                 break;
             }
         }
-        completedSummary?.Invoke(succeeded, failed, candidates.Length - succeeded - failed);
-        return failed == 0 ? 0 : 1;
+        int unselected = candidates.Length - packages.Length;
+        completedSummary?.Invoke(succeeded, failed, unselected);
+        completedSummaryDetailed?.Invoke(succeeded, failed, unconfirmed, unselected);
+        return failed == 0 && unconfirmed == 0 ? 0 : 1;
     }
 
     internal static bool ShouldRetryUpdate(WingetExecutionResult result, int retry, CancellationToken token) =>
@@ -118,10 +125,13 @@ public static class BackgroundUpdateApplication
                 state = state with { Available = available };
                 if (available > 0 && (force || state.Fingerprint != previous?.Fingerprint || previous?.ExitCode != 0))
                     notifications.ShowBackgroundUpdateCheckSummary(available);
-            }, (updated, failed, unselected) =>
+            }, completedSummary: null, token: token, force: force,
+            discovered: (available, fingerprint) => state = state with { Available = available, Fingerprint = fingerprint },
+            completedSummaryDetailed: (updated, failed, unconfirmed, unselected) =>
             {
-                if (updated > 0 || failed > 0) notifications.ShowBackgroundUpdateSummary(updated, failed, unselected);
-            }, token, force, (available, fingerprint) => state = state with { Available = available, Fingerprint = fingerprint });
+                if (updated > 0 || failed > 0 || unconfirmed > 0)
+                    notifications.ShowBackgroundUpdateSummary(updated, failed, unselected, unconfirmed);
+            });
             return exitCode;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { exitCode = 130; throw; }

@@ -18,7 +18,7 @@ public sealed partial class PackageDetailsProvider(IStoreCatalog store, WingetPa
         var details = await store.LoadDetailsAsync(app, token);
         await installed.EnsureLoadedAsync(token);
         token.ThrowIfCancellationRequested();
-        details.IsInstalled = details.IsSelf || installed.IsInstalled(details.Name, details.Id);
+        installed.ApplyInstallationStatus(details);
         return details;
     }
     public Task<WingetPackageDetailsService.ExtendedPackageInfo> LoadExtendedAsync(AppEntry app, CancellationToken token) => metadata.GetAsync(app, token);

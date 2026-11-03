@@ -139,7 +139,7 @@ public sealed partial class CliApplication
         bool install = request.Command is "search" or "install";
         _console.Heading(install ? "Instalação" : "Atualização");
         _console.Note($"{chosen.Count} pacote(s) para {(install ? "instalar" : "atualizar")}:");
-        int succeeded = 0, failed = 0, reboot = 0;
+        int succeeded = 0, failed = 0, reboot = 0, unconfirmed = 0;
         for (int i = 0; i < chosen.Count; i++)
         {
             token.ThrowIfCancellationRequested();
@@ -151,7 +151,19 @@ public sealed partial class CliApplication
             catch (Exception exception)
             { failed++; Log(exception.ToString()); _console.Result(CliFailure.Message(CliFailure.Describe(exception), package.Name), false); continue; }
             if (!result.Success)
-            { failed++; Log($"{package.Id}: {result.ExitCode} {result.Output}"); _console.Result(CliFailure.Message(CliFailure.Describe(result), package.Name), false); }
+            {
+                Log($"{package.Id}: {result.ExitCode} {result.Output}");
+                if (result.IsUnconfirmed)
+                {
+                    unconfirmed++;
+                    _console.Unconfirmed($"Não confirmado: {package.Name} — {result.Output}");
+                }
+                else
+                {
+                    failed++;
+                    _console.Result(CliFailure.Message(CliFailure.Describe(result), package.Name), false);
+                }
+            }
             else
             {
                 succeeded++;
@@ -160,8 +172,8 @@ public sealed partial class CliApplication
                 if (result.RebootInitiated) break;
             }
         }
-        _console.Summary(succeeded, failed, reboot);
-        return failed == 0 ? 0 : 1;
+        _console.Summary(succeeded, failed, reboot, unconfirmed);
+        return failed == 0 && unconfirmed == 0 ? 0 : 1;
     }
 
     private static List<UpgradablePackage> Filter(List<UpgradablePackage> packages, InteractiveCliRequest request)

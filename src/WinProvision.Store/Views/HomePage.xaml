@@ -70,6 +70,7 @@
                                 </TextBlock.Style>
                             </TextBlock>
                             <TextBlock Text="· Instalado" FontSize="10" Margin="6,0,0,0" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <TextBlock Text="· Não confirmado" FontSize="10" Margin="6,0,0,0" Foreground="{ThemeResource SystemFillColorCautionBrush}" Visibility="{Binding IsInstalledUnconfirmed, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                         <Grid Margin="0,4,0,0" Visibility="{Binding StoreRating, Converter={StaticResource NullToVisibilityConverter}}">
                             <Grid.ColumnDefinitions>

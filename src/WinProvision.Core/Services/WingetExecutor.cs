@@ -16,6 +16,10 @@ namespace WinProvision.Core.Services;
 public class WingetExecutionResult
 {
     public bool Success { get; set; }
+    [JsonIgnore]
+    public OperationVerificationStatus VerificationStatus { get; set; }
+    [JsonIgnore]
+    public string? EffectiveSource { get; set; }
     public int ExitCode { get; set; }
     private bool _rebootRequired;
     public bool RebootRequired { get => _rebootRequired || InstallerExitCodes.RequiresReboot(ExitCode); set => _rebootRequired = value; }
@@ -42,6 +46,10 @@ public class WingetExecutionResult
     /// <summary>Uma consulta nova comprovou que o alvo já está satisfeito, sem executar instalador.</summary>
     [JsonIgnore]
     public bool UpdateAlreadySatisfied { get; set; }
+    [JsonIgnore]
+    public bool InstallationVerified { get; set; }
+    [JsonIgnore]
+    public bool IsUnconfirmed => VerificationStatus == OperationVerificationStatus.Unconfirmed;
 
     /// <summary>
     /// Motivo canônico da falha (ver <see cref="WingetErrorTranslator"/>), já classificado a

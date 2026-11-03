@@ -63,6 +63,7 @@ public sealed partial class OperationViewModel : ObservableObject, IDisposable
             OperationKind.Uninstall => $"{AppName} removido com sucesso",
             _ => $"{AppName} concluído"
         },
+        OperationState.Unconfirmed => $"{AppName} — resultado não confirmado",
         OperationState.Failed => $"Falha ao {KindVerb} {AppName}",
         OperationState.Canceled => $"{KindLabel} {AppName} cancelado",
         _ => $"{AppName}"
@@ -99,6 +100,7 @@ public sealed partial class OperationViewModel : ObservableObject, IDisposable
             _ => "Falha na operação"
         },
         OperationState.Canceled => "Cancelado",
+        OperationState.Unconfirmed => "Não confirmado",
         _ => string.Empty
     };
 
@@ -151,7 +153,7 @@ public sealed partial class OperationsViewModel : ObservableObject, IDisposable
     public bool ShowFailureBadge => HasFailedOperations && !IsQueueExpanded;
     public FluentIcons.Common.Icon ExpanderIcon => IsQueueExpanded ? FluentIcons.Common.Icon.ChevronUp : FluentIcons.Common.Icon.ChevronDown;
     public string QueueDescription => HasPending ? $"Fila de operações, {PendingCount} pendente(s)" : "Fila de operações";
-    public string HeaderText => _queue.TotalCount == 0 ? "Operações" : $"{_queue.CompletedCount} de {_queue.TotalCount} operações concluídas";
+    public string HeaderText => _queue.TotalCount == 0 ? "Operações" : $"{_queue.CompletedCount} de {_queue.TotalCount} operações finalizadas";
     public IRelayCommand CancelAllCommand { get; }
     public IRelayCommand ClearCommand { get; }
     public IRelayCommand ClearSuccessfulCommand { get; }

@@ -97,12 +97,15 @@ public static partial class OperationRunner
         PackageInstallOptions? options = null)
     {
         options ??= new PackageInstallOptions(InstallLocation: installLocation);
-        Task<WingetExecutionResult> operation = _installHandler is null
+        var installHandler = _installHandler;
+        Task<WingetExecutionResult> operation = installHandler is null
             ? executor.InstallAppAsync(appId, onLogReceived, cancellationToken, installLocation, source)
-            : _installHandler(appId, onLogReceived, cancellationToken, options, onProgress, source);
+            : installHandler(appId, onLogReceived, cancellationToken, options, onProgress, source);
         WingetExecutionResult result = await operation.ConfigureAwait(false);
+        if (installHandler is null)
+            result = MarkInstallUnconfirmedIfNeeded(result);
         if (result.Success)
-            ReportSuccessfulInstall(appId, source);
+            ReportSuccessfulInstall(appId, result.EffectiveSource ?? source);
         return result;
     }
 
@@ -127,6 +130,7 @@ public static partial class OperationRunner
         string? postInstallScript = null,
         bool runInstallHooks = false)
     {
+        var installHandler = _installHandler;
         PackageInstallOptions? savedOptions = useSavedPackageOptions
             ? _packageInstallOptionsProvider?.Invoke(appId, source)
             : null;
@@ -164,7 +168,7 @@ public static partial class OperationRunner
                 PreInstallScript: preInstallScript,
                 PostInstallScript: postInstallScript,
                 RunInstallHooks: runInstallHooks);
-            if (_installHandler is null)
+            if (installHandler is null)
             {
                 item.Method = WingetMethod.WingetExe;
                 // Envia um progresso inicial para garantir que a cor seja aplicada
@@ -180,13 +184,13 @@ public static partial class OperationRunner
                 return hookFailure;
             }
 
-            var result = _installHandler is null
+            var result = installHandler is null
                 ? await executor.InstallAppAsync(
                     appId, onLogReceived, item.CancellationTokenSource.Token, installLocation,
                     source: source, requiresElevation: requiresElevation, scope: scope,
                     architecture: architecture, interactive: interactive, ignoreSecurityHash: ignoreSecurityHash,
                     version: version, customArguments: customArguments)
-                : await _installHandler(
+                : await installHandler(
                     appId,
                     onLogReceived,
                     item.CancellationTokenSource.Token,
@@ -200,16 +204,21 @@ public static partial class OperationRunner
                 result = PackageInstallHookRunner.Failure("pós-instalação");
             }
 
-            AppendResultLog(item, source, result);
+            if (installHandler is null)
+                result = MarkInstallUnconfirmedIfNeeded(result);
+            string effectiveSource = result.EffectiveSource ?? source;
+            AppendResultLog(item, effectiveSource, result);
 
             if (result.Success)
             {
-                ReportSuccessfulInstall(appId, source);
+                ReportSuccessfulInstall(appId, effectiveSource);
                 item.IsIndeterminate = false;
                 item.Progress = 100;
             }
             item.State = result.Success
                 ? OperationState.Completed
+                : result.IsUnconfirmed
+                    ? OperationState.Unconfirmed
                 : IsCanceledResult(item, result)
                     ? OperationState.Canceled
                     : OperationState.Failed;
@@ -225,6 +234,11 @@ public static partial class OperationRunner
                 // O instalador terminou, mas o pós-hook falhou; atualize o inventário
                 // para impedir que a falha do hook provoque uma nova instalação.
                 InstalledPackageMethodHistory.Record(appId, item.Method);
+                installedAppsService?.MarkInstalled();
+                item.StatusText = result.Output;
+            }
+            else if (result.IsUnconfirmed)
+            {
                 installedAppsService?.MarkInstalled();
                 item.StatusText = result.Output;
             }
@@ -345,11 +359,17 @@ public static partial class OperationRunner
             }
             item.State = result.Success
                 ? OperationState.Completed
+                : result.IsUnconfirmed
+                    ? OperationState.Unconfirmed
                 : IsCanceledResult(item, result)
                     ? OperationState.Canceled
                     : OperationState.Failed;
 
-            if (!result.Success && item.State is OperationState.Failed or OperationState.Canceled)
+            if (result.IsUnconfirmed)
+            {
+                item.StatusText = result.Output;
+            }
+            else if (!result.Success && item.State is OperationState.Failed or OperationState.Canceled)
             {
                 item.StatusText = result.Output.StartsWith("A atualização foi executada, mas não foi confirmada.", StringComparison.Ordinal)
                     ? result.Output
@@ -1076,6 +1096,22 @@ public static partial class OperationRunner
         string output = result.Output?.Trim() ?? string.Empty;
         if (output.Length > 0 && !item.GetFullLog().Contains(output, StringComparison.Ordinal))
             item.AppendLog($"Detalhes retornados pelo instalador: {output}");
+    }
+
+    private static WingetExecutionResult MarkInstallUnconfirmedIfNeeded(WingetExecutionResult result)
+    {
+        if (!result.Success || result.InstallationVerified || result.IsUnconfirmed)
+            return result;
+
+        string originalOutput = result.Output;
+        result.Success = false;
+        result.InstallerStarted = true;
+        result.VerificationStatus = OperationVerificationStatus.Unconfirmed;
+        result.FailureReason = WingetFailureReason.Unknown;
+        result.Output = string.IsNullOrWhiteSpace(originalOutput)
+            ? "Resultado não confirmado. O executor direto não verificou a identidade instalada."
+            : $"Resultado não confirmado. O executor direto não verificou a identidade instalada.{Environment.NewLine}{originalOutput}";
+        return result;
     }
 
     private static bool IsCanceledResult(OperationItem item, WingetExecutionResult result) =>

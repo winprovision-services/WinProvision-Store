@@ -17,6 +17,7 @@ public sealed partial class OperationStatusBadge : Control
     {
         OperationState.Failed => "Failed",
         OperationState.Canceled => "Canceled",
+        OperationState.Unconfirmed => "Unconfirmed",
         _ => "Completed"
     }, false);
 }
