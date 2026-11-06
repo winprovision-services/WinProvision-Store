@@ -1,10 +1,6 @@
 // WinProvisionApiService.cs
-// Cliente de instalação própria: lê os instaladores dos mesmos detalhes publicados pelo catálogo V2.
-//
-// Formato observado:
-//   Store/Catalog/manifest.json + Store/Catalog/manifest/search-index.json (gerenciador de pacotes)
-//   Store/Catalog/msstore/manifest.json + .../search-index.json (catálogo visual)
-//   Cada detailPath aponta para o app.json que também contém "installers".
+// Cliente de instalação própria: lê o índice SQLite de release do WinProvision-PKGS
+// e os detalhes fixados ao mesmo commit. O catálogo CDN anterior é uma alternativa.
 //
 using System;
 using System.Collections.Generic;
@@ -38,6 +34,7 @@ public sealed class PackageIndex
     [JsonPropertyName("count")] public int Count { get; set; }
     [JsonPropertyName("packages")] public List<PackageIndexEntry> Packages { get; set; } = [];
     [JsonPropertyName("sourceIndexHashes")] public Dictionary<string, string> SourceIndexHashes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [JsonIgnore] internal bool RemoteRefreshSucceeded { get; set; }
 }
 
 public sealed class PackageIndexEntry
@@ -167,6 +164,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         }
         finally
         {
+            if (_ownsReleaseCatalogIndexService && _releaseCatalogIndexService is IDisposable releaseCatalog)
+                releaseCatalog.Dispose();
             if (_ownsHttpClient) _http.Dispose();
             _lifetime.Dispose();
         }
@@ -178,6 +177,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private static readonly RequestRateLimitPolicy MetadataRateLimit = RequestRateLimitHandler.SharedPolicy;
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
+    private readonly IReleaseCatalogIndexService _releaseCatalogIndexService;
+    private readonly bool _ownsReleaseCatalogIndexService;
     private readonly string _cacheDir;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
     private readonly SemaphoreSlim _manifestCacheLock = new(1, 1);
@@ -187,6 +188,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     private PackageIndex? _indexCache;
     private WingetCdnCatalog.Snapshot? _catalogSnapshot;
+    private IReadOnlyDictionary<string, AppEntry> _releaseCatalogEntriesById =
+        new Dictionary<string, AppEntry>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, (WingetCdnCatalog.App App, DateTimeOffset Expires)> _wingetApps = new(StringComparer.OrdinalIgnoreCase);
     private bool _startupRevalidationScheduled;
     private IReadOnlyDictionary<string, PackageIndexEntry> _catalogEntriesById =
@@ -209,7 +212,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private static readonly SemaphoreSlim InstallerCacheGate = new(1, 1);
 
     public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null, string? installRecordsPath = null,
-        OperationPreferencesService? operationPreferences = null)
+        OperationPreferencesService? operationPreferences = null,
+        IReleaseCatalogIndexService? releaseCatalogIndexService = null)
     {
         _operationPreferences = operationPreferences ?? new OperationPreferencesService();
         _ownsHttpClient = http is null;
@@ -224,6 +228,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         { Timeout = Timeout.InfiniteTimeSpan };
         if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("WinProvisionStore/1.0");
+        _ownsReleaseCatalogIndexService = releaseCatalogIndexService is null;
+        _releaseCatalogIndexService = releaseCatalogIndexService ?? new ReleaseCatalogIndexService(_http,
+            Path.Combine(cacheDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "WinProvisionStore", "ApiCache"), "release-index"));
         _cacheDir = cacheDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "WinProvisionStore", "ApiCache");
@@ -246,12 +254,52 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         await _indexLock.WaitAsync(ct);
         try
         {
-            if (!forceRefresh && _indexCache is not null)
+            if (!forceRefresh && !requireRemote && _indexCache is not null)
             {
                 ScheduleStartupRevalidation();
                 return _indexCache;
             }
-            if (_catalogSnapshot is null && File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath))
+            ReleaseCatalogSnapshot? releaseSnapshot = null;
+            if (!requireRemote)
+            {
+                try
+                {
+                    releaseSnapshot = await _releaseCatalogIndexService.TryLoadLocalSnapshotAsync(ct).ConfigureAwait(false);
+                    if (releaseSnapshot is not null)
+                    {
+                        _indexCache = BuildIndex(releaseSnapshot);
+                        if (!forceRefresh)
+                        {
+                            ScheduleStartupRevalidation();
+                            return _indexCache;
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex) when (IsCatalogReadFailure(ex))
+                {
+                    CoreLog.Warning(ex, "ReadReleaseCatalogIndexCache");
+                }
+            }
+            try
+            {
+                releaseSnapshot = await _releaseCatalogIndexService.RefreshAsync(ct).ConfigureAwait(false);
+                string? previousCatalog = _indexCache?.SourceIndexHashes.GetValueOrDefault("winget");
+                PackageIndex releaseIndex = _indexCache = BuildIndex(releaseSnapshot);
+                releaseIndex.RemoteRefreshSucceeded = true;
+                if (!string.Equals(previousCatalog, releaseSnapshot.DatabaseSha256, StringComparison.OrdinalIgnoreCase))
+                    _wingetApps.Clear();
+                _startupRevalidationScheduled = true;
+                return releaseIndex;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (IsCatalogReadFailure(ex))
+            {
+                CoreLog.Warning(ex, "RefreshReleaseCatalogIndex");
+            }
+            if (!requireRemote && releaseSnapshot is not null && IsRecentReleaseSnapshot(releaseSnapshot))
+                return _indexCache = BuildIndex(releaseSnapshot);
+            if (!requireRemote && _catalogSnapshot is null && File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath))
             {
                 try
                 {
@@ -274,6 +322,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 var snapshot = await WingetCdnCatalog.LoadIndexAsync(_http, ct, _catalogSnapshot);
                 bool indexChanged = _indexCache?.SourceIndexHashes.GetValueOrDefault("winget") != snapshot.IndexSha256;
                 _indexCache = BuildIndex(snapshot);
+                _indexCache.RemoteRefreshSucceeded = true;
                 Directory.CreateDirectory(_cacheDir);
                 if (indexChanged || !File.Exists(WingetSearchCachePath))
                     await AtomicFile.WriteAllBytesAsync(WingetSearchCachePath, snapshot.IndexBytes, ct);
@@ -287,13 +336,15 @@ public sealed class WinProvisionApiService : IAsyncDisposable
                 ct.ThrowIfCancellationRequested();
                 if (requireRemote)
                     throw new HttpRequestException("Não foi possível revalidar o catálogo remoto; a operação exige uma geração atual do R2.", ex);
-                if (File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath)
+                if (!requireRemote && File.Exists(WingetCatalogCachePath) && File.Exists(WingetSearchCachePath)
                     && IsRecentCache(WingetCatalogCachePath))
                 {
                     var cached = WingetCdnCatalog.ParseSnapshot(await File.ReadAllBytesAsync(WingetCatalogCachePath, ct),
                         await File.ReadAllBytesAsync(WingetSearchCachePath, ct));
                     return _indexCache = BuildIndex(cached);
                 }
+                if (!requireRemote && releaseSnapshot is not null)
+                    return _indexCache = BuildIndex(releaseSnapshot);
                 throw new HttpRequestException("Não foi possível consultar a API e não há índice local recente disponível.", ex);
             }
         }
@@ -309,6 +360,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
     private PackageIndex BuildIndex(WingetCdnCatalog.Snapshot snapshot)
     {
         _catalogSnapshot = snapshot;
+        _releaseCatalogEntriesById = new Dictionary<string, AppEntry>(StringComparer.OrdinalIgnoreCase);
         var index = new PackageIndex
         {
             Schema = 3, GeneratedAt = snapshot.GeneratedAt, Count = snapshot.Apps.Count,
@@ -334,18 +386,80 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         return index;
     }
 
+    private PackageIndex BuildIndex(ReleaseCatalogSnapshot snapshot)
+    {
+        _catalogSnapshot = null;
+        List<AppEntry> apps = snapshot.Apps
+            .Where(app => app.Source.Equals("winget", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var index = new PackageIndex
+        {
+            Schema = 3,
+            GeneratedAt = GetReleaseCacheTimestamp(snapshot),
+            Count = apps.Count,
+            Packages = apps.Select(app => new PackageIndexEntry
+            {
+                Id = app.Id,
+                Name = app.Name,
+                Publisher = app.Publisher,
+                Version = app.Version,
+                Source = "winget",
+                Architectures = app.Architectures,
+                InstallerCount = app.Architectures.Count,
+                ManifestPath = app.CatalogDetailPath,
+                ManifestSha256 = app.CatalogDetailSha256,
+                IconUrl = IconService.ResolveCatalogMediaUrl(app, app.Media?.Icon, app.Media?.IconSha256),
+                Description = app.Description
+            }).ToList(),
+            SourceIndexHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                { ["winget"] = RequireReleaseDatabaseSha256(snapshot.DatabaseSha256) }
+        };
+        _releaseCatalogEntriesById = apps.ToDictionary(app => CatalogEntryKey("winget", app.Id),
+            StringComparer.OrdinalIgnoreCase);
+        _catalogEntriesById = index.Packages.ToDictionary(entry => CatalogEntryKey(entry.Source, entry.Id),
+            StringComparer.OrdinalIgnoreCase);
+        return index;
+    }
+
+    private static DateTimeOffset GetReleaseCacheTimestamp(ReleaseCatalogSnapshot snapshot)
+    {
+        if (snapshot.LastValidatedUtc is { } lastValidated)
+            return lastValidated;
+        try
+        {
+            if (File.Exists(snapshot.DatabasePath))
+                return new DateTimeOffset(File.GetLastWriteTimeUtc(snapshot.DatabasePath), TimeSpan.Zero);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            CoreLog.Debug($"[WinProvisionAPI] Não foi possível ler a data do cache SQLite: {exception.Message}");
+        }
+        return DateTimeOffset.MinValue;
+    }
+
+    private static string RequireReleaseDatabaseSha256(string? value)
+    {
+        if (value is { Length: 64 } && value.All(Uri.IsHexDigit))
+            return value.ToLowerInvariant();
+        throw new InvalidDataException("A release SQLite não informa um SHA-256 válido do banco.");
+    }
+
+    private static bool IsCatalogReadFailure(Exception exception) => exception is HttpRequestException or IOException
+        or OperationCanceledException or JsonException or InvalidDataException or UnauthorizedAccessException
+        or Microsoft.Data.Sqlite.SqliteException or FormatException or OverflowException;
+
     /// <summary>Verifica cada catálogo remoto individualmente.</summary>
     public async Task<CatalogApiHealth> CheckCatalogHealthAsync(CancellationToken ct = default)
     {
         var clock = Stopwatch.StartNew();
         try
         {
-            var snapshot = await WingetCdnCatalog.LoadIndexAsync(_http, ct);
+            PackageIndex index = await GetIndexAsync(forceRefresh: true, ct: ct, requireRemote: true).ConfigureAwait(false);
             return new CatalogApiHealth(DateTimeOffset.UtcNow,
-                [new CatalogSourceHealth("WinGet", true, snapshot.Apps.Count, snapshot.GeneratedAt, clock.Elapsed, null)]);
+                [new CatalogSourceHealth("WinGet", true, index.Count, index.GeneratedAt, clock.Elapsed, null)]);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException)
+        catch (Exception ex) when (IsCatalogReadFailure(ex))
         {
             return new CatalogApiHealth(DateTimeOffset.UtcNow,
                 [new CatalogSourceHealth("WinGet", false, null, null, clock.Elapsed, ex.Message)]);
@@ -367,12 +481,14 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             await _manifestCacheLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
+                await _releaseCatalogIndexService.ClearCacheAsync(ct).ConfigureAwait(false);
                 if (Directory.Exists(_cacheDir))
                     Directory.Delete(_cacheDir, recursive: true);
                 Directory.CreateDirectory(_cacheDir);
                 _indexCache = null;
                 _catalogSnapshot = null;
                 _wingetApps.Clear();
+                _releaseCatalogEntriesById = new Dictionary<string, AppEntry>(StringComparer.OrdinalIgnoreCase);
                 _catalogEntriesById = new Dictionary<string, PackageIndexEntry>(StringComparer.OrdinalIgnoreCase);
             }
             finally
@@ -504,6 +620,20 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)) return null;
         await GetIndexAsync(ct: ct).ConfigureAwait(false);
         if (!_catalogEntriesById.TryGetValue(CatalogEntryKey("winget", id), out var entry)) return null;
+        if (_releaseCatalogEntriesById.TryGetValue(CatalogEntryKey("winget", id), out AppEntry? releaseEntry))
+        {
+            WingetCdnCatalog.App releaseApp;
+            if (_wingetApps.TryGetValue(id, out var releaseCached) && releaseCached.Expires > DateTimeOffset.UtcNow)
+                releaseApp = releaseCached.App;
+            else
+            {
+                releaseApp = await WingetCdnCatalog.LoadGitHubAppAsync(_http, releaseEntry, ct, _cacheDir)
+                    .ConfigureAwait(false);
+                _wingetApps[id] = (releaseApp, DateTimeOffset.UtcNow.AddMinutes(5));
+            }
+            return await WingetCdnCatalog.LoadGitHubVersionAsync(_http, releaseApp, version ?? string.Empty, ct, _cacheDir)
+                .ConfigureAwait(false);
+        }
         WingetCdnCatalog.App app;
         if (_wingetApps.TryGetValue(id, out var cached) && cached.Expires > DateTimeOffset.UtcNow)
             app = cached.App;
@@ -679,8 +809,12 @@ public sealed class WinProvisionApiService : IAsyncDisposable
             return false;
         }
     }
-    private static bool IsRecentCache(string path) =>
-        File.Exists(path) && DateTime.UtcNow - File.GetLastWriteTimeUtc(path) <= MaxStaleCacheAge;
+    private static bool IsRecentCache(string path)
+    {
+        if (!File.Exists(path)) return false;
+        TimeSpan age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
+        return age >= TimeSpan.Zero && age <= MaxStaleCacheAge;
+    }
     private string IndexCachePath => Path.Combine(_cacheDir, "catalog-index.json");
 
     private string GetManifestCachePath(string id, string source)
@@ -1200,7 +1334,7 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     /// <summary>
     /// Remove um pacote previamente instalado por esta API. Primeiro executa o desinstalador
-    /// normal (com retries e detecção de tecnologia); se falhar, usa o Force Uninstall. Os
+    /// silencioso registrado, sem limpeza automática de resíduos. Os
     /// portáteis só são removidos da pasta gerenciada da WinProvision Store.
     /// </summary>
     public async Task<bool?> UninstallAsync(
@@ -1212,6 +1346,8 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         ApiInstallRecord? record = await FindApiInstallAsync(app.Id, ct).ConfigureAwait(false);
         if (record is null)
             return null; // Não foi instalado pelo método da API própria.
+        if (!record.IsPortable)
+            return null; // Aplicativos registrados seguem o fluxo comum de desinstalação.
 
         onStatus?.Invoke("Tentando a desinstalação normal...");
         bool success;
@@ -1225,17 +1361,6 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         else
         {
             success = await uninstaller.RunSilentUninstallAsync(app, ct).ConfigureAwait(false);
-            if (success)
-            {
-                onStatus?.Invoke("Limpando arquivos restantes...");
-                await uninstaller.PerformAggressiveCleanupAsync(app, ct).ConfigureAwait(false);
-            }
-            else
-            {
-                ct.ThrowIfCancellationRequested();
-                onStatus?.Invoke("A desinstalação normal falhou; tentando a remoção avançada...");
-                success = await uninstaller.ForceUninstallAsync(app, ct).ConfigureAwait(false);
-            }
         }
 
         if (success)
@@ -1609,7 +1734,10 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         timeout.CancelAfter(UpdateIndexRefreshTimeout);
         try
         {
-            return await GetIndexAsync(forceRefresh: refreshRemote, ct: timeout.Token).ConfigureAwait(false);
+            PackageIndex index = await GetIndexAsync(forceRefresh: refreshRemote, ct: timeout.Token).ConfigureAwait(false);
+            if (refreshRemote && index.RemoteRefreshSucceeded || IsRecentUpdateIndex(index))
+                return index;
+            return await TryLoadCachedUpdateIndexAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1624,16 +1752,26 @@ public sealed class WinProvisionApiService : IAsyncDisposable
 
     private async Task<PackageIndex?> TryLoadCachedUpdateIndexAsync(CancellationToken ct)
     {
-        if (_indexCache is not null
-            && DateTimeOffset.UtcNow - _indexCache.GeneratedAt <= MaxStaleCacheAge)
+        if (_indexCache is not null && IsRecentUpdateIndex(_indexCache))
             return _indexCache;
 
         await _indexLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_indexCache is not null
-                && DateTimeOffset.UtcNow - _indexCache.GeneratedAt <= MaxStaleCacheAge)
+            if (_indexCache is not null && IsRecentUpdateIndex(_indexCache))
                 return _indexCache;
+            try
+            {
+                ReleaseCatalogSnapshot? release = await _releaseCatalogIndexService
+                    .TryLoadLocalSnapshotAsync(ct).ConfigureAwait(false);
+                if (release is not null && IsRecentReleaseSnapshot(release))
+                    return _indexCache = BuildIndex(release);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception exception) when (IsCatalogReadFailure(exception))
+            {
+                CoreLog.Debug($"[WinProvisionAPI] Cache SQLite indisponível para updates offline: {exception.Message}");
+            }
             if (!File.Exists(WingetCatalogCachePath) || !File.Exists(WingetSearchCachePath)
                 || !IsRecentCache(WingetCatalogCachePath))
                 return null;
@@ -1654,6 +1792,19 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         {
             _indexLock.Release();
         }
+    }
+
+    private static bool IsRecentUpdateIndex(PackageIndex index)
+    {
+        TimeSpan age = DateTimeOffset.UtcNow - index.GeneratedAt;
+        return age >= TimeSpan.Zero && age <= MaxStaleCacheAge;
+    }
+
+    private static bool IsRecentReleaseSnapshot(ReleaseCatalogSnapshot snapshot)
+    {
+        DateTimeOffset validated = GetReleaseCacheTimestamp(snapshot);
+        TimeSpan age = DateTimeOffset.UtcNow - validated;
+        return age >= TimeSpan.Zero && age <= MaxStaleCacheAge;
     }
 
     private static bool TryParseStrictNumericVersion(string? value, out Version version)
@@ -1895,27 +2046,33 @@ public sealed class WinProvisionApiService : IAsyncDisposable
         if (File.Exists(destination)) throw new IOException("O destino do instalador já existe.");
         string extension = Path.GetExtension(uri.AbsolutePath);
         string? cached = await FindVerifiedInstallerCacheAsync(installer.Sha256!, extension, ct).ConfigureAwait(false);
-        try
+        await PublishInstallerAsync(destination, async (staging, token) =>
         {
             if (cached is not null)
             {
                 await using var input = new FileStream(cached, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.Asynchronous);
-                await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous);
-                await input.CopyToAsync(output, ct).ConfigureAwait(false);
+                await using var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous);
+                await input.CopyToAsync(output, token).ConfigureAwait(false);
             }
-            else await DownloadFileWithViperAsync(uri.AbsoluteUri, installer.Sha256!, destination, null, null, ct).ConfigureAwait(false);
-            // Viper hashes and compares the complete file before publishing it. Avoid a second
-            // full-file read on a fresh download; cache hits still need local verification.
-            if (cached is not null && !await VerifySha256Async(destination, installer.Sha256!, ct).ConfigureAwait(false))
+            else await DownloadFileWithViperAsync(uri.AbsoluteUri, installer.Sha256!, staging, null, null, token).ConfigureAwait(false);
+            if (cached is not null && !await VerifySha256Async(staging, installer.Sha256!, token).ConfigureAwait(false))
                 throw new InvalidDataException("O SHA-256 do instalador difere do manifesto.");
             if (cached is null)
-                await SaveVerifiedInstallerCacheAsync(destination, installer.Sha256!, extension, null, ct).ConfigureAwait(false);
-        }
-        catch
+                await SaveVerifiedInstallerCacheAsync(staging, installer.Sha256!, extension, null, token).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
+    }
+
+    internal static async Task PublishInstallerAsync(string destination,
+        Func<string, CancellationToken, Task> prepare, CancellationToken token)
+    {
+        string staging = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
         {
-            TryDeleteFile(destination);
-            throw;
+            await prepare(staging, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            File.Move(staging, destination, false);
         }
+        finally { TryDeleteFile(staging); }
     }
 
     private async Task DownloadFileWithViperAsync(

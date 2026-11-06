@@ -28,6 +28,7 @@ public partial class App
         }
         if (IsSmokeTest)
         {
+            services.AddSingleton<ProvisioningWallpaperCatalogService, SmokeProvisioningWallpaperCatalogService>();
             var historyPath = Path.Combine(SmokeTest.OutputDirectory, "operation-history-test.json");
             if (File.Exists(historyPath)) File.Delete(historyPath);
             services.AddSingleton<OperationHistoryService>(_ => new OperationHistoryService(historyPath));

@@ -3,6 +3,7 @@
 O código do WinProvision Store é distribuído sob a licença MIT em `LICENSE`. As dependências e os materiais de terceiros mantêm suas próprias licenças e atribuições.
 
 - WiX DTF Compression/Cab 5.0.2: licença MS-RL, aviso e fontes correspondentes em `src/WinProvision.Core/ThirdParty/WiX-DTF`. Esses arquivos acompanham a distribuição.
+- SQLitePCLRaw 2.1.11 e biblioteca nativa `SQLitePCLRaw.lib.e_sqlite3` 2.1.14: licença Apache 2.0, incluída em `src/WinProvision.Core/ThirdParty/SQLitePCLRaw` e na distribuição. O mecanismo SQLite incorporado é disponibilizado em domínio público pelos seus autores; informações em https://www.sqlite.org/copyright.html. O provedor Microsoft.Data.Sqlite 10.0.0 é distribuído sob MIT.
 - gsudo 2.6.1, de Gerardo Grignoli e colaboradores, usado como base do WinProvision Elevator 2.6.1.2: licença MIT original em `Tool/gsudo/LICENSE.txt`, fonte e alterações documentadas em [Tool/gsudo/README.md](Tool/gsudo/README.md). O helper e a licença acompanham a interface e a CLI.
 - Spectre.Console e Spectre.Console.Ansi 0.57.2: licença MIT, para apresentação da CLI; licença incluída nos pacotes NuGet. Projeto: https://github.com/spectreconsole/spectre.console.
 - Pacotes NuGet: os componentes Microsoft, CommunityToolkit.Mvvm e demais dependências declaradas nos arquivos de projeto mantêm as licenças de seus respectivos pacotes.

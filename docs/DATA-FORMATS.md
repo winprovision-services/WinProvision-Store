@@ -4,6 +4,12 @@ O cache descartável `Cache/featured-store-banners.json` contém a segunda-feira
 
 Este documento registra as regras de compatibilidade do WinProvision Store.
 
+Na pesquisa textual da CLI, a coluna de versão mostra a versão disponível no catálogo. Os campos e significados do JSON permanecem os mesmos. A CLI passa a respeitar os métodos de instalação e atualização salvos na interface, inclusive preferências já existentes.
+
+A exportação offline continua usando o mesmo manifesto e o campo `skipped` para itens não incluídos. A seleção considera alternativas de instalador exportáveis; falhas de preparação do Office também são registradas por item. ZIPs e perfis anteriores permanecem compatíveis.
+
+A listagem de backups mantém o identificador do Gist apenas em memória. Ao fazer backup, arquivos de mesmo nome nos Gists de backup reconhecidos são substituídos por um perfil contendo somente a coleção selecionada; arquivos diferentes e Gists de bootstrap permanecem independentes. A exportação de perfil completo continua contendo todas as coleções, e o formato dos perfis não foi alterado.
+
 A identidade MSI lida do instalador validado e os indicadores de identidade comprovada/confirmação de versão são metadados transitórios, omitidos do JSON. A confirmação aceita versões numéricas equivalentes ou superiores ao alvo e não altera históricos anteriores, formatos de coleção, preferências ou códigos públicos da CLI. Uma falha de confirmação registra também as versões e os escopos encontrados no Windows.
 
 A confirmação de instalação usa o inventário novo do WinGet e exige ID e origem efetivamente usada, além da versão escolhida quando houver. A origem efetiva é metadado transitório omitido do JSON, assim como o estado de verificação. Evidência insuficiente fica como `Não confirmado`; detecção de instalado baseada somente no nome do Registro também é transitória e não marca o pacote como instalado. `OperationState.Unconfirmed` é um novo rótulo terminal no histórico local; os valores anteriores do enum e os formatos públicos da CLI permanecem compatíveis.
@@ -39,7 +45,7 @@ O arquivo por usuário `elevation-preferences.json` registra `allowElevation` (b
 
 Preferências de agendamento preservam os valores existentes de `UpdateSchedule` (`AtLogon=0`, `Daily=1`, `Weekly=2`) e acrescentam `Interval=3`. `UpdateIntervalMinutes` aceita de 15 a 1440, com padrão de 60; `UpdateNotificationsEnabled` usa `true` quando ausente; `UpdateScheduleAnchorUtc` é opcional e registra a configuração da agenda para estimar a próxima execução. Dados antigos mantêm sua agenda. Esses campos são compartilhados pela interface e pela CLI e usam serialização preparada para Native AOT.
 
-`app-preferences.json` também contém `AutomaticCloudBackupEnabled` (booleano, padrão `true` quando ausente). Ele controla apenas o envio automático ao Gist após mudanças nas coleções; o backup local automático e o botão de backup manual continuam disponíveis. O formato do perfil e os contratos da CLI permanecem iguais.
+`app-preferences.json` também contém `AutomaticCloudBackupEnabled` (booleano, padrão `true` quando ausente). A preferência antiga é preservada para compatibilidade, mas ignorada: backups locais e no Gist ocorrem apenas pelo botão Fazer Backup. O formato do perfil e os contratos da CLI permanecem iguais.
 
 `app-preferences.json` e as configurações portáteis versão 1 aceitam `SearchOnDemand` (booleano, padrão `false` quando ausente). Quando ativado, Descobrir aguarda uma pesquisa para carregar o catálogo e libera os dados da vitrine ao limpar a consulta. Arquivos anteriores continuam compatíveis e mantêm a vitrine completa como padrão.
 
@@ -89,7 +95,9 @@ Na 1.0.5, o executável do helper passa a `WinProvision Elevator.exe`. A pasta `
 
 ## Catálogo remoto
 
-### Contrato ativo da CDN WinGet
+O catálogo WinProvision-PKGS publica o índice SQLite de esquema 2 em releases `catalog-v2-<commit completo>`. O manifesto da release informa o commit, SHA-256 e tamanho do banco e as contagens de aplicativos e versões. `apps.app_sha256` corresponde aos bytes do JSON de produto no commit fixado; cada `versions[].detailSha256` valida o detalhe de versão, e o SHA-256 de cada instalador continua sendo validado no download. O cliente verifica esses vínculos antes de substituir o cache; uma falha conserva o último índice válido. Hashes detectam divergências, mas não substituem assinatura de autenticidade da publicação.
+
+### Contrato anterior da CDN WinGet
 
 A CDN pública é servida por `https://cdn.winprovisionstore.com.br/winget/v1/`, a partir do bucket `wps-cdn`. A raiz `v1` identifica a versão do contrato, não a versão dos pacotes. A API WinProvision e o cliente WinGet compartilham os mesmos objetos publicados. O layout canônico por pacote segue a convenção de identificador/versão do WinGet-Pkgs:
 
@@ -116,7 +124,7 @@ O índice de busca contém apenas campos de busca e apresentação, como ID, nom
 
 Publicação segue uma ordem segura: workflows processam mudanças do repositório desde o último commit, reutilizam mídia por hash, geram e validam somente os detalhes e índices afetados, enviam detalhes e `app.json` antes do índice imutável e atualizam `catalog.json` por último. Uma reconciliação completa periódica confere a origem contra o bucket. Como os caminhos dos detalhes e do app geral são estáveis por contrato, usam cache curto de cinco minutos; índices content-addressed recebem cache longo e `catalog.json` revalidação de um minuto. Escrita no bucket usa credencial restrita do workflow, nunca distribuída no app. HTTPS/TLS 1.2+ é obrigatório. Hashes detectam corrupção; para provar autenticidade contra substituição maliciosa do catálogo, o cliente deve validar uma assinatura com chave pública embutida no app.
 
-O cliente e a API própria consomem `winget/v1`; a busca da vitrine consulta ainda a origem WinGet `msstore` e enriquece seus resultados pela Display Catalog da Microsoft. Ícones, banners e capturas da Store usam URLs retornadas pela API e não são publicados como mídia no R2. O índice WinGet contém também `icon` (caminho relativo e SHA-256), `score` e `locale` para apresentar os resultados sem baixar todos os `app.json` gerais. Cada entrada do índice fixa `appSha256`; o `app.json` geral fixa o SHA-256 de cada detalhe por versão. A API só usa instaladores depois dessas verificações. O cache local usa nomes separados dos arquivos do catálogo anterior.
+O cliente e a API própria ainda aceitam `winget/v1` como alternativa ao SQLite de release. A busca da vitrine consulta também a origem WinGet `msstore` e enriquece seus resultados pela Display Catalog da Microsoft. Ícones, banners e capturas da Store usam URLs retornadas pela API e não são publicados como mídia no R2. O índice CDN contém também `icon`, `score` e `locale`. Cada entrada fixa `appSha256`; o `app.json` geral fixa o SHA-256 de cada detalhe por versão. A API só usa instaladores depois dessas verificações.
 
 Na 1.0.7, o host COM privado v2 substitui a delegação administrativa para CLI: usa o SDK oficial InProcCom no processo elevado pelo Elevator. Os comandos públicos e formatos salvos não mudam. A distribuição completa inclui `Tool/winget-com` na interface e na CLI. As atualizações próprias preservam o escopo/diretório da instalação e aguardam autorização antes de fechar a interface.
 
@@ -124,7 +132,7 @@ A origem de apresentação distingue WinGet, Microsoft Store e Catálogo WinProv
 
 Pacotes mantidos pela infraestrutura própria usam `catalogOrigin: "curated"`, preservando `source: "winget"` para compatibilidade de roteamento. `wingetManifestAvailable: false` indica que o link do manifesto não deve ser apresentado. `releaseDate` e `catalogSyncedUtc` são datas ISO 8601 da release e da última publicação dos dados; `author` e `releaseNotes` são opcionais. A tela usa os instaladores do detalhe para tipo, URL e SHA-256 desses pacotes, sem depender de uma consulta ao WinGet. A galeria aceita os caminhos relativos de `media.screenshots` em ambas as origens.
 
-O app e a instalação pela API própria consultam `Store/Catalog/manifest.json`, `Store/Catalog/manifest/search-index.json` e os detalhes por aplicativo indicados por `detailPath` (terminado em `app.json`). A fonte Microsoft Store usa o mesmo contrato sob `Store/Catalog/msstore/`. Não existe consumo direto do snapshot de YAMLs em `Store/Manifests/winget/v1` pelo cliente.
+O formato anterior sob `Store/Catalog/` é mantido por compatibilidade histórica. O catálogo WinProvision-PKGS atual é consultado pelo SQLite e por JSONs de produto e versão fixados ao commit; o cliente não consome diretamente o snapshot de YAMLs em `Store/Manifests/winget/v1`.
 
 `recordSha256` valida os bytes do detalhe; `indexSha256` valida os bytes do índice; `catalogSha256` identifica a geração do catálogo. O `sha256` de cada instalador valida o binário baixado. São verificações diferentes: atualizar o instalador exige publicar seus dados, recalcular os hashes dos JSONs afetados e atualizar o manifesto principal por último. Não se deve remover essas verificações para aceitar um catálogo desatualizado.
 
@@ -148,7 +156,7 @@ O cache do Elevator passa a ser automático e fixo em 5 minutos de inatividade p
 
 “Iniciar com o Windows” preserva a preferência `LaunchAtStartup` em `app-preferences.json` e cria a tarefa interativa `WinProvisionStoreWinUI3Startup`, com `ONLOGON`, nível `HIGHEST` e `--startup-minimized`. Registros antigos de abertura da interface são reconhecidos durante a migração e deixam de ser usados como comando de execução. A agenda de atualização em segundo plano mantém tarefa própria, inclusive para `AtLogon`, sem registrar comandos administrativos na chave `Run`. A remoção das tarefas é idempotente.
 
-No modo de atualização WinProvision API, o inventário é lido do Registro do Windows e comparado ao catálogo `winget/v1` ou ao seu cache validado, sem depender de WinGet. A chave local da instalação e a arquitetura conferida no executável são metadados transitórios, omitidos do JSON público da CLI. Registros de usuário e máquina com o mesmo nome não são fundidos. O índice R2 deve publicar a versão nova para que ela seja oferecida; atualizar apenas a fonte externa WinGet não muda o snapshot próprio.
+No modo de atualização WinProvision API, o inventário é lido do Registro do Windows e comparado ao catálogo WinProvision-PKGS ou ao seu cache validado, sem depender de WinGet. A chave local da instalação e a arquitetura conferida no executável são metadados transitórios, omitidos do JSON público da CLI. Registros de usuário e máquina com o mesmo nome não são fundidos. O índice deve publicar a versão nova para que ela seja oferecida; atualizar apenas a fonte externa WinGet não muda o snapshot próprio.
 
 Fabricante e tecnologia desconhecidos permanecem ausentes no inventário de atualizações, sem inferir família EXE a partir de um desinstalador. O ProductCode usado para confirmar uma atualização API vem de `installers[].productCode` do detalhe validado e permanece metadado transitório do resultado, omitido do JSON. Os formatos públicos de catálogo, preferências e CLI não mudam.
 

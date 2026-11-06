@@ -5,7 +5,7 @@ using WinProvision.Core.Services;
 
 namespace WinProvision.Store.Services;
 
-public sealed class ProvisioningWallpaperCatalogService
+public class ProvisioningWallpaperCatalogService
 {
     private const string CatalogUrl = CatalogEndpoints.PublicBaseUrl + "/windows/wallpaper/wallpapers.json";
     private const string WallpaperPrefix = "windows/wallpaper/";
@@ -20,7 +20,7 @@ public sealed class ProvisioningWallpaperCatalogService
         PooledConnectionLifetime = TimeSpan.FromMinutes(5)
     })) { Timeout = TimeSpan.FromSeconds(30) };
 
-    public async Task<IReadOnlyList<ProvisioningWallpaperDescriptor>> GetWallpapersAsync(CancellationToken token)
+    public virtual async Task<IReadOnlyList<ProvisioningWallpaperDescriptor>> GetWallpapersAsync(CancellationToken token)
     {
         using var response = await Client.GetAsync(CatalogUrl, HttpCompletionOption.ResponseHeadersRead, token);
         response.EnsureSuccessStatusCode();
@@ -74,7 +74,7 @@ public sealed class ProvisioningWallpaperCatalogService
         return result;
     }
 
-    public async Task<byte[]> DownloadWallpaperAsync(ProvisioningWallpaperDescriptor wallpaper, CancellationToken token)
+    public virtual async Task<byte[]> DownloadWallpaperAsync(ProvisioningWallpaperDescriptor wallpaper, CancellationToken token)
     {
         string fileName = wallpaper.FileName;
         if (fileName.Length is < 5 or > 64 || fileName.Contains('/') || fileName.Contains('\\')

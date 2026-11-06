@@ -5,6 +5,7 @@ public static class CatalogEndpoints
 {
     public const string PublicBaseUrl = NetworkEndpoints.CatalogPublicBaseUrl;
     public const string CatalogBaseUrl = NetworkEndpoints.CatalogBaseUrl;
+    public const string CatalogPackageMediaBaseUrl = NetworkEndpoints.CatalogPackageMediaBaseUrl;
     public const string FeaturedUrl = NetworkEndpoints.FeaturedCatalogUrl;
     public const string OfficeIconBaseUrl = NetworkEndpoints.OfficeIconBaseUrl;
 

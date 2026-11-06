@@ -118,24 +118,37 @@ public partial class IconService
         if (string.IsNullOrWhiteSpace(mediaPath)
             || string.IsNullOrWhiteSpace(app.CatalogDetailPath)
             || !mediaPath.StartsWith("media/", StringComparison.Ordinal)
-            || Path.IsPathRooted(mediaPath)
-            || mediaPath.Replace('\\', '/').Split('/').Any(segment => segment is "" or "." or ".."))
+            || !IsSafeRelativePath(mediaPath))
             return null;
 
         string detailPath = app.CatalogDetailPath.Replace('\\', '/');
+        if (!IsSafeRelativePath(detailPath) || !detailPath.EndsWith("/app.json", StringComparison.Ordinal))
+            return null;
+
+        // WinProvision-PKGS armazena os JSONs na raiz da branch (7/7zip/7zip/app.json),
+        // enquanto o R2 mantém a raiz manifests/ (winget/v1/manifests/7/7zip/7zip/...).
+        // O catálogo legado já inclui "manifests/" no próprio caminho.
+        if (detailPath.StartsWith("manifests/", StringComparison.Ordinal))
+            detailPath = detailPath["manifests/".Length..];
         int lastSlash = detailPath.LastIndexOf('/');
         if (lastSlash < 0)
             return null;
 
+        string packagePath = string.Join('/', detailPath[..lastSlash].Split('/').Select(Uri.EscapeDataString));
         string encodedMedia = string.Join('/', mediaPath.Split('/').Select(Uri.EscapeDataString));
-        string baseUrl = app.CatalogDetailBaseUrl
-            ?? (string.Equals(app.Source, "msstore", StringComparison.OrdinalIgnoreCase)
-                ? CatalogAppsBaseUrl + "msstore"
-                : CatalogAppsBaseUrl.TrimEnd('/'));
-        string url = $"{baseUrl}/{detailPath[..(lastSlash + 1)]}{encodedMedia}";
+        string url = $"{CatalogEndpoints.CatalogPackageMediaBaseUrl}/{packagePath}/{encodedMedia}";
         return !string.IsNullOrWhiteSpace(sha256) && sha256.Length == 64 && sha256.All(Uri.IsHexDigit)
             ? $"{url}?v={sha256[..16]}"
             : url;
     }
+
+    private static bool IsSafeRelativePath(string path) =>
+        !Path.IsPathRooted(path)
+        && !path.Contains('\\')
+        && path.Split('/').All(segment => segment.Length > 0
+            && segment is not "." and not ".."
+            && !segment.Any(char.IsControl)
+            && !segment.Contains('?')
+            && !segment.Contains('#'));
 
 }

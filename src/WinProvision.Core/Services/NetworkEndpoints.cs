@@ -4,6 +4,7 @@ public static class NetworkEndpoints
 {
     public const string CatalogPublicBaseUrl = "https://cdn.winprovisionstore.com.br";
     public const string CatalogBaseUrl = CatalogPublicBaseUrl + "/Store/Catalog/";
+    public const string CatalogPackageMediaBaseUrl = CatalogPublicBaseUrl + "/winget/v1/manifests";
     public const string FeaturedCatalogUrl = CatalogBaseUrl + "manifest/featured.json";
     public const string OfficeIconBaseUrl = CatalogPublicBaseUrl + "/office/media";
     public const string GitHubApiBaseUrl = "https://api.github.com";
@@ -12,6 +13,7 @@ public static class NetworkEndpoints
     public const string DisplayCatalogProductsUrl = "https://displaycatalog.mp.microsoft.com/v7.0/products";
     public const string DisplayCatalogProductFamiliesUrl = "https://displaycatalog.mp.microsoft.com/v7.0/productFamilies/Apps/products";
     public const string WingetPackagesRawBaseUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master";
+    public const string WinProvisionPkgsRawBaseUrl = "https://raw.githubusercontent.com/winprovision-services/WinProvision-PKGS";
     public const string OfficeFileListUrl = "https://clients.config.office.net/releases/v1.0/filelist";
     public const string OfficeDeploymentToolUrl = "https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_20326-20112.exe";
     public const string HelpRecoveryAssistantUrl = "https://aka.ms/SaRA_EnterpriseVersionFiles";

@@ -28,16 +28,20 @@ public partial class App
     {
         services.AddSingleton<IUiDispatcher>(new UiDispatcher(DispatcherQueue.GetForCurrentThread()));
         services.AddSingleton<HttpClient>(_ => NetworkClientFactory.Create(TimeSpan.FromSeconds(30)));
+        services.AddSingleton<IReleaseCatalogIndexService>(provider => new ReleaseCatalogIndexService(
+            provider.GetRequiredService<HttpClient>()));
         services.AddSingleton<StoreService>(provider => new StoreService(
             provider.GetRequiredService<HttpClient>(),
-            provider.GetRequiredService<IconService>()));
+            provider.GetRequiredService<IconService>(),
+            provider.GetRequiredService<IReleaseCatalogIndexService>()));
         services.AddSingleton<IStoreCatalog>(provider => provider.GetRequiredService<StoreService>());
         services.AddSingleton<WingetBootstrapper>();
         services.AddSingleton<WingetExecutor>(provider => new WingetExecutor(
             provider.GetRequiredService<WingetBootstrapper>(),
             provider.GetRequiredService<OperationPreferencesService>()));
         services.AddSingleton<WinProvisionApiService>(provider => new WinProvisionApiService(
-            operationPreferences: provider.GetRequiredService<OperationPreferencesService>()));
+            operationPreferences: provider.GetRequiredService<OperationPreferencesService>(),
+            releaseCatalogIndexService: provider.GetRequiredService<IReleaseCatalogIndexService>()));
         services.AddSingleton<PackageMetricsService>();
         services.AddSingleton<IPackageMetricsService>(provider => provider.GetRequiredService<PackageMetricsService>());
         services.AddSingleton<PowerShell7Bootstrapper>();

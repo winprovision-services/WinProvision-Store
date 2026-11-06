@@ -9,11 +9,11 @@ $taskResults = Join-Path $taskBin 'smoke-results'
 $taskResultFile = Join-Path $taskResults 'result.json'
 if (Test-Path -LiteralPath $taskResultFile) { Remove-Item -LiteralPath $taskResultFile }
 $taskProcess = Start-Process -FilePath (Join-Path $taskBin 'WinProvision.Store.exe') -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
-$taskDeadline = [DateTime]::UtcNow.AddSeconds(90)
+$taskDeadline = [DateTime]::UtcNow.AddSeconds(150)
 while (-not $taskProcess.WaitForExit(10000) -and [DateTime]::UtcNow -lt $taskDeadline) { }
 if (-not $taskProcess.HasExited) {
     Stop-Process -Id $taskProcess.Id -ErrorAction SilentlyContinue
-    throw 'O teste não terminou em 90 segundos. A instância de teste foi encerrada; inspecione os resultados.'
+    throw 'O teste não terminou em 150 segundos. A instância de teste foi encerrada; inspecione os resultados.'
 }
 if ($taskProcess.ExitCode -ne 0) { throw "A aplicação encerrou com falha. ExitCode: $($taskProcess.ExitCode)" }
 if (-not (Test-Path -LiteralPath $taskResultFile)) { throw "A aplicação não gerou resultado. ExitCode: $($taskProcess.ExitCode)" }

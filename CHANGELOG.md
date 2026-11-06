@@ -1,6 +1,8 @@
 # Histórico de alterações
 
-## Não lançado
+## 1.0.18 - 5 de novembro de 2026
+
+- A interface e a API própria passam a consultar o índice SQLite das releases do WinProvision-PKGS, com revalidação ao abrir o aplicativo, cache offline validado e detalhes fixados ao commit do catálogo. Os hashes de produto, versão e instalador continuam verificados; uma atualização incompleta não substitui o cache anterior. O catálogo R2 anterior permanece como alternativa de compatibilidade.
 
 ## 1.0.15 - 25 de outubro de 2026
 

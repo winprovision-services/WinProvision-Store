@@ -9,12 +9,184 @@ namespace WinProvision.Core.Services;
 public static class WingetCdnCatalog
 {
     public const string BaseUrl = CatalogEndpoints.PublicBaseUrl + "/winget/v1/";
+    /// <summary>Raiz raw do repositório WinProvision-PKGS; cada leitura acrescenta um commit imutável.</summary>
+    public const string GitHubRawCatalogBaseUrl = NetworkEndpoints.WinProvisionPkgsRawBaseUrl;
     private const int MaximumJsonBytes = 64 * 1024 * 1024;
 
     public sealed record Snapshot(string Generation, string IndexSha256, DateTimeOffset GeneratedAt,
         List<AppEntry> Apps, byte[] CatalogBytes, byte[] IndexBytes);
     public sealed record Version(string Number, string DetailPath, string Sha256, List<string> Architectures);
     public sealed record App(AppEntry Entry, List<Version> Versions);
+
+    /// <summary>Carrega app.json do WinProvision-PKGS no commit completo fixado pelo índice.</summary>
+    public static async Task<App> LoadGitHubAppAsync(HttpClient http, AppEntry summary, CancellationToken token,
+        string? cacheDirectory = null)
+    {
+        string commit = summary.CatalogDetailCatalogSha256 ?? "";
+        string path = summary.CatalogDetailPath ?? "";
+        ValidateGitHubReference(commit, path, summary.CatalogDetailSha256);
+        byte[] bytes = await ReadPinnedGitHubAsync(http, commit, path, summary.CatalogDetailSha256!, token, cacheDirectory);
+        using var document = JsonDocument.Parse(bytes);
+        JsonElement root = document.RootElement;
+        if (Int(root, "schemaVersion") != 1 || Required(root, "id") != summary.Id
+            || Required(root, "source") != "winget")
+            throw new InvalidDataException("Identidade do aplicativo WinProvision-PKGS inválida.");
+
+        if (!root.TryGetProperty("versions", out JsonElement items) || items.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("O aplicativo WinProvision-PKGS não lista versões.");
+        var versions = new List<Version>();
+        var seenVersions = new HashSet<string>(StringComparer.Ordinal);
+        foreach (JsonElement item in items.EnumerateArray())
+        {
+            string number = Required(item, "version");
+            string detailPath = Required(item, "detailPath");
+            string hash = Required(item, "detailSha256");
+            if (!seenVersions.Add(number) || !IsValidPackageVersion(number)
+                || detailPath != "versions/" + Uri.EscapeDataString(number) + "/app.json"
+                || !SafePath(detailPath, "versions/", "/app.json") || !IsSha256(hash))
+                throw new InvalidDataException("Referência de versão WinProvision-PKGS inválida.");
+            versions.Add(new Version(number, detailPath, hash, Strings(item, "architectures")));
+        }
+
+        string latest = Required(root, "latestVersion");
+        if (versions.Count == 0 || versions[0].Number != latest
+            || !versions.Any(item => item.Number == latest)
+            || !string.IsNullOrWhiteSpace(summary.Version) && latest != summary.Version)
+            throw new InvalidDataException("A versão mais recente não corresponde ao índice ou à lista WinProvision-PKGS.");
+        if (!root.TryGetProperty("package", out JsonElement package) || package.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("Metadados do aplicativo WinProvision-PKGS ausentes.");
+
+        var entry = new AppEntry
+        {
+            Id = summary.Id, Source = "winget", Name = Optional(package, "name") ?? summary.Name,
+            Publisher = Optional(package, "publisher") ?? summary.Publisher,
+            Description = Optional(package, "description") ?? summary.Description,
+            Homepage = Optional(package, "homepage"), PackageUrl = Optional(package, "packageUrl"),
+            License = Optional(package, "license"), Moniker = Optional(package, "moniker"),
+            PackageLocale = Optional(package, "locale"), Tags = Strings(package, "tags"),
+            RegionTags = Strings(package, "regionTags"), Version = latest,
+            Architectures = Strings(root, "architectures"), CatalogDetailPath = path,
+            CatalogDetailSha256 = summary.CatalogDetailSha256,
+            CatalogDetailBaseUrl = GitHubRawCatalogBaseUrl,
+            CatalogDetailCatalogSha256 = commit, Media = ReadMedia(root)
+        };
+        if (root.TryGetProperty("catalog", out JsonElement catalog)) entry.Score = Int(catalog, "score");
+        return new App(entry, versions);
+    }
+
+    /// <summary>Carrega detalhe de versão WinProvision-PKGS fixado ao mesmo commit e valida seus bytes.</summary>
+    public static async Task<PackageManifest> LoadGitHubVersionAsync(HttpClient http, App app,
+        string? requestedVersion, CancellationToken token, string? cacheDirectory = null)
+    {
+        string commit = app.Entry.CatalogDetailCatalogSha256 ?? "";
+        if (!IsGitCommit(commit)) throw new InvalidDataException("Commit WinProvision-PKGS inválido.");
+        string version = string.IsNullOrWhiteSpace(requestedVersion) ? app.Entry.Version : requestedVersion;
+        Version reference = app.Versions.FirstOrDefault(item => item.Number == version)
+            ?? throw new InvalidDataException("A versão solicitada não consta no catálogo WinProvision-PKGS.");
+        string appPath = app.Entry.CatalogDetailPath ?? "";
+        ValidateGitHubReference(commit, appPath, app.Entry.CatalogDetailSha256);
+        string basePath = appPath[..^"app.json".Length];
+        string path = basePath + reference.DetailPath;
+        byte[] bytes = await ReadPinnedGitHubAsync(http, commit, path, reference.Sha256, token, cacheDirectory);
+        using var document = JsonDocument.Parse(bytes);
+        JsonElement root = document.RootElement;
+        if (Int(root, "schemaVersion") != 1 || Required(root, "id") != app.Entry.Id
+            || Required(root, "version") != version || Required(root, "source") != "winget")
+            throw new InvalidDataException("O detalhe não corresponde à referência validada do WinProvision-PKGS.");
+        if (!root.TryGetProperty("installers", out JsonElement installers) || installers.ValueKind != JsonValueKind.Array
+            || installers.GetArrayLength() == 0)
+            throw new InvalidDataException("A versão WinProvision-PKGS não contém instaladores.");
+
+        var result = new PackageManifest
+        {
+            Id = app.Entry.Id, Source = "winget", Version = version, Schema = 1,
+            PublisherUrl = Optional(root, "publisherUrl"), LicenseUrl = Optional(root, "licenseUrl"),
+            ReleaseNotesUrl = Optional(root, "releaseNotesUrl")
+        };
+        if (DateTimeOffset.TryParse(Optional(root, "releaseDate"), out var date)) result.ReleaseDate = date;
+        foreach (JsonElement item in installers.EnumerateArray())
+        {
+            JsonElement silent = item.TryGetProperty("silent", out var silentValue) ? silentValue : default;
+            JsonElement elevation = item.TryGetProperty("elevation", out var elevationValue) ? elevationValue : default;
+            JsonElement uninstall = item.TryGetProperty("uninstall", out var uninstallValue) ? uninstallValue : default;
+            string? arguments = Optional(silent, "arguments");
+            string? url = Optional(item, "url");
+            string? sha256 = Optional(item, "sha256");
+            // Downloads inseguros ou malformados não invalidam os instaladores seguros
+            // da mesma versão; todos os hashes de instalador aceitos continuam obrigatórios.
+            if (!IsSafeInstallerUrl(url) || !IsSha256(sha256 ?? "")) continue;
+            List<NestedInstallerReference> nestedFiles = ReadNestedInstallerReferences(item);
+            NestedInstallerReference? singleNestedFile = nestedFiles.Count == 1 ? nestedFiles[0] : null;
+            result.Installers.Add(new CatalogInstaller
+            {
+                Architecture = Optional(item, "architecture"), Type = Optional(item, "type"),
+                NestedType = Optional(item, "nestedType") ?? Optional(item, "nestedInstallerType"),
+                NestedInstallerFiles = nestedFiles.Select(file => file.RelativePath).ToList(),
+                NestedInstallerFile = singleNestedFile?.RelativePath,
+                PortableCommandAlias = SafeAlias(Optional(item, "portableCommandAlias"))
+                    ?? singleNestedFile?.PortableCommandAlias,
+                Scope = Optional(item, "scope"), ElevationRequirement = Optional(elevation, "requirement"),
+                Url = url!, Sha256 = sha256, SilentArgs = arguments,
+                SilentSource = Optional(silent, "source") ?? "none", SilentSupported = !string.IsNullOrWhiteSpace(arguments),
+                InstallerSwitches = ReadStringDictionary(item, "installerSwitches"),
+                SuccessCodes = Integers(item, "successCodes"), Dependencies = Strings(item, "dependencies"),
+                ProductCode = string.Equals(Optional(uninstall, "type"), "productCode", StringComparison.OrdinalIgnoreCase)
+                    ? Optional(uninstall, "value") ?? Optional(uninstall, "productCode") : Optional(item, "productCode"),
+                Locale = Optional(item, "locale"), Platforms = Strings(item, "platforms"),
+                MinimumOsVersion = Optional(item, "minimumOsVersion") ?? Optional(item, "minimumOSVersion"),
+                InstallModes = Strings(item, "installModes"),
+                UpgradeBehavior = Optional(item, "upgradeBehavior"),
+                UnsupportedArguments = Strings(item, "unsupportedArguments"),
+                DownloadCommandProhibited = Bool(item, "downloadCommandProhibited"),
+                ErrorCodes = Integers(item, "errorCodes"), Commands = Strings(item, "commands"),
+                FileExtensions = Strings(item, "fileExtensions"), Protocols = Strings(item, "protocols"),
+                Capabilities = Strings(item, "capabilities"),
+                UnsupportedOsArchitectures = Strings(item, "unsupportedOsArchitectures").Count > 0
+                    ? Strings(item, "unsupportedOsArchitectures") : Strings(item, "unsupportedOSArchitectures"),
+                AppsAndFeaturesEntries = ReadAppsAndFeatures(item)
+            });
+        }
+        if (result.Installers.Count == 0)
+            throw new InvalidDataException("A versão WinProvision-PKGS não contém instaladores HTTPS válidos com SHA-256.");
+        return result;
+    }
+
+    private sealed record NestedInstallerReference(string RelativePath, string? PortableCommandAlias);
+
+    private static List<NestedInstallerReference> ReadNestedInstallerReferences(JsonElement installer)
+    {
+        var result = new List<NestedInstallerReference>();
+        if (!installer.TryGetProperty("nestedInstallerFiles", out JsonElement files)
+            || files.ValueKind != JsonValueKind.Array) return result;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonElement file in files.EnumerateArray())
+        {
+            string? path = file.ValueKind == JsonValueKind.String
+                ? file.GetString()
+                : Optional(file, "relativeFilePath");
+            if (!IsSafeNestedInstallerPath(path) || !seen.Add(path!)) continue;
+            string? alias = file.ValueKind == JsonValueKind.Object ? Optional(file, "portableCommandAlias") : null;
+            alias = SafeAlias(alias);
+            result.Add(new NestedInstallerReference(path!, alias));
+        }
+        return result;
+    }
+
+    private static bool IsSafeNestedInstallerPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > 512 || Path.IsPathRooted(path)
+            || path.Any(char.IsControl) || path.Contains(':')) return false;
+        string normalized = path.Replace('\\', '/');
+        return !normalized.StartsWith("/", StringComparison.Ordinal)
+            && !normalized.Split('/').Any(segment => segment is "" or "." or "..");
+    }
+
+    private static string? SafeAlias(string? alias) => !string.IsNullOrWhiteSpace(alias)
+        && alias.Length <= 128 && !alias.Any(char.IsControl)
+        && !alias.Contains('/') && !alias.Contains('\\') && !alias.Contains(':') ? alias : null;
+
+    private static bool IsSafeInstallerUrl(string? value) => Uri.TryCreate(value, UriKind.Absolute, out Uri? uri)
+        && uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort && uri.UserInfo.Length == 0;
 
     public static async Task<Snapshot> LoadIndexAsync(HttpClient http, CancellationToken token, Snapshot? cached = null)
     {
@@ -232,6 +404,91 @@ public static class WingetCdnCatalog
         return remote;
     }
 
+    private static async Task<byte[]> ReadPinnedGitHubAsync(HttpClient http, string commit, string path,
+        string sha256, CancellationToken token, string? cacheDirectory)
+    {
+        ValidateGitHubReference(commit, path, sha256);
+        if (cacheDirectory is not null)
+        {
+            string cachePath = Path.Combine(cacheDirectory, "winget-v1-details", sha256[..2], sha256 + ".json");
+            try
+            {
+                if (File.Exists(cachePath))
+                {
+                    FileAttributes attributes = File.GetAttributes(cachePath);
+                    var info = new FileInfo(cachePath);
+                    if ((attributes & FileAttributes.ReparsePoint) == 0 && info.Length is > 0 and <= MaximumJsonBytes)
+                    {
+                        byte[] cached = await File.ReadAllBytesAsync(cachePath, token);
+                        if (SHA256.HashData(cached).AsSpan().SequenceEqual(Convert.FromHexString(sha256))) return cached;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                CoreLog.Warning(ex, "ReadWinProvisionPkgsCache");
+            }
+        }
+
+        // WinProvision-PKGS guarda os segmentos já percent-encoded como nomes literais no Git
+        // (por exemplo, o diretório real chama-se "7%2BTaskbarTweaker"). EscapeDataString precisa
+        // codificar novamente o '%' para a URL resultar nesse nome exato no servidor.
+        string encoded = string.Join('/', path.Split('/').Select(EncodePathSegment));
+        string url = $"{GitHubRawCatalogBaseUrl.TrimEnd('/')}/{commit}/{encoded}";
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
+        if (response.RequestMessage?.RequestUri is not { } finalUri || finalUri.Scheme != Uri.UriSchemeHttps
+            || !finalUri.IsDefaultPort || finalUri.UserInfo.Length != 0
+            || !finalUri.Host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+            || !finalUri.AbsolutePath.StartsWith($"/winprovision-services/WinProvision-PKGS/{commit}/", StringComparison.Ordinal))
+            throw new InvalidDataException("A resposta GitHub saiu do repositório ou commit fixado.");
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength is > MaximumJsonBytes)
+            throw new InvalidDataException("JSON WinProvision-PKGS excede o limite de tamanho.");
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync(token);
+        if (bytes.Length > MaximumJsonBytes || !SHA256.HashData(bytes).AsSpan().SequenceEqual(Convert.FromHexString(sha256)))
+            throw new InvalidDataException("Hash SHA-256 do JSON WinProvision-PKGS divergente.");
+        if (cacheDirectory is not null)
+        {
+            string cachePath = Path.Combine(cacheDirectory, "winget-v1-details", sha256[..2], sha256 + ".json");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+                await AtomicFile.WriteAllBytesAsync(cachePath, bytes, token);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                CoreLog.Warning(ex, "WriteWinProvisionPkgsCache");
+            }
+        }
+        return bytes;
+    }
+
+    private static void ValidateGitHubReference(string commit, string path, string? sha256)
+    {
+        if (!IsGitCommit(commit) || !IsSha256(sha256 ?? "") || !SafePath(path, "", "/app.json")
+            || !IsCanonicalEncodedPath(path))
+            throw new InvalidDataException("Referência de app WinProvision-PKGS inválida.");
+    }
+
+    private static bool IsCanonicalEncodedPath(string path)
+    {
+        foreach (string segment in path.Split('/'))
+        {
+            string decoded;
+            try { decoded = Uri.UnescapeDataString(segment); }
+            catch (UriFormatException) { return false; }
+            if (decoded.Length == 0 || decoded is "." or ".." || decoded.Contains('/') || decoded.Contains('\\')
+                || decoded.Any(char.IsControl) || !string.Equals(Uri.EscapeDataString(decoded), segment, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    private static string EncodePathSegment(string segment) => Uri.EscapeDataString(segment);
+    private static bool IsGitCommit(string commit) => commit.Length == 40 && commit.All(Uri.IsHexDigit);
+    private static bool IsValidPackageVersion(string version) => version.Length is > 0 and <= 128
+        && !version.Any(char.IsControl) && !version.Any(character => "\\/:*?\"<>|".Contains(character));
+
     public static void ApplyVersionMetadata(AppEntry entry, JsonElement detail)
     {
         entry.PublisherUrl = Optional(detail, "publisherUrl");
@@ -245,7 +502,19 @@ public static class WingetCdnCatalog
         if (!root.TryGetProperty("media", out JsonElement media) || media.ValueKind != JsonValueKind.Object)
             return null;
         var result = new CatalogMedia();
-        if (media.TryGetProperty("icon", out JsonElement icon) && icon.ValueKind == JsonValueKind.Object)
+        if (media.TryGetProperty("icons", out JsonElement icons) && icons.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement icon in icons.EnumerateArray())
+            {
+                string? path = Optional(icon, "path");
+                string? hash = Optional(icon, "sha256");
+                if (path is null || hash is null || !IsSha256(hash)) continue;
+                result.Icon = path;
+                result.IconSha256 = hash;
+                break;
+            }
+        }
+        else if (media.TryGetProperty("icon", out JsonElement icon) && icon.ValueKind == JsonValueKind.Object)
         {
             result.Icon = Optional(icon, "path"); result.IconSha256 = Optional(icon, "sha256");
         }
@@ -334,6 +603,17 @@ public static class WingetCdnCatalog
             || value.ValueKind != JsonValueKind.Array) return result;
         foreach (JsonElement item in value.EnumerateArray())
             if (item.TryGetInt32(out int number)) result.Add(number);
+        return result;
+    }
+
+    private static Dictionary<string, string> ReadStringDictionary(JsonElement obj, string name)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty(name, out JsonElement value)
+            || value.ValueKind != JsonValueKind.Object) return result;
+        foreach (JsonProperty property in value.EnumerateObject())
+            if (property.Value.ValueKind == JsonValueKind.String)
+                result[property.Name] = property.Value.GetString() ?? string.Empty;
         return result;
     }
 

@@ -55,6 +55,8 @@ public partial class App : Application
                 TaskScheduler.Default);
             return;
         }
+        if (!IsSmokeTest)
+            _services.GetRequiredService<StoreService>().BeginStartupCatalogRevalidation();
         _window = new MainWindow(_services);
         _memoryMilestoneLog?.RecordOnce("mainwindow_created");
         _services.GetRequiredService<WindowsAppNotificationService>().TryRegister(() =>

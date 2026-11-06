@@ -28,6 +28,7 @@ public sealed class CacheSettingsService(CacheService cache) : ICacheSettingsSer
                 + CacheStorageUsage.Measure(System.IO.Path.Combine(root, "Cache", "Icons"), token: token);
             CacheUsage catalog = CacheStorageUsage.Measure(System.IO.Path.Combine(root, "ApiCache"), token: token)
                 + CacheStorageUsage.Measure(System.IO.Path.Combine(root, "catalog-v2-details"), token: token)
+                + CacheStorageUsage.Measure(System.IO.Path.Combine(root, "Cache", "ReleaseCatalogIndex"), token: token)
                 + CacheStorageUsage.Measure(System.IO.Path.Combine(root, "Cache"), "package-metrics.json", false, token);
             foreach (string pattern in new[] { "catalog-v2-*.json*", "msstore-catalog-*.json*", "screenshot-index.json*", "apps.json*" })
                 catalog += CacheStorageUsage.Measure(root, pattern, false, token);

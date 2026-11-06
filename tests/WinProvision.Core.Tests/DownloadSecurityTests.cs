@@ -7,6 +7,44 @@ namespace WinProvision.Core.Tests;
 
 public sealed class DownloadSecurityTests
 {
+    [Fact]
+    public async Task ConcurrentDestinationIsPreservedWhenPublishingInstaller()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "WinProvision-publish-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string destination = Path.Combine(directory, "installer.exe");
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() => WinProvisionApiService.PublishInstallerAsync(destination, async (staging, token) =>
+            {
+                await File.WriteAllTextAsync(staging, "download", token);
+                await File.WriteAllTextAsync(destination, "outro arquivo", token);
+            }, CancellationToken.None));
+            Assert.Equal("outro arquivo", await File.ReadAllTextAsync(destination));
+            Assert.Single(Directory.GetFiles(directory));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public async Task CancelledInstallerPublicationDoesNotPublishPartialFile()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "WinProvision-publish-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string destination = Path.Combine(directory, "installer.exe");
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => WinProvisionApiService.PublishInstallerAsync(destination, async (staging, token) =>
+            {
+                await File.WriteAllTextAsync(staging, "download", token);
+                cancellation.Cancel();
+            }, cancellation.Token));
+            Assert.Empty(Directory.GetFiles(directory));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     [Theory]
     [InlineData("http://attacker.invalid/catalog.json")]
     [InlineData("https://attacker.invalid/catalog.json")]
@@ -19,8 +57,9 @@ public sealed class DownloadSecurityTests
         try
         {
             await Assert.ThrowsAsync<HttpRequestException>(() => api.GetIndexAsync());
-            Assert.Single(handler.Requests); // Only the current catalog endpoint.
+            Assert.Equal(2, handler.Requests.Count); // GitHub e a CDN de compatibilidade, sem seguir o redirecionamento.
             Assert.All(handler.Requests, uri => Assert.Equal(Uri.UriSchemeHttps, uri.Scheme));
+            Assert.DoesNotContain(handler.Requests, uri => uri.Host.Equals("attacker.invalid", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

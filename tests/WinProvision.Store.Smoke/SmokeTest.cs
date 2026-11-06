@@ -388,20 +388,20 @@ internal static partial class SmokeTest
                     provisioningModel.IsWallpaperPickerExpanded = true;
                     await provisioningModel.LoadWallpaperOptionsCommand.ExecutionTask!;
                     Check(provisioningModel.WallpaperOptions.Count > 0,
-                        $"Provisionamento: catálogo de wallpapers do R2 carregado em {theme}");
+                        $"Provisionamento: catálogo local de teste carregado em {theme}");
                     Check(provisioningModel.WallpaperOptions[0].IsLocalChoice,
                         $"Provisionamento: card de imagem local aparece primeiro na galeria em {theme}");
                     var firstWallpaperOption = provisioningModel.WallpaperOptions.First(option => !option.IsLocalChoice);
                     var wallpaperThumbnail = await AsyncImage.LoadBitmapAsync(firstWallpaperOption.Url, 380, CancellationToken.None);
                     Check(wallpaperThumbnail is not null,
-                        $"Provisionamento: miniatura R2 decodificada em {theme}");
+                        $"Provisionamento: miniatura local de teste decodificada em {theme}");
                     if (theme == ElementTheme.Dark)
                     {
                         var wallpaperOption = firstWallpaperOption;
                         await provisioningModel.SelectCatalogWallpaperCommand.ExecuteAsync(wallpaperOption);
                         Check(provisioningModel.HasWallpaper && provisioningModel.WallpaperFileName == wallpaperOption.FileName
                             && provisioningModel.StatusText.Contains("incorporada ao perfil", StringComparison.OrdinalIgnoreCase),
-                            "Provisionamento: baixar e selecionar imagem do catálogo R2 atualiza o perfil");
+                            "Provisionamento: selecionar imagem local de teste atualiza o perfil");
                         provisioningModel.ClearWallpaperCommand.Execute(null);
                     }
                     ((FrameworkElement)provisioning.FindName("WallpaperGalleryItems")!).StartBringIntoView();

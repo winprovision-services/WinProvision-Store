@@ -32,6 +32,11 @@ public class StoreService : IStoreCatalog
     private readonly bool _ownsHttpClient;
     private bool _disposed;
     private readonly IconService _iconService;
+    private readonly IReleaseCatalogIndexService _releaseCatalog;
+    private readonly bool _ownsReleaseCatalog;
+    private bool _loadedReleaseCatalog;
+    private readonly CancellationTokenSource _startupCatalogCancellation = new();
+    private Task? _startupCatalogTask;
 
     // Opções centralizadas compartilhadas pelo app para manter o cache compacto
     // e compatível com o modelo AppEntry usado pelo cliente.
@@ -62,18 +67,22 @@ public class StoreService : IStoreCatalog
     public event Action<IReadOnlyList<AppEntry>>? CatalogUpdated;
     public event Action? CacheCleared;
 
-    public StoreService(HttpClient? httpClient = null, IconService? iconService = null)
-        : this(httpClient, iconService, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinProvisionStore"))
+    public StoreService(HttpClient? httpClient = null, IconService? iconService = null,
+        IReleaseCatalogIndexService? releaseCatalog = null)
+        : this(httpClient, iconService, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinProvisionStore"), releaseCatalog)
     {
     }
 
-    internal StoreService(HttpClient? httpClient, IconService? iconService, string cacheDirectory)
+    internal StoreService(HttpClient? httpClient, IconService? iconService, string cacheDirectory,
+        IReleaseCatalogIndexService? releaseCatalog = null)
     {
         _ownsHttpClient = httpClient is null;
         _httpClient = httpClient ?? NetworkClientFactory.Create(TimeSpan.FromSeconds(30));
         _iconService = iconService ?? new IconService();
 
         _cacheDirectory = cacheDirectory;
+        _ownsReleaseCatalog = releaseCatalog is null;
+        _releaseCatalog = releaseCatalog ?? new ReleaseCatalogIndexService(_httpClient, Path.Combine(cacheDirectory, "Cache", "ReleaseCatalogIndex"));
 
         _legacyCacheFilePath = Path.Combine(_cacheDirectory, "apps.json");
         _catalogManifestCacheFilePath = Path.Combine(_cacheDirectory, "catalog-v2-manifest.json");
@@ -115,7 +124,7 @@ public class StoreService : IStoreCatalog
                 return _cachedCatalog;
             }
 
-            if (!forceRefresh && TryLoadLocalCatalog())
+            if (await TryLoadLocalReleaseCatalogAsync(cancellationToken).ConfigureAwait(false) || TryLoadLocalCatalog())
             {
                 RemoveLegacyScreenshotLinks(_cachedCatalog);
                 PopulateIcons(_cachedCatalog);
@@ -168,6 +177,7 @@ public class StoreService : IStoreCatalog
             _loadedSearchIndexCacheFilePath = null;
             _wingetApps.Clear();
             _startupRevalidationScheduled = false;
+            _loadedReleaseCatalog = false;
         }
         finally
         {
@@ -186,6 +196,8 @@ public class StoreService : IStoreCatalog
 
     private async Task<AppEntry> LoadDetailsCoreAsync(AppEntry app, CancellationToken cancellationToken, bool allowRefresh)
     {
+        if (string.Equals(app.CatalogDetailBaseUrl, WingetCdnCatalog.GitHubRawCatalogBaseUrl, StringComparison.Ordinal))
+            return await LoadWingetDetailsAsync(app, cancellationToken);
         if (string.Equals(app.CatalogDetailBaseUrl, WingetCdnCatalog.BaseUrl.TrimEnd('/'), StringComparison.Ordinal))
             return await LoadWingetDetailsAsync(app, cancellationToken);
         int cacheGeneration = Volatile.Read(ref _cacheGeneration);
@@ -315,7 +327,9 @@ public class StoreService : IStoreCatalog
             && cached.Expires > DateTimeOffset.UtcNow
             && cached.App.Entry.CatalogDetailCatalogSha256 == summary.CatalogDetailCatalogSha256)
             return cached.App;
-        WingetCdnCatalog.App app = await WingetCdnCatalog.LoadAppAsync(_httpClient, summary, token);
+        WingetCdnCatalog.App app = IsReleaseEntry(summary)
+            ? await WingetCdnCatalog.LoadGitHubAppAsync(_httpClient, summary, token, _catalogDetailsCacheDirectory)
+            : await WingetCdnCatalog.LoadAppAsync(_httpClient, summary, token);
         _wingetApps[summary.Id] = (app, DateTimeOffset.UtcNow.AddMinutes(5));
         return app;
     }
@@ -331,14 +345,18 @@ public class StoreService : IStoreCatalog
         string? version, CancellationToken token = default)
     {
         WingetCdnCatalog.App app = await GetWingetAppAsync(summary, token);
-        PackageManifest detail = await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, version, token);
+        PackageManifest detail = IsReleaseEntry(summary)
+            ? await WingetCdnCatalog.LoadGitHubVersionAsync(_httpClient, app, version, token, _catalogDetailsCacheDirectory)
+            : await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, version, token);
         return detail.Installers;
     }
 
     private async Task<AppEntry> LoadWingetDetailsAsync(AppEntry summary, CancellationToken token)
     {
         WingetCdnCatalog.App app = await GetWingetAppAsync(summary, token);
-        PackageManifest detail = await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, null, token);
+        PackageManifest detail = IsReleaseEntry(summary)
+            ? await WingetCdnCatalog.LoadGitHubVersionAsync(_httpClient, app, null, token, _catalogDetailsCacheDirectory)
+            : await WingetCdnCatalog.LoadVersionAsync(_httpClient, app, null, token);
         AppEntry result = app.Entry;
         result.Installers = detail.Installers;
         result.PublisherUrl = detail.PublisherUrl;
@@ -349,8 +367,23 @@ public class StoreService : IStoreCatalog
     }
 
     /// <summary>Momento em que o manifesto do catálogo v2 foi gravado localmente.</summary>
-    public DateTime? LastCatalogSyncUtc =>
-        File.Exists(_wingetCatalogCachePath) ? File.GetLastWriteTimeUtc(_wingetCatalogCachePath) : null;
+    private static bool IsReleaseEntry(AppEntry entry) =>
+        string.Equals(entry.CatalogDetailBaseUrl, WingetCdnCatalog.GitHubRawCatalogBaseUrl, StringComparison.Ordinal);
+
+    public DateTime? LastCatalogSyncUtc => _loadedReleaseCatalog && _loadedSearchIndexCacheFilePath is { } path && File.Exists(path)
+        ? File.GetLastWriteTimeUtc(path)
+        : File.Exists(_wingetCatalogCachePath) ? File.GetLastWriteTimeUtc(_wingetCatalogCachePath) : null;
+
+    private async Task<bool> TryLoadLocalReleaseCatalogAsync(CancellationToken token)
+    {
+        ReleaseCatalogSnapshot? snapshot = await _releaseCatalog.TryLoadLocalSnapshotAsync(token).ConfigureAwait(false);
+        if (snapshot is null) return false;
+        _loadedReleaseCatalog = true;
+        _catalogSha256 = _loadedIndexSha256 = snapshot.SourceCommit;
+        _loadedSearchIndexCacheFilePath = snapshot.DatabasePath;
+        SetCachedCatalog(snapshot.Apps.ToList());
+        return true;
+    }
 
     private bool TryLoadLocalCatalog()
     {
@@ -524,6 +557,33 @@ public class StoreService : IStoreCatalog
         int generation = Volatile.Read(ref _cacheGeneration);
         try
         {
+            ReleaseCatalogSnapshot release = await _releaseCatalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
+            if (!forceRefresh && _loadedReleaseCatalog && _cachedCatalog.Count == release.AppCount
+                && string.Equals(_loadedIndexSha256, release.SourceCommit, StringComparison.Ordinal))
+                return _cachedCatalog;
+            var installedIds = _cachedCatalog.Where(app => app.IsInstalled)
+                .Select(app => app.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            List<AppEntry> apps = release.Apps.ToList();
+            foreach (AppEntry app in apps) app.IsInstalled = installedIds.Contains(app.Id);
+            PopulateIcons(apps);
+            if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
+            _loadedReleaseCatalog = true;
+            _catalogSha256 = _loadedIndexSha256 = release.SourceCommit;
+            _loadedSearchIndexCacheFilePath = release.DatabasePath;
+            _wingetApps.Clear();
+            SetCachedCatalog(apps);
+            CatalogUpdated?.Invoke(_cachedCatalog);
+            return _cachedCatalog;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            CoreLog.Warning(exception, "RefreshReleaseCatalog");
+            if (_loadedReleaseCatalog && _cachedCatalog.Count > 0) return _cachedCatalog;
+        }
+        try
+        {
             WingetCdnCatalog.Snapshot snapshot = await WingetCdnCatalog.LoadIndexAsync(_httpClient, cancellationToken);
             if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
             if (!forceRefresh && _cachedCatalog.Count == snapshot.Apps.Count
@@ -541,6 +601,7 @@ public class StoreService : IStoreCatalog
             await AtomicFile.WriteAllBytesAsync(_wingetCatalogCachePath, snapshot.CatalogBytes, cancellationToken);
             if (generation != Volatile.Read(ref _cacheGeneration)) return _cachedCatalog;
             _catalogSha256 = snapshot.IndexSha256;
+            _loadedReleaseCatalog = false;
             _loadedIndexSha256 = snapshot.IndexSha256;
             _loadedSearchIndexCacheFilePath = _wingetSearchCachePath;
             _wingetApps.Clear();
@@ -684,6 +745,7 @@ public class StoreService : IStoreCatalog
         _catalogSha256 = null;
         _loadedIndexSha256 = null;
         _loadedSearchIndexCacheFilePath = null;
+        _loadedReleaseCatalog = false;
         _wingetApps.Clear();
 
         lock (_refreshSync)
@@ -694,6 +756,7 @@ public class StoreService : IStoreCatalog
 
         try
         {
+            _releaseCatalog.ClearCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
             foreach (string path in Directory.Exists(_cacheDirectory)
                          ? Directory.EnumerateFiles(_cacheDirectory, "catalog-v2-search-*.json").ToArray()
                          : Array.Empty<string>())
@@ -1101,6 +1164,9 @@ public class StoreService : IStoreCatalog
         try
         {
             string? searchIndexPath = _loadedSearchIndexCacheFilePath;
+            if (_loadedReleaseCatalog)
+                return searchIndexPath is null || !File.Exists(searchIndexPath)
+                    || DateTime.UtcNow - File.GetLastWriteTimeUtc(searchIndexPath) >= CatalogCacheTtl;
             return searchIndexPath is null ||
                    !File.Exists(searchIndexPath) ||
                    !File.Exists(_wingetCatalogCachePath) ||
@@ -1150,6 +1216,22 @@ public class StoreService : IStoreCatalog
             return task;
         }
     }
+
+    /// <summary>Revalida o cache ao abrir a interface, sem carregar a vitrine no modo sob demanda.</summary>
+    public void BeginStartupCatalogRevalidation()
+    {
+        lock (_refreshSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _startupCatalogTask ??= Task.Run(async () =>
+            {
+                try { await _releaseCatalog.RefreshAsync(_startupCatalogCancellation.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (_startupCatalogCancellation.IsCancellationRequested) { }
+                catch (Exception exception) { CoreLog.Warning(exception, "StartupReleaseCatalog"); }
+            });
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         Task? pending;
@@ -1158,6 +1240,7 @@ public class StoreService : IStoreCatalog
             if (_disposed) return;
             _disposed = true;
             _refreshCts?.Cancel();
+            _startupCatalogCancellation.Cancel();
             pending = _refreshTask;
         }
         try
@@ -1171,6 +1254,13 @@ public class StoreService : IStoreCatalog
         catch (Exception exception) { CoreLog.Error(exception, "StoreService"); }
         finally
         {
+            if (_startupCatalogTask is not null)
+            {
+                try { await _startupCatalogTask.ConfigureAwait(false); }
+                catch (Exception exception) { CoreLog.Warning(exception, "DisposeStartupReleaseCatalog"); }
+            }
+            if (_ownsReleaseCatalog) (_releaseCatalog as IDisposable)?.Dispose();
+            _startupCatalogCancellation.Dispose();
             if (_ownsHttpClient) _httpClient.Dispose();
         }
     }
