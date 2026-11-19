@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "tabs": [
+    {
+      "id": "overview",
+      "label": "about.tab.overview",
+      "blocks": [
+        { "type": "heading", "text": "about.product.name" },
+        { "type": "subtitle", "text": "about.product.subtitle" },
+        { "type": "paragraph", "text": "about.product.description" },
+        { "type": "valueLine", "text": "about.version.line", "providerId": "app-version" },
+        { "type": "notice", "severity": "warning", "title": "about.legal.title", "text": "about.legal.text", "icon": "infoCircle" },
+        { "type": "heading", "text": "about.links.heading" },
+        {
+          "type": "links",
+          "items": [
+            { "label": "about.links.home", "destination": "https://winprovision-services.github.io/WinProvision-Store/" },
+            { "label": "about.links.repository", "destination": "https://github.com/winprovision-services/WinProvision-Store" },
+            { "label": "about.links.report", "destination": "https://github.com/winprovision-services/WinProvision-Store/issues" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "third-party",
+      "label": "Licença de Terceiros",
+      "footer": "Todas as marcas, nomes de produtos e logos pertencem aos seus respectivos proprietários e são usados apenas para identificação. O WinProvision Store não é afiliado nem endossado por eles.",
+      "blocks": [
+        {
+          "type": "list",
+          "items": [
+            {
+              "name": "Chocolatey (CLI)",
+              "purpose": "Gerenciador de pacotes usado como fonte opcional. O app usa uma instalação existente do Chocolatey CLI ou o instala sob demanda; não redistribui o Chocolatey.",
+              "license": "Apache License 2.0. Marca de Chocolatey Software, Inc.",
+              "sourceUrl": "https://github.com/chocolatey/choco",
+              "licenseUrl": "https://github.com/chocolatey/choco/blob/develop/LICENSE",
+              "warning": "Chocolatey e suas marcas pertencem à Chocolatey Software, Inc."
+            },
+            {
+              "name": "WinGet (Windows Package Manager)",
+              "purpose": "Usado pelo app para pesquisar, instalar e atualizar aplicativos.",
+              "license": "MIT. Marca da Microsoft.",
+              "sourceUrl": "https://github.com/microsoft/winget-cli",
+              "licenseUrl": "https://github.com/microsoft/winget-cli/blob/master/LICENSE",
+              "warning": "WinGet e Windows são marcas da Microsoft Corporation."
+            },
+            {
+              "name": "Office / Office Deployment Tool",
+              "purpose": "Usada para instalar e desinstalar o Microsoft Office.",
+              "license": "O Office Deployment Tool e o Microsoft Office estão sujeitos aos respectivos termos de licença de software da Microsoft.",
+              "sourceUrl": "https://learn.microsoft.com/en-us/deployoffice/overview-office-deployment-tool",
+              "licenseUrl": "https://www.microsoft.com/en-US/download/details.aspx?id=49117",
+              "warning": "“Microsoft Office” e os logos são marcas da Microsoft Corporation."
+            },
+            {
+              "name": "Ícones do aplicativo (Segoe Fluent Icons)",
+              "purpose": "Fonte de ícones usada pela interface e fornecida pelo Windows.",
+              "license": "© Microsoft. Uso conforme os termos de licença do Windows; a fonte não é redistribuída com o app.",
+              "sourceUrl": "https://learn.microsoft.com/en-us/windows/apps/design/iconography/segoe-fluent-icons-font",
+              "licenseUrl": "https://www.microsoft.com/en-us/useterms",
+              "warning": "A fonte é fornecida pelo Windows e não acompanha o aplicativo."
+            },
+            {
+              "name": "Logos de produtos Microsoft/Office",
+              "purpose": "Usados apenas para identificar produtos Microsoft/Office na interface.",
+              "license": "O repositório não declara uma licença para os logos; informa que eles são propriedade da Microsoft Corporation.",
+              "sourceUrl": "https://github.com/loryanstrant/MicrosoftCloudLogos",
+              "licenseUrl": "https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks",
+              "warning": "Marcas da Microsoft Corporation, usadas apenas para identificar produtos. Sem afiliação ou endosso."
+            },
+            {
+              "name": "Ícones diversos — Dashboard Icons",
+              "purpose": "Ícones usados na interface, obtidos do projeto Dashboard Icons.",
+              "license": "Arquivos sob Apache License 2.0; logos e marcas pertencem aos respectivos proprietários e são usados só para identificação.",
+              "sourceUrl": "https://dashboardicons.com/",
+              "licenseUrl": "https://github.com/homarr-labs/dashboard-icons/blob/main/LICENSE",
+              "warning": "A licença Apache 2.0 do repositório não transfere direitos sobre as marcas representadas nos ícones."
+            },
+            {
+              "name": "Ícones diversos — Wikimedia Commons",
+              "purpose": "Ícones identificadores usados na interface; consulte a página de cada arquivo para sua origem e autoria.",
+              "license": "Licença e autoria variam por arquivo; a página de cada arquivo no Commons traz os detalhes.",
+              "sourceUrl": "https://commons.wikimedia.org/wiki/File:Windows_Package_Manager_logo.svg",
+              "licenseUrl": "https://commons.wikimedia.org/wiki/File:Windows_Package_Manager_logo.svg",
+              "warning": "O ícone do WinGet embutido no app tem autoria e licença registradas em ThirdPartyIconSources.json."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

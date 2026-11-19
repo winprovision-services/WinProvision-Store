@@ -1,0 +1,99 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="OperationProgressTrackTransparentBrush" Color="#00000000"/>
+            <SolidColorBrush x:Key="OperationNeutralBackgroundBrush" Color="{ThemeResource CardBackgroundFillColorDefault}" Opacity="0.07"/>
+            <SolidColorBrush x:Key="OperationAttentionBackgroundBrush" Color="{ThemeResource AccentFillColorDefault}" Opacity="0.10"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="#FF176B37"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="#FF176B37" Opacity="0.10"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="#FFB42318"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#FFB42318" Opacity="0.10"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FF526274"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#FF526274" Opacity="0.08"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="#FF825B00"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="#FF825B00" Opacity="0.12"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#FFD7E0E8"/>
+            <SolidColorBrush x:Key="OperationDescriptionBackgroundBrush" Color="#FF000000" Opacity="0.10"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="OperationProgressTrackTransparentBrush" Color="#00000000"/>
+            <SolidColorBrush x:Key="OperationNeutralBackgroundBrush" Color="#FFFFFFFF" Opacity="0.07"/>
+            <SolidColorBrush x:Key="OperationAttentionBackgroundBrush" Color="#FF0078D4" Opacity="0.10"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="#FF79D99A"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="#2679D99A"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="#FFFF8585"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#26FF8585"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FFC6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#18C6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="#FFFFD37A"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="#26FFC857"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#24FFFFFF"/>
+            <SolidColorBrush x:Key="OperationDescriptionBackgroundBrush" Color="#FFFFFFFF" Opacity="0.10"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="OperationProgressTrackTransparentBrush" Color="#00000000"/>
+            <SolidColorBrush x:Key="OperationNeutralBackgroundBrush" Color="{ThemeResource CardBackgroundFillColorDefault}" Opacity="0.07"/>
+            <SolidColorBrush x:Key="OperationAttentionBackgroundBrush" Color="{ThemeResource AccentFillColorDefault}" Opacity="0.10"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="#FF79D99A"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="#2679D99A"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="#FFFF8585"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="#26FF8585"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="#FFC6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="#18C6D1E0"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="#FFFFD37A"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="#26FFC857"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="#24FFFFFF"/>
+            <SolidColorBrush x:Key="OperationDescriptionBackgroundBrush" Color="#FFFFFFFF" Opacity="0.10"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="OperationProgressTrackTransparentBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="OperationNeutralBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="OperationAttentionBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationSuccessSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationFailureBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationFailureSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationCanceledBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationCanceledSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="AppOperationUnconfirmedSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+            <SolidColorBrush x:Key="AppProgressTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+            <SolidColorBrush x:Key="OperationDescriptionBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+    <SolidColorBrush x:Key="AppOperationComBrush" Color="#FFB991FF"/>
+    <SolidColorBrush x:Key="AppOperationApiBrush" Color="#FFFF9A3D"/>
+    <SolidColorBrush x:Key="AppOperationViperBrush" Color="#FFD13438"/>
+    <SolidColorBrush x:Key="AppOperationWingetBrush" Color="#FF0078D4"/>
+    <SolidColorBrush x:Key="AppOperationDefaultBrush" Color="#FF0078D4"/>
+    <Style x:Key="QueueProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style x:Key="OperationDescriptionButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="RootGrid" Background="Transparent">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="RootGrid.Background" Value="Transparent"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="RootGrid.Background" Value="Transparent"/></VisualState.Setters></VisualState>
+                                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="RootGrid.Background" Value="Transparent"/></VisualState.Setters></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" ContentTransitions="{TemplateBinding ContentTransitions}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

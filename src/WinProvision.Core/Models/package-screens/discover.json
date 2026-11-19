@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "id": "discover",
+  "title": "Descobrir",
+  "icon": "discover",
+  "subtitle": "{filtered} de {total} {packageLabel}",
+  "search": {
+    "enabled": true,
+    "placeholder": "search.placeholder",
+    "trigger": "live",
+    "debounceMs": 275,
+    "minLength": 1,
+    "keepQuery": true
+  },
+  "ranking": {
+    "sources": { "winget": 0.12, "msstore": 0.12, "chocolatey": 0 },
+    "scoreWeight": 0.35,
+    "starsWeight": 0.2,
+    "downloadsWeight": 0.2,
+    "storeRatingWeight": 0.15,
+    "curatedIconBonus": 0.05,
+    "metadataCompletenessWeight": 0.05,
+    "sourceMatchAdvantageThreshold": 1,
+    "derivedPenalty": 0.15,
+    "duplicatePenalty": 0.1,
+    "noiseSuffixes": [".install", ".portable", ".commandline", ".app"]
+  },
+  "data": {
+    "provider": "discover"
+  },
+  "toolbar": {
+    "primary": {
+      "action": "install",
+      "menu": [
+        "manageOptions"
+      ]
+    },
+    "overflow": [
+      "details",
+      "manualInstall",
+      "download",
+      "addToCollection",
+      "selectAll",
+      "clearSelection"
+    ]
+  },
+  "sidebar": {
+    "sections": [
+      {
+        "id": "sources",
+        "title": "filters.sources",
+        "type": "sources",
+        "bulkActions": [
+          "select-all",
+          "clear"
+        ],
+        "items": []
+      },
+      {
+        "id": "search",
+        "title": "search.options",
+        "type": "search-options",
+        "modes": [
+          "name",
+          "id",
+          "both",
+          "exact"
+        ],
+        "items": [
+          {
+            "id": "searchMode",
+            "title": "search.mode.title"
+          }
+        ]
+      },
+      {
+        "id": "categories",
+        "title": "Categorias",
+        "type": "choice",
+        "items": [
+          {
+            "id": "category",
+            "title": "Categoria"
+          }
+        ]
+      }
+    ]
+  },
+  "views": {
+    "list": {
+      "columns": ["name", "id", "version", "source"]
+    },
+    "details": {
+      "columns": ["name", "id", "version", "source"],
+      "subtitle": "status"
+    },
+    "grid": {
+      "card": ["name", "id", "versionTransition"],
+      "badge": "source"
+    }
+  },
+  "row": {
+    "tap": "select",
+    "doubleTap": "details",
+    "contextActions": [
+      "install",
+      "installAdmin",
+      "installInteractive",
+      "updateIgnoreHash",
+      "details",
+      "manualInstall",
+      "manageOptions",
+      "download",
+      "addToCollection",
+      "copyId",
+      "copyLink"
+    ]
+  },
+  "selection": "multiple",
+  "sortColumns": ["relevance", "name", "id"],
+  "defaults": {
+    "view": "list",
+    "sort": {
+      "column": "relevance",
+      "direction": "descending"
+    }
+  }
+}

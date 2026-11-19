@@ -1,0 +1,35 @@
+**/bin/
+**/obj/
+**/publish/
+**/TestResults/
+**/__pycache__/
+**/.venv/
+**/venv/
+**/.cache/
+**/cache/
+**/staging/
+**/logs/
+tests/WinProvision.Store.Smoke/validation-harness.flag
+.vs/
+.vscode/
+artifacts/
+.wrangler/
+# Separate, locally cloned catalog repository (includes large generated SQLite indexes)
+WinProvision-PKGS/
+*.user
+*.suo
+
+# Local credentials and diagnostic output
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+STORE_DIR/
+out/
+!.env.example
+*.pfx
+*.p12
+*.key
+*-token.dat
+*.log
+*.dmp

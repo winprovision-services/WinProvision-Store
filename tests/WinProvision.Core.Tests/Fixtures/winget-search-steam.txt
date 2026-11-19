@@ -1,0 +1,49 @@
+Nome                            ID                                    Versão              Correspondência
+---------------------------------------------------------------------------------------------------------------
+Steam                           Valve.Steam                           2.10.91.91          
+Achievement Watcher             AnthonyBeaumont.AchievementWatcher    1.6.8               Tag: steam
+SteaScree                       AwthWathje.SteaScree                  1.5.4               Tag: steam
+DeckSave                        Baldknobber.DeckSave                  0.4.0               Tag: steam
+SteamCleaner                    Codeusa.SteamCleaner                  2.4                 Tag: steam
+Steam Dock Extension            DennieZorg.SteamDockExtension         0.1.0               Tag: steam
+PC GamePak                      HarryBMa.PCGamePak                    1.1.0               Tag: steam
+ArchiSteamFarm                  JustArchiNET.ArchiSteamFarm           6.3.10.3            Tag: steam
+SaveState                       Matteo842.SaveState                   3.0                 Tag: steam
+Achievements                    PSerban93.Achievements                1.3.0               Tag: steam
+Steam-Library-Manager           RevoLand.Steam-Library-Manager        1.7.2.0             Tag: steam
+ShiftPad                        ShiftPad.ShiftPad                     2.2.0               Tag: steam
+Steam Token Dumper              SteamDatabase.SteamTokenDumper        2026.8.20           Tag: steam
+Steam ROM Manager               SteamGridDB.RomManager                2.5.29              Tag: steam
+DepotDownloader                 SteamRE.DepotDownloader               3.4.0               Tag: steam
+SteamPal for Command Palette    StontyTech.SteamPalforCommandPalette  0.0.1.0             Tag: steam
+chiaki-ng                       StreetPea.chiaki-ng                   1.9.9               Tag: steam
+TcNo Account Switcher           TechNobo.TcNoAccountSwitcher          2025-11-20_03       Tag: steam
+Steam Link                      Valve.SteamLink                       1.3.33              Tag: steam
+Steamless                       atom0s.Steamless                      3.1.0.5             Tag: steam
+UWPHook                         brianlima.uwphook                     2.14.3              Tag: steam
+Steam Tools NG                  calendulish.SteamToolsNG              4.0                 Tag: steam
+Accshift                        klNuno.Accshift                       1.0.3               Tag: steam
+Console Mode                    lippdev.ConsoleMode                   1.5.1               Tag: steam
+SteamDepotDownloaderGUI         mmvanheusden.SteamDepotDownloaderGUI  3.0.1               Tag: steam
+Bookworm                        BlindPandasTeam.Bookworm              2026.2              
+Steam Achievement Manager (SAM) Gibbed.SteamAchievementManager        7.0.41              
+Git Extensions                  GitExtensionsTeam.GitExtensions       7.2.1.7             
+SteamLibraryLauncher            Jack.SteamLibraryLauncher             1.0.0               
+Rolisteam                       KDE.Rolisteam                         1.10                
+steamie                         LargeModGames.steamie                 0.4.2               
+OpenVR Advanced Settings        OVRASTeam.OpenVR-AdvancedSettings     5.8.17              
+蒸汽平台                        PerfectWorld.SteamChina               2.10.91.91          
+AWS Loggy                       SteampunkLabs.AWSLoggy                3.15.3              
+Qucs-S                          TheQucsTeam.Qucs-S                    26.1.1              
+Steam Art Manager               TravisLane.SteamArtManager            3.23.1              
+Unknown-Horizons                Unknown-HorizonsTeam.Unknown-Horizons 2019.1              
+SteamCMD                        Valve.SteamCMD                        2.2.95.35           
+Weasis                          WeasisTeam.Weasis                     4.7.3               
+SteamlessController             david419kr.SteamlessController        260629              
+Steam Game Idler                zevnda.SteamGameIdler                 6.2.9               
+Iriun VR Server                 Iriun.IriunVR                         2.4                 Tag: steamvr
+Amethyst 2.0 Technical Preview  K2VRTeam.AME2                         20251011            Tag: steamvr
+Amethyst (Portable)             K2VRTeam.Amethyst.Portable            1.3.4.0             Tag: steamvr
+Microsoft Teams                 Microsoft.Teams                       26198.304.4946.9672 Tag: msteams
+sl                              ScaryRawr.SL                          6.1.5               Tag: steam-locomotive
+palctl                          SteveWeed79.palctl                    1.0.0               Tag: steamcmd

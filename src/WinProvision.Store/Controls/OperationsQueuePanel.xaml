@@ -1,0 +1,92 @@
+<UserControl xmlns:ic="using:FluentIcons.WinUI" x:Class="WinProvision.Store.Controls.OperationsQueuePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WinProvision.Store.ViewModels"
+             xmlns:svc="using:WinProvision.Store.Services"
+             xmlns:services="using:WinProvision.Store.Services"
+             x:DataType="vm:OperationsViewModel" x:Name="Root"
+             FontFamily="{StaticResource StoreFontFamily}" FontSize="14"
+             HorizontalAlignment="Stretch"
+             PointerEntered="Panel_PointerEntered" PointerExited="Panel_PointerExited"
+             GotFocus="Panel_GotFocus" LostFocus="Panel_LostFocus">
+    <UserControl.Resources><services:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/></UserControl.Resources>
+    <Border x:Name="QueueSurface" Background="Transparent"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+        <Grid RowDefinitions="Auto,*">
+            <Grid Grid.Row="0" Height="28" Margin="4,2,4,2" ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0" Width="28" Height="24" Padding="4" Background="Transparent" BorderThickness="0"
+                        Command="{Binding ToggleQueueCommand}" AutomationProperties.Name="{Binding CollapseAutomationText}"
+                        ToolTipService.ToolTip="{Binding CollapseAutomationText}">
+                    <Grid Width="10" Height="10">
+                        <PathIcon Width="10" Height="10" Data="M0,0 L5,6 L10,0" Visibility="{Binding IsQueueExpanded, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                        <PathIcon Width="10" Height="10" Data="M0,6 L5,0 L10,6" Visibility="{Binding IsQueueExpanded, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </Grid>
+                </Button>
+                <TextBlock Grid.Column="1" Text="{Binding HeaderText}" FontSize="12" Opacity="0.6" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                <Button x:Name="BulkMenuButton" Grid.Column="2" Width="28" Height="24" Padding="0" Margin="0,0,4,0"
+                        Background="Transparent" BorderThickness="0" AutomationProperties.Name="{Binding HeaderAutomationText}"
+                        ToolTipService.ToolTip="{Binding HeaderAutomationText}" Click="BulkMenuButton_Click">
+                    <TextBlock Text="⋯" FontSize="13"/>
+                </Button>
+            </Grid>
+            <ScrollViewer Grid.Row="1" Visibility="{Binding IsQueueExpanded, Converter={StaticResource BoolToVisibilityConverter}}"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="OperationsList" ItemsSource="{Binding Items}" Margin="8,4,8,4">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:OperationViewModel">
+                            <Border Height="{Binding RowHeight}" Margin="{Binding RowMargin}" Padding="{Binding RowPadding}" CornerRadius="{Binding RowCornerRadius}"
+                                  Background="{Binding StateBrush}" AutomationProperties.Name="{Binding AccessibleDescription}">
+                                <Border.Child>
+                <Grid ColumnSpacing="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding IconColumnGridLength}"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="{Binding ActionButtonColumnGridLength}"/>
+                        <ColumnDefinition Width="{Binding MoreButtonColumnGridLength}"/>
+                    </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Width="{Binding IconSize}" Height="{Binding RowIconHeight}" VerticalAlignment="Center">
+                                    <ic:FluentIcon x:Name="IconFallback" Icon="Apps" IconVariant="Regular" IconSize="Size20" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Image x:Name="OperationImage" Stretch="Uniform" ImageOpened="OperationImage_Opened" ImageFailed="OperationImage_Failed"/>
+                                </Grid>
+                                <Grid x:Name="FlexibleRegion" Grid.Column="1" MinWidth="{Binding DescriptionMinWidth}" ColumnSpacing="{Binding FlexibleColumnSpacing}" ColumnDefinitions="Auto,*" SizeChanged="FlexibleRegion_SizeChanged">
+                                    <TextBlock x:Name="OperationTitle" Grid.Column="0" Margin="6,0,0,0" MinWidth="{Binding TitleMinWidth}" MaxWidth="{Binding TitleMaxWidth}" FontSize="{Binding TitleFontSize}"
+                                               VerticalAlignment="Center" Text="{Binding DisplayTitle}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxLines="1"
+                                               ToolTipService.ToolTip="{Binding TitleToolTip}"/>
+                                    <Grid Grid.Column="1" Height="{Binding DescriptionHeight}" MinWidth="{Binding DescriptionMinWidth}" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                     <Border x:Name="DescriptionSurface" CornerRadius="{Binding DescriptionCornerRadius}" Background="{Binding DescriptionBackgroundBrush}"/>
+                                     <Button x:Name="LiveLineButton" Background="Transparent" BorderThickness="0" Padding="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Click="LiveLineButton_Click" Tag="{Binding}"
+                                             AutomationProperties.Name="{Binding DisplayTitle}" AutomationProperties.HelpText="{Binding QueueStatusText}"
+                                             ToolTipService.ToolTip="{Binding DescriptionToolTip}" Foreground="{Binding TitleBrush}">
+                                      <Grid x:Name="DescriptionContent" RowDefinitions="*,Auto" ColumnDefinitions="*" HorizontalAlignment="Stretch" Background="Transparent" IsHitTestVisible="False">
+                                      <Border Grid.Row="0" Grid.RowSpan="2" Height="{Binding DescriptionProgressTrackHeight}" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" CornerRadius="{Binding ProgressCornerRadius}" Background="Transparent"/>
+                                      <TextBlock Grid.Row="0" Grid.Column="0" Margin="{Binding DescriptionTextMargin}" Text="{Binding QueueStatusText}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" HorizontalAlignment="Stretch" TextAlignment="Left" FontSize="{Binding DescriptionFontSize}" svc:OperationMessageTypography.FontToken="{Binding DescriptionFontToken}" svc:OperationMessageTypography.FontWeightToken="{Binding DescriptionFontWeightToken}" Foreground="{Binding TitleBrush}"/>
+                                      <ProgressBar x:Name="OperationProgress" Grid.Row="1" Grid.Column="0" Style="{StaticResource QueueProgressBarStyle}" IsIndeterminate="{Binding PresentationIsIndeterminate}" Value="{Binding Progress}" Minimum="0" Maximum="100"
+                                                   Height="{Binding ProgressHeight}" CornerRadius="{Binding ProgressCornerRadius}" Margin="0" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Foreground="{Binding ProgressBrush}" Background="{Binding ProgressTrackBrush}" Visibility="{Binding ProgressVisibility}" BorderThickness="0"/>
+                                      </Grid>
+                                     </Button>
+                                    </Grid>
+                                </Grid>
+                                <Button Grid.Column="3" Width="{Binding ActionButtonWidth}" Margin="6,0,1,0" Height="{Binding ActionButtonHeight}" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                        Command="{Binding ActionCommand}" Content="{Binding ButtonText}" AutomationProperties.Name="{Binding ButtonText}"
+                                        BorderThickness="0" CornerRadius="{Binding RowCornerRadius}" FontSize="{Binding ActionFontSize}"/>
+                                <Button x:Name="MoreOptionsButton" Grid.Column="4" Width="{Binding MoreButtonWidth}" Height="{Binding ActionButtonHeight}" Padding="0" VerticalAlignment="Center" BorderThickness="0"
+                                        CornerRadius="{Binding RowCornerRadius}" AutomationProperties.Name="{Binding MoreOptionsAutomationText}"
+                                        ToolTipService.ToolTip="{Binding MoreOptionsAutomationText}" Click="ItemMoreButton_Click" Tag="{Binding}">
+                                    <StackPanel Orientation="Horizontal" Spacing="3" HorizontalAlignment="Center">
+                                        <Border Width="3" Height="3" CornerRadius="1.5" Background="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                        <Border Width="3" Height="3" CornerRadius="1.5" Background="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                        <Border Width="3" Height="3" CornerRadius="1.5" Background="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                    </StackPanel>
+                                </Button>
+                                </Grid>
+                                </Border.Child>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,11 @@
+{
+  "notice.elevator.title": "Preferências de segurança",
+  "notice.elevator.message": "Estas configurações afetam a segurança. Altere só se entender as implicações.",
+  "notice.elevator.secondary": "São preferências do usuário e não formam uma barreira contra processos maliciosos executados na mesma conta.",
+  "notice.riskChanged.title": "Preferências de risco diferentes do padrão",
+  "notice.riskChanged.message": "Uma ou mais preferências perigosas foram alteradas em relação ao padrão.",
+  "notice.lanNetwork.title": "Uso do servidor LAN",
+  "notice.lanNetwork.message": "O token é transmitido sem criptografia. Use o servidor apenas em uma rede confiável.",
+  "notice.lanCredentials.title": "Código de conexão",
+  "notice.lanCredentials.message": "O código contém endereço e token; trate-o como uma senha."
+}

@@ -1,0 +1,1242 @@
+{
+  "schemaVersion": 1,
+  "vectors": [
+    {
+      "type": "msi",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "msi",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "msi",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+msi",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msi",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+msi",
+      "prohibited": true
+    },
+    {
+      "type": "wix",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "wix",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "wix",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+wix",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "wix",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+wix",
+      "prohibited": true
+    },
+    {
+      "type": "exe",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "exe",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "exe",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+exe",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "exe",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+exe",
+      "prohibited": true
+    },
+    {
+      "type": "inno",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "inno",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "inno",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+inno",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "inno",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+inno",
+      "prohibited": true
+    },
+    {
+      "type": "nullsoft",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "nullsoft",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "nullsoft",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+nullsoft",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "nullsoft",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+nullsoft",
+      "prohibited": true
+    },
+    {
+      "type": "burn",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "burn",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "burn",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "reason": "scope:machine+burn",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "burn",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "conflict:elevationProhibited-vs-scope:machine+burn",
+      "prohibited": true
+    },
+    {
+      "type": "msix",
+      "scope": null,
+      "requirement": null,
+      "decision": "not-required",
+      "source": "type",
+      "reason": "type:msix",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "msix",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "msix",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "scope:unresolved-for-installer-type",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "msix",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "appx",
+      "scope": null,
+      "requirement": null,
+      "decision": "not-required",
+      "source": "type",
+      "reason": "type:appx",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "appx",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "appx",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "scope:unresolved-for-installer-type",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "appx",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "zip",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "no-positive-declaration-or-supported-machine-scope",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "zip",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "zip",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "scope:unresolved-for-installer-type",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "zip",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "portable",
+      "scope": null,
+      "requirement": null,
+      "decision": "not-required",
+      "source": "type",
+      "reason": "type:portable",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "portable",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "portable",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "scope:unresolved-for-installer-type",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "portable",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "pwa",
+      "scope": null,
+      "requirement": null,
+      "decision": "not-required",
+      "source": "type",
+      "reason": "type:pwa",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": null,
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": null,
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "pwa",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "user",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "user",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "user",
+      "requirement": "elevationProhibited",
+      "decision": "not-required",
+      "source": "scope",
+      "reason": "scope:user+elevationProhibited",
+      "prohibited": true
+    },
+    {
+      "type": "pwa",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "reason": "scope:unresolved-for-installer-type",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "machine",
+      "requirement": "elevationRequired",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevationRequired",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "machine",
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "reason": "declared:elevatesSelf",
+      "prohibited": false
+    },
+    {
+      "type": "pwa",
+      "scope": "machine",
+      "requirement": "elevationProhibited",
+      "decision": "unknown",
+      "source": "none",
+      "reason": "declared:elevationProhibited-awaiting-inspection",
+      "prohibited": true
+    },
+    {
+      "type": "zip",
+      "scope": null,
+      "requirement": "elevatesSelf",
+      "decision": "required",
+      "source": "declared",
+      "prohibited": false,
+      "reason": "declared:elevatesSelf"
+    },
+    {
+      "type": "zip",
+      "nestedType": "portable",
+      "scope": null,
+      "requirement": null,
+      "decision": "not-required",
+      "source": "type",
+      "prohibited": false,
+      "reason": "type:portable"
+    },
+    {
+      "type": "zip",
+      "nestedType": "msi",
+      "scope": null,
+      "requirement": null,
+      "decision": "unknown",
+      "source": "none",
+      "prohibited": false,
+      "reason": "no-positive-declaration-or-supported-machine-scope"
+    },
+    {
+      "type": "zip",
+      "nestedType": "msi",
+      "scope": "machine",
+      "requirement": null,
+      "decision": "required",
+      "source": "scope",
+      "prohibited": false,
+      "reason": "scope:machine+msi"
+    },
+    {
+      "type": "zip",
+      "nestedType": "msi",
+      "scope": "user",
+      "requirement": null,
+      "decision": "not-required",
+      "source": "scope",
+      "prohibited": false,
+      "reason": "scope:user"
+    }
+  ]
+}

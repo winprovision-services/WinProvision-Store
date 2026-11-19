@@ -1,0 +1,513 @@
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:vm="using:WinProvision.Store.ViewModels"
+      xmlns:ic="using:FluentIcons.WinUI"
+      xmlns:conv="using:WinProvision.Store.Services"
+      xmlns:services="using:WinProvision.Store.Services"
+      x:Class="WinProvision.Store.Views.PackageManagersPage"
+      x:DataType="vm:PackageManagersViewModel"
+      Background="Transparent"
+      FontFamily="{StaticResource StoreFontFamily}"
+      FontSize="{StaticResource PackageManagerPageFontSize}"
+      Loaded="Page_Loaded">
+  <Page.Resources>
+    <ResourceDictionary>
+      <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+      <conv:ManagerStatusBackgroundConverter x:Key="ManagerStatusBackgroundConverter" />
+      <conv:ManagerStatusForegroundConverter x:Key="ManagerStatusForegroundConverter" />
+
+      <DataTemplate x:Key="PackageManagerSettingsActionTemplate" x:DataType="vm:PackageManagerSettingsActionViewModel">
+        <Grid HorizontalAlignment="Stretch">
+          <Button Style="{StaticResource PackageManagerActionButtonStyle}" Content="{x:Bind Label, Mode=OneTime}"
+                  Tag="{x:Bind Id, Mode=OneTime}" Click="SelectedAction_Click"
+                  Visibility="{x:Bind IsLink, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+          <Button Style="{StaticResource PackageManagerRelatedActionButtonStyle}" Tag="{x:Bind Id, Mode=OneTime}"
+                  Click="SelectedAction_Click" VerticalContentAlignment="Center"
+                  Visibility="{x:Bind IsLink, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Grid MinHeight="{StaticResource PackageManagerStatusRowMinimumHeight}"
+                  ColumnSpacing="{StaticResource PackageManagerControlSpacing}">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <ic:FluentIcon Icon="TextBulletList" IconVariant="Regular" IconSize="Size16" />
+              <TextBlock Grid.Column="1" Text="{x:Bind Label, Mode=OneTime}" VerticalAlignment="Center" />
+              <ic:FluentIcon Grid.Column="2" Icon="ChevronRight" IconVariant="Regular" IconSize="Size16"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Grid>
+          </Button>
+        </Grid>
+      </DataTemplate>
+
+      <DataTemplate x:Key="PackageManagerChoiceTemplate" x:DataType="vm:PackageManagerSettingsChoiceViewModel">
+        <TextBlock Text="{x:Bind Label, Mode=OneTime}" />
+      </DataTemplate>
+
+      <DataTemplate x:Key="PackageManagerInstallControlTemplate" x:DataType="vm:PackageManagerSettingsFieldViewModel">
+        <StackPanel>
+        <Grid MinHeight="{StaticResource PackageManagerInputRowMinimumHeight}"
+              ColumnSpacing="{StaticResource PackageManagerCardSpacing}"
+              Visibility="{x:Bind IsChoice, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" />
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+            <TextBlock Text="{x:Bind Label, Mode=OneWay}" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       FontSize="{StaticResource PackageManagerDescriptionFontSize}" TextWrapping="Wrap"
+                       Visibility="{x:Bind HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+          </StackPanel>
+          <ComboBox Grid.Column="1" Style="{StaticResource PackageManagerSettingsComboBoxStyle}"
+                    ItemsSource="{x:Bind Choices, Mode=OneWay}" ItemTemplate="{StaticResource PackageManagerChoiceTemplate}"
+                    SelectedItem="{x:Bind SelectedChoice, Mode=TwoWay}" />
+        </Grid>
+        <Grid MinHeight="{StaticResource PackageManagerInputRowMinimumHeight}"
+              ColumnSpacing="{StaticResource PackageManagerCardSpacing}"
+              Visibility="{x:Bind IsText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" />
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+            <TextBlock Text="{x:Bind Label, Mode=OneWay}" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       FontSize="{StaticResource PackageManagerDescriptionFontSize}" TextWrapping="Wrap"
+                       Visibility="{x:Bind HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+          </StackPanel>
+          <TextBox Grid.Column="1" Style="{StaticResource PackageManagerSettingsTextBoxStyle}"
+                   Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   PlaceholderText="{x:Bind Placeholder, Mode=OneWay}" />
+        </Grid>
+        <Grid MinHeight="{StaticResource PackageManagerPathRowMinimumHeight}"
+              ColumnSpacing="{StaticResource PackageManagerCardSpacing}"
+              Visibility="{x:Bind IsPath, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{StaticResource PackageManagerPathControlColumnGridLength}" />
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+            <TextBlock Text="{x:Bind Label, Mode=OneWay}" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       FontSize="{StaticResource PackageManagerDescriptionFontSize}" TextWrapping="Wrap"
+                       Visibility="{x:Bind HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+          </StackPanel>
+          <Grid Grid.Column="1" ColumnSpacing="{StaticResource PackageManagerControlSpacing}" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBox Style="{StaticResource PackageManagerSettingsTextBoxStyle}" IsReadOnly="True"
+                     Text="{x:Bind Value, Mode=OneWay}" PlaceholderText="{x:Bind Placeholder, Mode=OneWay}"
+                     AutomationProperties.Name="{x:Bind Label, Mode=OneWay}" />
+            <Button Grid.Column="1" Style="{StaticResource PackageManagerActionButtonStyle}"
+                    Content="{x:Bind SelectPathText, Mode=OneTime}"
+                    Command="{x:Bind SelectPathCommand, Mode=OneWay}" />
+            <Button Grid.Column="2" Style="{StaticResource PackageManagerActionButtonStyle}"
+                    Content="{x:Bind ResetText, Mode=OneTime}"
+                    Command="{x:Bind ResetPathCommand, Mode=OneWay}" />
+          </Grid>
+        </Grid>
+        </StackPanel>
+      </DataTemplate>
+
+      <DataTemplate x:Key="PackageManagerAdvancedFieldTemplate" x:DataType="vm:PackageManagerSettingsFieldViewModel">
+        <Border Padding="{StaticResource PackageManagerSettingsHeaderPadding}" HorizontalAlignment="Stretch"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="{StaticResource PackageManagerBottomDividerThickness}">
+          <StackPanel HorizontalAlignment="Stretch">
+            <Grid MinHeight="{StaticResource PackageManagerDescriptionRowMinimumHeight}"
+                  HorizontalAlignment="Stretch"
+                  ColumnSpacing="{StaticResource PackageManagerCardSpacing}"
+                  Visibility="{x:Bind IsToggle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+                <TextBlock Text="{x:Bind Label, Mode=OneWay}" TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           FontSize="{StaticResource PackageManagerDescriptionFontSize}" TextWrapping="Wrap"
+                           Visibility="{x:Bind HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+              </StackPanel>
+              <Grid Grid.Column="1" Width="{StaticResource PackageManagerControlColumnWidth}"
+                    ColumnSpacing="{StaticResource PackageManagerControlSpacing}" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <TextBlock Text="{x:Bind ToggleStateText, Mode=OneWay}" FontWeight="SemiBold"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ToggleValue, Mode=TwoWay}"
+                              OnContent="" OffContent="" Width="{StaticResource PackageManagerToggleSwitchWidth}"
+                              MinWidth="{StaticResource PackageManagerToggleSwitchWidth}" VerticalAlignment="Center" />
+              </Grid>
+            </Grid>
+            <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource PackageManagerInstallControlTemplate}"
+                              HorizontalAlignment="Stretch"
+                              Visibility="{x:Bind IsNotToggle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+          </StackPanel>
+        </Border>
+      </DataTemplate>
+
+      <Style x:Key="PackageManagerSourceListItemStyle" TargetType="ListViewItem">
+        <Setter Property="Padding" Value="{StaticResource PackageManagerSourceRowPadding}" />
+        <Setter Property="MinHeight" Value="{StaticResource PackageManagerSourceRowMinimumHeight}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      </Style>
+    </ResourceDictionary>
+  </Page.Resources>
+
+  <Grid x:Name="PackageManagersRoot" Margin="{StaticResource PageContentMargin}"
+        MaxWidth="{StaticResource PageContentMaxWidth}" HorizontalAlignment="Stretch">
+    <Grid x:Name="ManagersHome">
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+      <StackPanel Grid.Row="0" Margin="{StaticResource PageHeaderMargin}">
+        <TextBlock Text="{Binding PageTitle}" Style="{StaticResource FluentPageTitleStyle}" />
+      </StackPanel>
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="{StaticResource PackageManagerHomeScrollContentMargin}">
+          <ItemsControl x:Name="ManagerRowsList" ItemsSource="{Binding VisibleManagerRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PackageManagerRowViewModel">
+                <Border Padding="{StaticResource PackageManagerSettingsHeaderPadding}"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="{StaticResource PackageManagerBottomDividerThickness}">
+                  <Grid ColumnSpacing="{StaticResource PackageManagerCardSpacing}" MinHeight="{StaticResource PackageManagerStatusRowMinimumHeight}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="{StaticResource PackageManagerIconColumnGridLength}" /><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" /><ColumnDefinition Width="{StaticResource PackageManagerIconColumnGridLength}" /></Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0" Width="24" Height="24" VerticalAlignment="Center">
+                      <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="{x:Bind IconGlyph, Mode=OneWay}"
+                                FontSize="{StaticResource PackageManagerTitleFontSize}" VerticalAlignment="Center"
+                                Visibility="{x:Bind HasIconUri, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                      <Image Width="24" Height="24" services:AsyncImage.SourceUrl="{x:Bind IconUri, Mode=OneWay}" Stretch="Uniform"
+                             Visibility="{x:Bind HasIconUri, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                             AutomationProperties.Name="{x:Bind DisplayName, Mode=OneWay}" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+                      <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" FontSize="{StaticResource PackageManagerTitleFontSize}" FontWeight="SemiBold" />
+                      <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Bind ProgressText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                 TextWrapping="Wrap" Visibility="{x:Bind HasProgressText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                      <TextBlock Text="{x:Bind FeedbackText, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                 TextWrapping="Wrap" Visibility="{x:Bind HasFeedbackText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="{StaticResource PackageManagerControlSpacing}"
+                                VerticalAlignment="Center">
+                      <ProgressRing Width="{StaticResource PackageManagerProgressIndicatorSize}" Height="{StaticResource PackageManagerProgressIndicatorSize}"
+                                    IsActive="{x:Bind IsBusy, Mode=OneWay}"
+                                    Visibility="{x:Bind IsBusy, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                      <ToggleSwitch IsOn="{x:Bind IsEnabled, Mode=TwoWay}" OnContent="" OffContent=""
+                                    Width="{StaticResource PackageManagerToggleSwitchWidth}" MinWidth="{StaticResource PackageManagerToggleSwitchWidth}"
+                                    IsEnabled="{x:Bind CanToggle, Mode=OneWay}"
+                                    AutomationProperties.Name="{x:Bind ToggleAutomationName, Mode=OneWay}" />
+                    </StackPanel>
+                    <Button Grid.Column="3" Style="{StaticResource PackageManagerIconButtonStyle}"
+                            Background="Transparent" BorderThickness="{StaticResource PackageManagerZeroThickness}" VerticalAlignment="Center"
+                            Command="{x:Bind OpenDetailsCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind HasDetailsPage, Mode=OneWay}"
+                            Visibility="{x:Bind HasDetailsPage, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            AutomationProperties.Name="{x:Bind DetailsAutomationName, Mode=OneWay}">
+                      <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" />
+                    </Button>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Margin="{StaticResource PackageManagerSummaryMargin}"
+                      Visibility="{Binding IsOfficeModuleVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="Módulos" FontSize="{StaticResource PackageManagerTitleFontSize}"
+                       FontWeight="SemiBold" Margin="{StaticResource PackageManagerSectionTitleMargin}" />
+            <Border Padding="{StaticResource PackageManagerSettingsHeaderPadding}"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="{StaticResource PackageManagerBottomDividerThickness}">
+              <Grid ColumnSpacing="{StaticResource PackageManagerCardSpacing}"
+                    MinHeight="{StaticResource PackageManagerStatusRowMinimumHeight}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="{StaticResource PackageManagerIconColumnGridLength}" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" />
+                  <ColumnDefinition Width="{StaticResource PackageManagerIconColumnGridLength}" />
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Width="24" Height="24" VerticalAlignment="Center"
+                       services:AsyncImage.SourceUrl="ms-appx:///Assets/Icons/microsoft-office.png"
+                       AutomationProperties.Name="Office" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+                  <TextBlock Text="Office" FontSize="{StaticResource PackageManagerTitleFontSize}" FontWeight="SemiBold" />
+                  <TextBlock Text="Instale, configure e remova o Microsoft Office (Microsoft 365). Desative para ocultá-lo do menu lateral."
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding OfficeModuleFeedbackText}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                             TextWrapping="Wrap" Visibility="{Binding HasOfficeModuleFeedback, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="2" IsOn="{Binding IsOfficeModuleEnabled, Mode=TwoWay}"
+                              OnContent="" OffContent="" Width="{StaticResource PackageManagerToggleSwitchWidth}"
+                              MinWidth="{StaticResource PackageManagerToggleSwitchWidth}" VerticalAlignment="Center"
+                              AutomationProperties.Name="Ativar módulo Office" />
+                <Button Grid.Column="3" Style="{StaticResource PackageManagerIconButtonStyle}"
+                        Background="Transparent" BorderThickness="{StaticResource PackageManagerZeroThickness}"
+                        VerticalAlignment="Center" Click="OfficeDetails_Click"
+                        AutomationProperties.Name="Configurações do Office">
+                  <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" />
+                </Button>
+              </Grid>
+            </Border>
+          </StackPanel>
+          <Border Margin="{StaticResource PackageManagerSummaryMargin}" Padding="{StaticResource PackageManagerSettingsHeaderPadding}"
+                  CornerRadius="{StaticResource PackageManagerControlCornerRadius}" Background="{ThemeResource LayerFillColorAltBrush}">
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource PackageManagerControlSpacing}">
+              <Button Content="{Binding VerifyAllText}" Command="{Binding CheckAllManagersCommand}" Style="{StaticResource PackageManagerActionButtonStyle}" />
+              <ProgressRing Width="{StaticResource PackageManagerProgressIndicatorSize}" Height="{StaticResource PackageManagerProgressIndicatorSize}"
+                            IsActive="{Binding IsCheckingAllManagers}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding LastAllManagersChecked}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+    </Grid>
+
+    <Grid x:Name="ManagerDetails" Visibility="Collapsed">
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+      <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="{StaticResource PackageManagerControlSpacing}" Margin="{StaticResource PageHeaderMargin}">
+        <Button Style="{StaticResource PackageManagerIconButtonStyle}" AutomationProperties.Name="Voltar para gerenciadores de pacotes"
+                Click="Back_Click" VerticalAlignment="Center">
+          <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" IconSize="Size16" />
+        </Button>
+        <TextBlock Text="{Binding SelectedPageTitle}" Style="{StaticResource FluentPageTitleStyle}" VerticalAlignment="Center" />
+      </StackPanel>
+      <ScrollViewer x:Name="ManagerSettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="{StaticResource PackageManagerScrollContentMargin}" HorizontalAlignment="Stretch">
+          <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="{StaticResource PackageManagerEnableCardPadding}">
+            <Grid ColumnSpacing="{StaticResource PackageManagerCardSpacing}" MinHeight="{StaticResource PackageManagerStatusRowMinimumHeight}">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+                <TextBlock Text="{Binding SelectedEnableLabel}" FontSize="{StaticResource PackageManagerTitleFontSize}"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{Binding SelectedManager.ProgressText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" Visibility="{Binding SelectedManager.HasProgressText, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <TextBlock Text="{Binding SelectedManager.FeedbackText}" Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                           TextWrapping="Wrap" Visibility="{Binding SelectedManager.HasFeedbackText, Converter={StaticResource BoolToVisibilityConverter}}" />
+              </StackPanel>
+                <Grid Grid.Column="1" Width="{StaticResource PackageManagerControlColumnWidth}"
+                      ColumnSpacing="{StaticResource PackageManagerControlSpacing}" VerticalAlignment="Center">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding SelectedEnabledLabel}" VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="SemiBold"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                  <ToggleSwitch Grid.Column="1" IsOn="{Binding SelectedManager.IsEnabled, Mode=TwoWay}"
+                                OnContent="" OffContent="" Width="{StaticResource PackageManagerToggleSwitchWidth}"
+                                MinWidth="{StaticResource PackageManagerToggleSwitchWidth}" VerticalAlignment="Center"
+                                IsEnabled="{Binding SelectedManager.CanToggle}" />
+              </Grid>
+            </Grid>
+          </Border>
+
+          <ContentControl IsEnabled="{Binding SelectedManager.IsEnabled}" HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch">
+            <StackPanel HorizontalAlignment="Stretch">
+            <TextBlock Text="{Binding SelectedStatusSectionTitle}" FontWeight="SemiBold" Margin="{StaticResource PackageManagerStatusTitleMargin}" />
+            <Expander IsExpanded="True" Margin="{StaticResource PackageManagerExpanderMargin}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Expander.Header>
+                <Border Padding="{StaticResource PackageManagerSettingsHeaderPadding}" HorizontalAlignment="Stretch"
+                        BorderThickness="{StaticResource PackageManagerStandardBorderThickness}" CornerRadius="{StaticResource PackageManagerCardCornerRadius}"
+                        Background="{Binding SelectedManager.StatusStyle, Converter={StaticResource ManagerStatusBackgroundConverter}}">
+                  <StackPanel Spacing="{StaticResource PackageManagerControlSpacing}">
+                    <TextBlock Text="{Binding SelectedManagerStatus}" FontWeight="SemiBold" TextWrapping="Wrap"
+                               Foreground="{Binding SelectedManager.StatusStyle, Converter={StaticResource ManagerStatusForegroundConverter}}" />
+                    <TextBlock Text="{Binding SelectedManagerVersionLabel}"
+                               Foreground="{Binding SelectedManager.StatusStyle, Converter={StaticResource ManagerStatusForegroundConverter}}" />
+                  </StackPanel>
+                </Border>
+              </Expander.Header>
+              <Border Padding="{StaticResource PackageManagerCardPadding}" HorizontalAlignment="Stretch"
+                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="{StaticResource PackageManagerStandardBorderThickness}"
+                      CornerRadius="{StaticResource PackageManagerCardCornerRadius}">
+                <StackPanel Spacing="{StaticResource PackageManagerControlSpacing}">
+                  <Grid MinHeight="{StaticResource PackageManagerStatusRowMinimumHeight}"
+                        ColumnSpacing="{StaticResource PackageManagerControlSpacing}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBox Style="{StaticResource PackageManagerSettingsTextBoxStyle}" Text="{Binding SelectedManagerExecutable, Mode=OneWay}"
+                             IsReadOnly="True" FontFamily="Consolas" VerticalAlignment="Center" AutomationProperties.Name="Executável atual" />
+                    <Button Grid.Column="1" Style="{StaticResource PackageManagerIconButtonStyle}" Click="CopyExecutable_Click"
+                            AutomationProperties.Name="Copiar caminho do executável">
+                      <ic:FluentIcon Icon="Clipboard" IconVariant="Regular" IconSize="Size16" />
+                    </Button>
+                    <Button Grid.Column="2" Content="Verificar novamente" Command="{Binding CheckSelectedManagerCommand}"
+                            Style="{StaticResource PackageManagerActionButtonStyle}" />
+                    <TextBlock Grid.Column="3" Text="{Binding SelectedManagerCheckedAt}"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               FontSize="{StaticResource PackageManagerDescriptionFontSize}" VerticalAlignment="Center" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding SelectedStatusFields}" ItemTemplate="{StaticResource PackageManagerAdvancedFieldTemplate}"
+                                Visibility="{Binding HasSelectedStatusFields, Converter={StaticResource BoolToVisibilityConverter}}" />
+                  <ItemsControl ItemsSource="{Binding SelectedStatusActions}" HorizontalAlignment="Stretch"
+                                ItemTemplate="{StaticResource PackageManagerSettingsActionTemplate}"
+                                Visibility="{Binding HasSelectedStatusActions, Converter={StaticResource BoolToVisibilityConverter}}">
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </Expander>
+
+            <TextBlock Text="{Binding SelectedInstallSectionTitle}" FontWeight="SemiBold" Margin="{StaticResource PackageManagerStatusTitleMargin}" />
+            <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="{StaticResource PackageManagerZeroPadding}">
+              <StackPanel>
+                <Grid Padding="{StaticResource PackageManagerSettingsHeaderPadding}"
+                      ColumnSpacing="{StaticResource PackageManagerControlSpacing}"
+                      BorderThickness="{StaticResource PackageManagerBottomDividerThickness}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="As seguintes opções serão aplicadas por padrão às operações deste gerenciador."
+                             TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{StaticResource PackageManagerControlSpacing}"
+                              HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="{Binding ResetText}" Command="{Binding ResetSelectedSettingsCommand}"
+                            IsEnabled="{Binding CanResetSelectedSettings}" Style="{StaticResource PackageManagerActionButtonStyle}" />
+                    <Button Content="{Binding ApplyText}" Command="{Binding ApplySelectedSettingsCommand}"
+                            IsEnabled="{Binding HasPendingSettingsChanges}" Style="{StaticResource PackageManagerActionButtonStyle}"
+                            Background="{ThemeResource AccentFillColorDefaultBrush}" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                  </StackPanel>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding SelectedInstallToggleFields}" Margin="{StaticResource PackageManagerInstallToggleListMargin}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PackageManagerSettingsFieldViewModel">
+                      <CheckBox Style="{StaticResource PackageManagerInstallOptionCheckBoxStyle}"
+                                IsChecked="{x:Bind ToggleValue, Mode=TwoWay}"
+                                MinHeight="{StaticResource PackageManagerCheckboxRowMinimumHeight}"
+                                VerticalContentAlignment="Center" HorizontalAlignment="Stretch">
+                        <StackPanel VerticalAlignment="Center" Spacing="{StaticResource PackageManagerControlSpacing}">
+                          <TextBlock Text="{x:Bind Label, Mode=OneWay}" TextWrapping="Wrap" />
+                          <TextBlock Text="{x:Bind Description, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                     FontSize="{StaticResource PackageManagerDescriptionFontSize}" TextWrapping="Wrap"
+                                     Visibility="{x:Bind HasDescription, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                      </CheckBox>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding SelectedInstallControlFields}" Margin="{StaticResource PackageManagerInstallControlListMargin}"
+                              ItemTemplate="{StaticResource PackageManagerInstallControlTemplate}" />
+                <ItemsControl ItemsSource="{Binding SelectedNotes}" Margin="{StaticResource PackageManagerNotesMargin}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                 TextWrapping="Wrap" FontSize="{StaticResource PackageManagerDescriptionFontSize}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="{StaticResource PackageManagerCardPadding}"
+                    Visibility="{Binding SupportsSources, Converter={StaticResource BoolToVisibilityConverter}}">
+              <StackPanel Spacing="{StaticResource PackageManagerControlSpacing}">
+                <Grid ColumnSpacing="{StaticResource PackageManagerControlSpacing}">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerControlColumnGridLength}" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding SelectedSourceSectionTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{StaticResource PackageManagerCompactControlSpacing}" HorizontalAlignment="Right">
+                    <Button Content="{Binding AddSourceText}" Click="AddSource_Click" IsEnabled="{Binding CanAddSource}"
+                            Style="{StaticResource PackageManagerActionButtonStyle}" />
+                    <ItemsControl ItemsSource="{Binding SelectedSourceActions}" VerticalAlignment="Center"
+                                  ItemTemplate="{StaticResource PackageManagerSettingsActionTemplate}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="{StaticResource PackageManagerCompactControlSpacing}" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <Button Style="{StaticResource PackageManagerIconButtonStyle}" Command="{Binding RefreshSelectedSourcesCommand}"
+                            IsEnabled="{Binding CanRefreshSources}" AutomationProperties.Name="{Binding RefreshSourcesAutomationName}">
+                      <ic:FluentIcon Icon="ArrowClockwise" IconVariant="Regular" IconSize="Size16" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
+                <Grid ColumnSpacing="{StaticResource PackageManagerControlSpacing}" Padding="{StaticResource PackageManagerTableHeaderPadding}"
+                      BorderThickness="{StaticResource PackageManagerBottomDividerThickness}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="{StaticResource PackageManagerSourceNameColumnGridLength}" /><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerIconButtonGridLength}" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="Nome" FontWeight="SemiBold" FontSize="{StaticResource PackageManagerDescriptionFontSize}" />
+                  <TextBlock Grid.Column="1" Text="Endereço" FontWeight="SemiBold" FontSize="{StaticResource PackageManagerDescriptionFontSize}" />
+                </Grid>
+                <ListView ItemsSource="{Binding SelectedSourceRows}" MaxHeight="{StaticResource PackageManagerSourcesMaximumHeight}"
+                          SelectionMode="None" Padding="{StaticResource PackageManagerZeroPadding}" ItemContainerStyle="{StaticResource PackageManagerSourceListItemStyle}">
+                  <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PackageManagerSettingsSourceViewModel">
+                      <Grid ColumnSpacing="{StaticResource PackageManagerControlSpacing}" Padding="{StaticResource PackageManagerSourceRowPadding}"
+                            MinHeight="{StaticResource PackageManagerSourceRowMinimumHeight}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="{StaticResource PackageManagerSourceNameColumnGridLength}" /><ColumnDefinition Width="*" /><ColumnDefinition Width="{StaticResource PackageManagerIconButtonGridLength}" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind Name, Mode=OneTime}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind Url, Mode=OneTime}" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button Grid.Column="2" Style="{StaticResource PackageManagerIconButtonStyle}"
+                                Command="{x:Bind RemoveCommand, Mode=OneWay}"
+                                AutomationProperties.Name="{x:Bind RemoveAutomationName, Mode=OneTime}"
+                                ToolTipService.ToolTip="Remover fonte">
+                          <ic:FluentIcon Icon="Delete" IconVariant="Regular" IconSize="Size16" />
+                        </Button>
+                      </Grid>
+                    </DataTemplate>
+                  </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock Text="{Binding SelectedSourcesStatus}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           FontSize="{StaticResource PackageManagerDescriptionFontSize}" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Text="Opções avançadas" FontWeight="SemiBold" Margin="{StaticResource PackageManagerSectionTitleMargin}"
+                       Visibility="{Binding HasAdvancedFields, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="{StaticResource PackageManagerZeroPadding}"
+                    Visibility="{Binding HasAdvancedFields, Converter={StaticResource BoolToVisibilityConverter}}">
+              <ItemsControl ItemsSource="{Binding SelectedAdvancedFields}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch" ItemTemplate="{StaticResource PackageManagerAdvancedFieldTemplate}" />
+            </Border>
+
+            <TextBlock Text="Configurações relacionadas" FontWeight="SemiBold" Margin="{StaticResource PackageManagerSectionTitleMargin}"
+                       Visibility="{Binding SupportsActions, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <ItemsControl ItemsSource="{Binding SelectedActions}" HorizontalAlignment="Stretch"
+                          ItemTemplate="{StaticResource PackageManagerSettingsActionTemplate}"
+                          Visibility="{Binding SupportsActions, Converter={StaticResource BoolToVisibilityConverter}}">
+            </ItemsControl>
+            </StackPanel>
+          </ContentControl>
+        </StackPanel>
+      </ScrollViewer>
+      <ScrollViewer x:Name="WinProvisionApiDetailsContent" Grid.Row="1" Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="{StaticResource PackageManagerScrollContentMargin}" Spacing="{StaticResource PackageManagerCardSpacing}">
+          <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="20">
+            <Grid ColumnSpacing="20">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+              <Image Width="104" Height="104" Source="ms-appx:///Assets/Icons/winprovision-api.jpg"
+                     Stretch="Uniform" AutomationProperties.Name="Ícone WinProvision API" />
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
+                <TextBlock Text="WinProvision API" FontSize="22" FontWeight="SemiBold" />
+                <TextBlock Text="Visão geral visual do gerenciador WinProvision."
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Border Background="{ThemeResource LayerFillColorAltBrush}" CornerRadius="8"
+                        Padding="10,5" HorizontalAlignment="Left">
+                  <TextBlock Text="Prévia visual" FontWeight="SemiBold" />
+                </Border>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <TextBlock Text="Estado da integração" FontWeight="SemiBold"
+                     Margin="{StaticResource PackageManagerSectionTitleMargin}" />
+          <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="16">
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel Spacing="4">
+                <TextBlock Text="Conexão" FontWeight="SemiBold" />
+                <TextBlock Text="Nenhuma conexão foi configurada para esta prévia."
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Column="1" Background="{ThemeResource LayerFillColorAltBrush}"
+                      CornerRadius="8" Padding="10,6" VerticalAlignment="Center">
+                <TextBlock Text="Não configurada" />
+              </Border>
+            </Grid>
+          </Border>
+
+          <TextBlock Text="Recursos" FontWeight="SemiBold"
+                     Margin="{StaticResource PackageManagerSectionTitleMargin}" />
+          <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="16">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Fontes de pacotes" FontWeight="SemiBold" />
+              <TextBlock Text="Nenhuma fonte está vinculada a esta tela."
+                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource PackageManagerSettingsCardStyle}" Padding="16">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Operações" FontWeight="SemiBold" />
+              <TextBlock Text="Nenhuma ação está configurada nesta prévia visual."
+                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Page>

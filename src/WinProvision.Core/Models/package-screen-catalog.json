@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 1,
+  "actions": [
+    {
+      "id": "refresh",
+      "title": "Recarregar",
+      "icon": "refresh"
+    },
+    {
+      "id": "install",
+      "title": "Instalar",
+      "icon": "install"
+    },
+    {
+      "id": "update",
+      "title": "Atualizar",
+      "icon": "update"
+    },
+    {
+      "id": "uninstall",
+      "title": "Desinstalar",
+      "icon": "uninstall",
+      "confirm": true
+    },
+    {
+      "id": "download",
+      "title": "Baixar instaladores",
+      "icon": "download"
+    },
+    {
+      "id": "export",
+      "title": "Exportar",
+      "icon": "export"
+    },
+    {
+      "id": "import",
+      "title": "Importar",
+      "icon": "import"
+    },
+    {
+      "id": "addToCollection",
+      "title": "Adicionar à coleção",
+      "icon": "collection"
+    },
+    {
+      "id": "selectAll",
+      "title": "Selecionar tudo",
+      "icon": "selectAll"
+    },
+    {
+      "id": "cancel",
+      "title": "Cancelar",
+      "icon": "cancel"
+    },
+    {
+      "id": "details",
+      "title": "Detalhes",
+      "icon": "details"
+    },
+    {
+      "id": "manualInstall",
+      "title": "Instalação manual",
+      "icon": "terminal"
+    },
+    {
+      "id": "ignoreUpdate",
+      "title": "Ignorar atualização",
+      "icon": "ignore"
+    },
+    {
+      "id": "restoreIgnored",
+      "title": "Restaurar atualização",
+      "icon": "restore"
+    },
+    {
+      "id": "showIgnored",
+      "title": "Ver atualizações ignoradas",
+      "icon": "ignore"
+    },
+    {
+      "id": "manageOptions",
+      "title": "Opções de instalação",
+      "icon": "settings"
+    },
+    {
+      "id": "exportCsv",
+      "title": "Exportar CSV",
+      "icon": "export"
+    },
+    {
+      "id": "newCollection",
+      "title": "Nova coleção",
+      "icon": "collectionAdd"
+    },
+    {
+      "id": "openCollection",
+      "title": "Abrir coleção",
+      "icon": "collection"
+    },
+    {
+      "id": "saveCollection",
+      "title": "Salvar coleção",
+      "icon": "save"
+    },
+    {
+      "id": "deleteCollection",
+      "title": "Excluir coleção",
+      "icon": "delete",
+      "confirm": true
+    },
+    {
+      "id": "installSelected",
+      "title": "Instalar selecionados",
+      "icon": "install"
+    },
+    {
+      "id": "installAll",
+      "title": "Instalar todos",
+      "icon": "install",
+      "confirm": true
+    },
+    {
+      "id": "offlineExport",
+      "title": "Exportar para instalação offline",
+      "icon": "download"
+    },
+    {
+      "id": "clearSelection",
+      "title": "Limpar",
+      "icon": "clear"
+    },
+    {
+      "id": "select-all",
+      "title": "Selecionar tudo",
+      "icon": "selectAll"
+    },
+    {
+      "id": "clear",
+      "title": "Limpar",
+      "icon": "clear"
+    },
+    {
+      "id": "uninstallAdmin",
+      "title": "Desinstalar como administrador",
+      "icon": "uninstall",
+      "confirm": true
+    },
+    {
+      "id": "uninstallInteractive",
+      "title": "Desinstalação interativa",
+      "icon": "uninstall",
+      "confirm": true
+    },
+    {
+      "id": "manualUninstall",
+      "title": "Copiar comando de desinstalação",
+      "icon": "terminal"
+    },
+    {
+      "id": "openLocation",
+      "title": "Abrir local do aplicativo",
+      "icon": "openFolder"
+    },
+    {
+      "id": "ignore",
+      "title": "Ignorar atualizações",
+      "icon": "ignore"
+    },
+    {
+      "id": "autoUpdate",
+      "title": "Atualizar automaticamente",
+      "icon": "update"
+    },
+    {
+      "id": "copyId",
+      "title": "Copiar identificador",
+      "icon": "copy"
+    },
+    {
+      "id": "copyName",
+      "title": "Copiar nome",
+      "icon": "copy"
+    },
+    {
+      "id": "installAdmin",
+      "title": "Instalar como administrador",
+      "icon": "install"
+    },
+    {
+      "id": "installInteractive",
+      "title": "Instalação interativa",
+      "icon": "install"
+    },
+    {
+      "id": "updateAdmin",
+      "title": "Atualizar como administrador",
+      "icon": "update"
+    },
+    {
+      "id": "updateInteractive",
+      "title": "Atualização interativa",
+      "icon": "update"
+    },
+    {
+      "id": "updateAll",
+      "title": "Atualizar tudo",
+      "icon": "update",
+      "confirm": true
+    },
+    {
+      "id": "updateIgnoreHash",
+      "title": "Atualizar ignorando a verificação de hash",
+      "icon": "update"
+    },
+    {
+      "id": "ignoreSelection",
+      "title": "Ignorar atualizações selecionadas",
+      "icon": "ignore"
+    },
+    {
+      "id": "uninstallOptions",
+      "title": "Opções de desinstalação",
+      "icon": "settings"
+    },
+    {
+      "id": "updateOptions",
+      "title": "Opções de atualização",
+      "icon": "settings"
+    },
+    {
+      "id": "manualUpdate",
+      "title": "Atualização manual",
+      "icon": "terminal"
+    },
+    {
+      "id": "renameCollection",
+      "title": "Renomear coleção",
+      "icon": "collection"
+    },
+    {
+      "id": "clearCollection",
+      "title": "Esvaziar coleção",
+      "icon": "clear"
+    },
+    {
+      "id": "removeFromCollection",
+      "title": "Remover da coleção",
+      "icon": "delete"
+    },
+    {
+      "id": "exportScript",
+      "title": "Exportar script PowerShell",
+      "icon": "terminal"
+    },
+    {
+      "id": "importCloud",
+      "title": "Importar da nuvem",
+      "icon": "import"
+    },
+    {
+      "id": "copyLink",
+      "title": "Copiar link do pacote",
+      "icon": "copy"
+    },
+    {
+      "id": "offlineCancel",
+      "title": "Cancelar exportação offline",
+      "icon": "cancel"
+    },
+    {
+      "id": "officeApply",
+      "title": "Aplicar alterações",
+      "icon": "install"
+    },
+    {
+      "id": "officeUninstall",
+      "title": "Desinstalar",
+      "icon": "uninstall"
+    },
+    {
+      "id": "officeOpenFolder",
+      "title": "Abrir pasta",
+      "icon": "openFolder"
+    },
+    {
+      "id": "officeAddCollection",
+      "title": "Adicionar à coleção",
+      "icon": "collectionAdd",
+      "requiresSelection": true
+    },
+    {
+      "id": "officeRefresh",
+      "title": "Verificar novamente",
+      "icon": "refresh"
+    }
+  ],
+  "columns": [
+    {
+      "id": "relevance",
+      "title": "sort.relevance",
+      "width": 120,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "name",
+      "title": "Nome",
+      "width": 260,
+      "sortable": true,
+      "cellTemplate": "package"
+    },
+    {
+      "id": "publisher",
+      "title": "Fabricante",
+      "width": 180,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "id",
+      "title": "Identificador",
+      "width": 220,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "version",
+      "title": "Versão",
+      "width": 110,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "newVersion",
+      "title": "Nova versão",
+      "width": 120,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "versionTransition",
+      "title": "Versões",
+      "width": 180,
+      "sortable": false,
+      "cellTemplate": "version-transition"
+    },
+    {
+      "id": "source",
+      "title": "Origem",
+      "width": 140,
+      "sortable": true,
+      "cellTemplate": "source"
+    },
+    {
+      "id": "status",
+      "title": "Status",
+      "width": 140,
+      "sortable": true,
+      "cellTemplate": "text"
+    },
+    {
+      "id": "state",
+      "title": "Estado",
+      "width": 52,
+      "sortable": true,
+      "cellTemplate": "status"
+    }
+  ],
+  "icons": {
+    "refresh": "ArrowClockwise",
+    "install": "ArrowDownload",
+    "update": "ArrowSync",
+    "uninstall": "Delete",
+    "download": "ArrowDownload",
+    "export": "ArrowExport",
+    "import": "ArrowImport",
+    "collection": "Collections",
+    "collectionAdd": "AddCircle",
+    "selectAll": "SelectAllOn",
+    "cancel": "Dismiss",
+    "details": "Info",
+    "discover": "Search",
+    "updates": "ArrowSync",
+    "installed": "AppsList",
+    "collections": "Collections",
+    "filter": "Filter",
+    "terminal": "WindowConsole",
+    "ignore": "EyeOff",
+    "restore": "ArrowUndo",
+    "settings": "Settings",
+    "save": "Save",
+    "delete": "Delete",
+    "clear": "DismissCircle",
+    "dismissCircle": "DismissCircle",
+    "history": "History",
+    "megaphone": "Megaphone",
+    "infoCircle": "Info",
+    "openFolder": "FolderOpen",
+    "copy": "Copy",
+    "other": "Globe",
+    "local": "Desktop",
+    "allSources": "AppsList",
+    "office": "Document",
+    "packageFallback": "Box"
+  },
+  "iconSources": {
+    "office": {
+      "light": "ms-appx:///Assets/Icons/microsoft-office.svg",
+      "dark": "ms-appx:///Assets/Icons/microsoft-office.svg"
+    }
+  },
+  "resources": {
+    "pt-BR": {
+      "actions.confirm.title": "Confirmar ação",
+      "actions.confirm.message": "Deseja continuar com “{action}”?",
+      "actions.confirm.message.one": "Deseja executar “{action}” para 1 item?",
+      "actions.confirm.message.many": "Deseja executar “{action}” para {count} itens?",
+      "actions.confirm.continue": "Continuar",
+      "actions.confirm.cancel": "Cancelar",
+      "packages.one": "pacote",
+      "packages.many": "pacotes",
+      "filters.sources": "Fontes",
+      "filters.filters": "Filtros",
+      "filters.clear": "Limpar",
+      "filters.selectAll": "Selecionar tudo",
+      "filters.local": "PC Local",
+      "filters.onlyRemovable": "Somente desinstaláveis",
+      "filters.hideSystem": "Ocultar componentes do sistema",
+      "filters.onlySelected": "Somente selecionados",
+      "search.name": "Nome",
+      "search.id": "Identificador",
+      "search.both": "Nome e identificador",
+      "search.exact": "Correspondência exata",
+      "screen.discover.subtitle": "{filtered} de {total} {packageLabel}",
+      "screen.updates.subtitle": "{filtered} de {total} atualizações disponíveis",
+      "screen.installed.subtitle": "{filtered} de {total} aplicativos instalados",
+      "screen.collections.subtitle": "{total} {packageLabel} na coleção atual",
+      "toolbar.filters": "Filtros",
+      "toolbar.reload": "Recarregar",
+      "toolbar.more": "Mais ações",
+      "footer.sort": "Classificar por:",
+      "sort.relevance": "Relevância",
+      "footer.selected.one": "{selected} selecionado",
+      "footer.selected.many": "{selected} selecionados",
+      "view.list": "Lista",
+      "view.detailed": "Lista detalhada",
+      "view.grid": "Grade",
+      "shell.title": "WinProvision Store",
+      "shell.navigation.discover": "Descobrir",
+      "shell.navigation.updates": "Atualizações",
+      "shell.navigation.installed": "Instalados",
+      "shell.navigation.collections": "Coleções",
+      "shell.navigation.office": "Office",
+      "shell.navigation.settings": "Configurações",
+      "shell.navigation.packageManagers": "Gerenciadores de pacotes",
+      "search.placeholder": "Pesquisar nome ou ID",
+      "search.settings": "Pesquisar configurações",
+      "search.packageManagers": "Pesquisar gerenciadores",
+      "search.options": "Opções de pesquisa",
+      "search.mode.title": "Modo de pesquisa",
+      "sources.office": "Microsoft 365",
+      "loading": "Carregando pacotes…",
+      "retry": "Tentar novamente",
+      "collection.profile": "Coleção",
+      "search.mode.name": "Nome",
+      "search.mode.id": "Identificador",
+      "search.mode.both": "Nome e identificador",
+      "search.mode.exact": "Correspondência exata"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "categories": {
+    "Progress": {
+      "defaultSeverity": "Information",
+      "channels": ["InApp"],
+      "autoDismissSeconds": 4,
+      "dedupeWindowSeconds": 0,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": false,
+      "requiresAction": false,
+      "persistInHistory": false
+    },
+    "OperationResult": {
+      "defaultSeverity": "Success",
+      "channels": ["InApp", "WindowsToast"],
+      "autoDismissSeconds": 6,
+      "dedupeWindowSeconds": 30,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": true,
+      "requiresAction": false,
+      "persistInHistory": true
+    },
+    "ActionableWarning": {
+      "defaultSeverity": "Warning",
+      "channels": ["InApp"],
+      "autoDismissSeconds": null,
+      "dedupeWindowSeconds": 30,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": false,
+      "requiresAction": true,
+      "persistInHistory": true
+    },
+    "BlockingError": {
+      "defaultSeverity": "Error",
+      "channels": ["InApp", "WindowsToast"],
+      "autoDismissSeconds": null,
+      "dedupeWindowSeconds": 30,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": true,
+      "requiresAction": false,
+      "persistInHistory": true
+    },
+    "PassiveInformation": {
+      "defaultSeverity": "Information",
+      "channels": ["InApp"],
+      "autoDismissSeconds": 5,
+      "dedupeWindowSeconds": 30,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": false,
+      "requiresAction": false,
+      "persistInHistory": false
+    },
+    "AppUpdateAvailable": {
+      "defaultSeverity": "Information",
+      "channels": ["InApp", "WindowsToast"],
+      "autoDismissSeconds": 10,
+      "dedupeWindowSeconds": 86400,
+      "cooldownSeconds": 0,
+      "coalesce": true,
+      "showWhenAppFocused": true,
+      "showToastWhenUnfocused": true,
+      "requiresAction": false,
+      "persistInHistory": true
+    }
+  }
+}

@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Fixtures\winget-search-*.txt" />
+    <EmbeddedResource Include="Fixtures\catalog-v2\*" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Assets\catalog-bits.json" LogicalName="WinProvision.Store.Assets.catalog-bits.json" />
+    <Compile Include="..\WinProvision.Viper.Tests\ViperTestServer.cs" Link="Fixtures\ViperTestServer.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\ManualInstallCommandBuilder.cs" Link="Services\ManualInstallCommandBuilder.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\CollectionScriptService.cs" Link="Services\CollectionScriptService.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\ChocolateyService.cs" Link="Services\ChocolateyService.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\ChocolateyCommandLineBuilder.cs" Link="Services\ChocolateyCommandLineBuilder.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\PackageDetailsAdapters.cs" Link="Services\PackageDetailsAdapters.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\OperationsPanelCatalog.cs" Link="Services\OperationsPanelCatalog.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\OperationTextProvider.cs" Link="Services\OperationTextProvider.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\OperationActionResolver.cs" Link="Services\OperationActionResolver.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\OperationStatePresentationResolver.cs" Link="Services\OperationStatePresentationResolver.cs" />
+    <Compile Include="..\..\src\WinProvision.Store\Services\OperationIconFallbackResolver.cs" Link="Services\OperationIconFallbackResolver.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Assets\operations-panel.json" LogicalName="WinProvision.Store.Assets.operations-panel.json" />
+    <EmbeddedResource Include="Fixtures\operations-panel.schema.json" LogicalName="WinProvision.Store.Tests.operations-panel.schema.json" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Services\OperationStatePresentationResolver.cs" LogicalName="OperationStateTests.OperationStatePresentationResolver.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Services\OperationsPanelCatalog.cs" LogicalName="OperationStateTests.OperationsPanelCatalog.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Styles\OperationsQueue.xaml" LogicalName="OperationStateTests.OperationsQueue.xaml" />
+    <EmbeddedResource Include="Fixtures\operations-states-golden.json" LogicalName="OperationStateTests.operations-states-golden.json" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Services\OperationActionResolver.cs" LogicalName="OperationMenuTests.OperationActionResolver.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Assets\Localization\operations.pt-BR.json" LogicalName="WinProvision.Store.Assets.Localization.operations.pt-BR.json" WithCulture="false" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Controls\OperationsQueuePanel.xaml" LogicalName="OperationTextTests.OperationsQueuePanel.xaml" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Controls\OperationsQueuePanel.xaml.cs" LogicalName="OperationTextTests.OperationsQueuePanel.xaml.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\ViewModels\OperationsViewModel.cs" LogicalName="OperationTextTests.OperationsViewModel.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Services\PackageBackend.cs" LogicalName="OperationTextTests.PackageBackend.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Core\Models\OperationItem.cs" LogicalName="OperationTextTests.OperationItem.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Core\Services\OperationRunner.cs" LogicalName="OperationTextTests.OperationRunner.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Controls\OperationOutputDialog.cs" LogicalName="OperationTextTests.OperationOutputDialog.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\Views\OperationHistoryPage.xaml.cs" LogicalName="OperationTextTests.OperationHistoryPage.xaml.cs" />
+    <EmbeddedResource Include="..\..\src\WinProvision.Store\App.xaml.cs" LogicalName="OperationTextTests.App.xaml.cs" />
+    <EmbeddedResource Include="Fixtures\operations.pt-BR.golden.json" LogicalName="OperationTextTests.operations.pt-BR.golden.json" />
+    <EmbeddedResource Include="Fixtures\operations-menu-golden.json" LogicalName="OperationMenuTests.operations-menu-golden.json" />
+    <EmbeddedResource Include="Fixtures\elevation-vectors.json" LogicalName="WinProvision.Core.Tests.Fixtures.elevation-vectors.json" />
+    <EmbeddedResource Include="Fixtures\operation-history-pre-refactor.jsonl" LogicalName="OperationContractTests.operation-history-pre-refactor.jsonl" />
+    <EmbeddedResource Include="Fixtures\operation-preferences-pre-refactor.json" LogicalName="OperationContractTests.operation-preferences-pre-refactor.json" />
+    <ProjectReference Include="..\..\src\WinProvision.Viper\WinProvision.Viper.csproj" />
+    <ProjectReference Include="..\..\src\WinProvision.Elevation\WinProvision.Elevation.csproj" />
+    <ProjectReference Include="..\..\src\WinProvision.Core\WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\..\src\WinProvision.Cli\WinProvision.Cli.csproj" />
+    <ProjectReference Include="..\..\src\WinProvision.Providers.WinGet.Com\WinProvision.Providers.WinGet.Com.csproj" />
+    <ProjectReference Include="..\..\src\WinProvision.Providers.WinGet.Cli\WinProvision.Providers.WinGet.Cli.csproj" />
+  </ItemGroup>
+</Project>

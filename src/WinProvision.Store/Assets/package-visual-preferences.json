@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "fields": [
+    {
+      "id": "showPackageIcons",
+      "type": "toggle",
+      "section": "appearance",
+      "label": "Ícones dos aplicativos",
+      "description": "Exibe os ícones dos pacotes nas listas, nos cartões e nos detalhes.",
+      "defaultValue": "true"
+    },
+    {
+      "id": "showPackageScreenshots",
+      "type": "toggle",
+      "section": "appearance",
+      "label": "Capturas de tela dos aplicativos",
+      "description": "Exibe a galeria de capturas de tela nos detalhes dos pacotes.",
+      "defaultValue": "true"
+    }
+  ]
+}

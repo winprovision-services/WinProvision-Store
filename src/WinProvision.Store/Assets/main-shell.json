@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "main-shell",
+  "title": "shell.title",
+  "search": {
+    "placement": "titlebar",
+    "minWidth": 320,
+    "maxWidth": 480,
+    "shortcut": "Ctrl+F",
+    "pages": {
+      "settings": {
+        "enabled": true,
+        "placeholder": "search.settings",
+        "trigger": "live",
+        "debounceMs": 0,
+        "minLength": 0,
+        "keepQuery": true
+      },
+      "package-managers": {
+        "enabled": true,
+        "placeholder": "search.packageManagers",
+        "trigger": "live",
+        "debounceMs": 0,
+        "minLength": 0,
+        "keepQuery": true
+      },
+      "operation-history": {
+        "enabled": true,
+        "placeholder": "Pesquisar histórico de operações",
+        "trigger": "live",
+        "debounceMs": 0,
+        "minLength": 0,
+        "keepQuery": false
+      }
+    }
+  },
+  "navigation": {
+    "pane": { "openLength": 300, "startsOpen": true },
+    "items": [
+      { "id": "discover", "label": "shell.navigation.discover", "icon": "discover", "target": { "type": "screen", "id": "discover" }, "placement": "top", "visible": true },
+      { "id": "updates", "label": "shell.navigation.updates", "icon": "updates", "target": { "type": "screen", "id": "updates" }, "placement": "top", "visible": true },
+      { "id": "installed", "label": "shell.navigation.installed", "icon": "installed", "target": { "type": "screen", "id": "installed" }, "placement": "top", "visible": true },
+      { "id": "collections", "label": "shell.navigation.collections", "icon": "collections", "target": { "type": "screen", "id": "collections" }, "placement": "top", "visible": true },
+      { "id": "office", "label": "shell.navigation.office", "icon": "office", "iconUriLight": "ms-appx:///Assets/Icons/microsoft-office.svg", "iconUriDark": "ms-appx:///Assets/Icons/microsoft-office.svg", "target": { "type": "page", "id": "office" }, "placement": "top", "visible": true },
+      { "id": "settings", "label": "shell.navigation.settings", "icon": "settings", "target": { "type": "page", "id": "settings" }, "placement": "bottom", "visible": true },
+      { "id": "package-managers", "label": "shell.navigation.packageManagers", "icon": "installed", "target": { "type": "page", "id": "package-managers" }, "placement": "bottom", "visible": true },
+      { "id": "more-menu", "kind": "flyout", "label": "Mais", "icon": "details", "placement": "bottom", "items": [
+        { "type": "command", "id": "logs-folder", "label": "Abrir pasta de logs", "icon": "openFolder", "commandId": "open-logs" },
+            { "type": "navigation", "id": "history", "label": "Histórico de operações", "icon": "history", "target": { "type": "page", "id": "operation-history" } },
+        { "type": "separator", "id": "separator-updates" },
+        { "type": "info", "id": "version", "label": "WinProvision Store · Versão {version}" },
+        { "type": "command", "id": "release-notes", "label": "Notas de lançamento", "icon": "megaphone", "commandId": "open-release" },
+        { "type": "command", "id": "check-updates", "label": "Verificar atualizações", "icon": "update", "commandId": "check-updates" },
+        { "type": "separator", "id": "separator-exit" },
+        { "type": "command", "id": "about", "label": "Sobre", "icon": "infoCircle", "commandId": "open-about" },
+        { "type": "separator", "id": "separator-before-exit" },
+        { "type": "command", "id": "exit", "label": "Sair do WinProvision Store", "icon": "dismissCircle", "commandId": "exit" }
+      ] }
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <Deterministic>true</Deterministic>
+    <DebugSymbols>true</DebugSymbols>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <TieredCompilation>true</TieredCompilation>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTGenerateProjection>false</CsWinRTGenerateProjection>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <Optimize>false</Optimize>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+    <TieredCompilationQuickJitForLoops>true</TieredCompilationQuickJitForLoops>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+    <Optimize>true</Optimize>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilationQuickJit>false</TieredCompilationQuickJit>
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+    <DefineConstants>RELEASE;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../WinProvision.Elevation/WinProvision.Elevation.csproj" />
+    <ProjectReference Include="../WinProvision.Providers.WinGet.Cli/WinProvision.Providers.WinGet.Cli.csproj" />
+    <ProjectReference Include="../WinProvision.WinGet.Contracts/WinProvision.WinGet.Contracts.csproj" />
+    <ProjectReference Include="../WinProvision.Viper/WinProvision.Viper.csproj" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <!-- Last MS-RL-only DTF release; later packages require the OSMF EULA. No WiX installer tools are shipped. -->
+    <PackageReference Include="WixToolset.Dtf.Compression.Cab" Version="5.0.2" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../Tool/gsudo/win-x64/WinProvision Elevator.exe" Link="Tool/gsudo/WinProvision Elevator.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../Tool/gsudo/LICENSE.txt" Link="Tool/gsudo/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../Tool/gsudo/manifest.json" Link="Tool/gsudo/manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Services/Profile/OfflineInstall.ps1" LogicalName="WinProvision.Core.OfflineInstall.ps1" />
+    <EmbeddedResource Include="Models/package-managers.json" LogicalName="WinProvision.Core.Models.package-managers.json" />
+    <EmbeddedResource Include="Models/package-screen-catalog.json" LogicalName="WinProvision.Core.Models.package-screen-catalog.json" />
+    <EmbeddedResource Include="Models/office-catalog.json" LogicalName="WinProvision.Core.Models.office-catalog.json" />
+    <EmbeddedResource Include="Models/package-screens/*.json" LogicalName="WinProvision.Core.Models.package-screens.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Services/Profile/InstallOffice.ps1" LogicalName="WinProvision.Core.InstallOffice.ps1" />
+    <EmbeddedResource Include="../WinProvision.Store/Assets/catalog-bits.json" LogicalName="WinProvision.Core.Assets.catalog-bits.json" />
+    <EmbeddedResource Include="../WinProvision.Store/Assets/catalog-signing-public.pem" LogicalName="WinProvision.Core.Assets.catalog-signing-public.pem" />
+    <None Update="ThirdParty/WiX-DTF/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="ThirdParty/SQLitePCLRaw/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

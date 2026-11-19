@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "default": "mica",
+  "fallbackOrder": ["mica", "acrylic", "none"],
+  "backdrops": [
+    { "id": "mica", "label": "Mica", "kind": "mica", "variant": "base" },
+    { "id": "mica-alt", "label": "Mica Alt", "kind": "mica", "variant": "baseAlt" },
+    { "id": "acrylic", "label": "Acrylic", "kind": "acrylic", "variant": "base" },
+    { "id": "acrylic-thin", "label": "Acrylic Thin", "kind": "acrylic", "variant": "thin" },
+    { "id": "none", "label": "Nenhum", "kind": "none" }
+  ]
+}

@@ -1,0 +1,423 @@
+{
+  "schemaVersion": 2,
+  "layout": {
+    "rowHeight": 48,
+    "rowSpacing": 8,
+    "rowHorizontalPadding": 8,
+    "rowVerticalPadding": 8,
+    "iconColumnWidth": 40,
+    "iconSize": 32,
+    "rowIconHeight": 24,
+    "flexibleColumnSpacing": 12,
+    "titleMaxWidthFraction": 0.4,
+    "titleMaxWidth": 260,
+    "titleMinWidth": 96,
+    "descriptionMinWidth": 150,
+    "descriptionHeight": 32,
+    "actionButtonWidth": 110,
+    "moreButtonWidth": 36,
+    "actionButtonHeight": 32
+  },
+  "theme": {
+    "rowCornerRadius": 4,
+    "messageCornerRadius": 4,
+    "progressCornerRadius": 4,
+    "neutralBackgroundAlpha": 0.07,
+    "attentionBackgroundAlpha": 0.1,
+    "messageBackgroundAlpha": 0.18
+  },
+  "metrics": {
+    "progressTrackHeight": 12,
+    "progressHeight": 2.5,
+    "messagePaddingHorizontal": 8,
+    "messagePaddingTop": 7,
+    "messagePaddingBottom": 4,
+    "titleFontSize": 14,
+    "messageFontSize": 14,
+    "messageFontFamily": "Segoe UI Variable Text, Segoe UI",
+    "actionFontSize": 14
+  },
+  "behavior": {
+    "autoClose": {
+      "delaySeconds": 5,
+      "pauseOnPointer": true,
+      "pauseOnFocus": true,
+      "pauseOnPopup": true
+    },
+    "height": {
+      "default": 240,
+      "min": 120,
+      "max": 480,
+      "maxFractionOfContent": 0.45
+    },
+    "defaultExpanded": true,
+    "ordering": { "mode": "pendingFirst" }
+  },
+  "states": {
+    "queued": { "iconId": "apps", "colorToken": "OperationNeutralBackgroundBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationDefaultBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "indeterminate", "visible": true } },
+    "running": { "iconId": "apps", "colorToken": "OperationAttentionBackgroundBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationDefaultBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "indeterminate", "visible": true } },
+    "completed": { "iconId": "apps", "colorToken": "AppOperationSuccessSurfaceBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationSuccessBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "complete", "visible": true } },
+    "failed": { "iconId": "apps", "colorToken": "AppOperationFailureSurfaceBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationFailureBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "none", "visible": false } },
+    "canceled": { "iconId": "apps", "colorToken": "AppOperationCanceledSurfaceBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationCanceledBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "none", "visible": false } },
+    "unconfirmed": { "iconId": "apps", "colorToken": "OperationNeutralBackgroundBrush", "messageColorToken": "OperationDescriptionBackgroundBrush", "trackColorToken": "OperationProgressTrackTransparentBrush", "fillColorToken": "AppOperationDefaultBrush", "messageFont": "messageDefault", "messageFontWeight": "normal", "progress": { "mode": "none", "visible": false } }
+  },
+  "managerIcons": { "winget": "managerWinget", "chocolatey": "managerChocolatey", "office": "managerOffice", "default": "apps" },
+  "actions": [
+    {
+      "group": "primary",
+      "iconId": "dismiss",
+      "id": "cancel",
+      "placement": "primary",
+      "commandId": "cancelOperation",
+      "order": 0,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.button.cancel",
+      "visibleWhen": [],
+      "locked": true,
+      "states": [
+        "Queued",
+        "Running"
+      ]
+    },
+    {
+      "group": "primary",
+      "iconId": "dismiss",
+      "id": "close",
+      "placement": "primary",
+      "commandId": "removeOperation",
+      "order": 1,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.button.close",
+      "visibleWhen": [],
+      "locked": true,
+      "states": [
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "document",
+      "id": "output",
+      "placement": "menu",
+      "commandId": "showOperationOutput",
+      "order": 0,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.output",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "info",
+      "id": "packageDetails",
+      "placement": "menu",
+      "commandId": "showPackageDetails",
+      "order": 10,
+      "whenUnavailable": "disable",
+      "scope": "item",
+      "enabledWhen": [
+        "hasPackage"
+      ],
+      "textKey": "operations.menu.item.packageDetails",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "settings",
+      "id": "packageOptions",
+      "placement": "menu",
+      "commandId": "showPackageOptions",
+      "order": 20,
+      "whenUnavailable": "disable",
+      "scope": "item",
+      "enabledWhen": [
+        "hasPackage"
+      ],
+      "textKey": "operations.menu.item.installOptions",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "folderOpen",
+      "id": "installLocation",
+      "placement": "menu",
+      "commandId": "openInstallLocation",
+      "order": 30,
+      "whenUnavailable": "disable",
+      "scope": "item",
+      "enabledWhen": [
+        "hasInstallLocation"
+      ],
+      "textKey": "operations.menu.item.installLocation",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "arrowClockwise",
+      "id": "retry",
+      "placement": "menu",
+      "commandId": "replayOperation",
+      "order": 40,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.retry",
+      "visibleWhen": [
+        "canReplay"
+      ],
+      "locked": false,
+      "states": [
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "shield",
+      "id": "replayElevated",
+      "placement": "menu",
+      "commandId": "replayOperationVariant:elevated",
+      "order": 50,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.replayElevated",
+      "visibleWhen": [
+        "canReplayElevated"
+      ],
+      "locked": false,
+      "states": [
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "desktop",
+      "id": "replayInteractive",
+      "placement": "menu",
+      "commandId": "replayOperationVariant:interactive",
+      "order": 60,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.replayInteractive",
+      "visibleWhen": [
+        "canReplayInteractive"
+      ],
+      "locked": false,
+      "states": [
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "dismiss",
+      "id": "cancelOperation",
+      "placement": "menu",
+      "commandId": "cancelOperation",
+      "order": 70,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.cancel",
+      "visibleWhen": [
+        "canCancel"
+      ],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running"
+      ]
+    },
+    {
+      "group": "item",
+      "iconId": "delete",
+      "id": "remove",
+      "placement": "menu",
+      "commandId": "removeOperation",
+      "order": 80,
+      "whenUnavailable": "hide",
+      "scope": "item",
+      "enabledWhen": [],
+      "textKey": "operations.menu.item.remove",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "bulk",
+      "iconId": "arrowClockwise",
+      "id": "retryFailed",
+      "placement": "menu",
+      "commandId": "replayFailed",
+      "order": 0,
+      "whenUnavailable": "disable",
+      "scope": "header",
+      "enabledWhen": [
+        "hasFailed"
+      ],
+      "textKey": "operations.menu.header.retryFailed",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "bulk",
+      "iconId": "checkmark",
+      "id": "clearSuccessful",
+      "placement": "menu",
+      "commandId": "clearSucceeded",
+      "order": 10,
+      "whenUnavailable": "disable",
+      "scope": "header",
+      "enabledWhen": [
+        "hasSucceeded"
+      ],
+      "textKey": "operations.menu.header.clearSuccessful",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "bulk",
+      "iconId": "dismiss",
+      "id": "clearFinished",
+      "placement": "menu",
+      "commandId": "clearFinished",
+      "order": 20,
+      "whenUnavailable": "disable",
+      "scope": "header",
+      "enabledWhen": [
+        "hasFinished"
+      ],
+      "textKey": "operations.menu.header.clearFinished",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "separator",
+      "iconId": "none",
+      "id": "separator.cancelAll",
+      "placement": "menu",
+      "commandId": "separator",
+      "order": 30,
+      "whenUnavailable": "disable",
+      "scope": "header",
+      "enabledWhen": [],
+      "textKey": "",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    },
+    {
+      "group": "bulk",
+      "iconId": "dismiss",
+      "id": "cancelAll",
+      "placement": "menu",
+      "commandId": "cancelAll",
+      "order": 40,
+      "whenUnavailable": "disable",
+      "scope": "header",
+      "enabledWhen": [
+        "hasCancelable"
+      ],
+      "textKey": "operations.menu.header.cancelAll",
+      "visibleWhen": [],
+      "locked": false,
+      "states": [
+        "Queued",
+        "Running",
+        "Completed",
+        "Failed",
+        "Canceled",
+        "Unconfirmed"
+      ]
+    }
+  ]
+}

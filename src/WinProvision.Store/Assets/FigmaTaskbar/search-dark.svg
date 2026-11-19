@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="14.4" height="14.4" viewBox="0 0 14.4 14.4" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<ellipse id="Ellipse 3" cx="8.26641" cy="6.12693" rx="4.29228" ry="4.28885" fill="url(#paint0_radial_0_49)" fill-opacity="0.15"/>
+<path id="Union" d="M14.3982 6.12693C14.3982 9.51074 11.6529 12.2539 8.26638 12.2539C6.9084 12.2539 5.65352 11.8128 4.63742 11.0661L1.5703 14.1308C1.2111 14.4897 0.628735 14.4897 0.269541 14.1308C-0.0896536 13.7719 -0.0896536 13.19 0.269541 12.8311L3.33463 9.76846C2.5805 8.75045 2.13455 7.49073 2.13455 6.12693C2.13455 2.74312 4.87987 0 8.26638 0C11.6529 0 14.3982 2.74312 14.3982 6.12693ZM12.5587 6.12693C12.5587 8.49559 10.6369 10.4158 8.26639 10.4158C5.89583 10.4158 3.97411 8.49559 3.97411 6.12693C3.97411 3.75826 5.89583 1.83808 8.26639 1.83808C10.6369 1.83808 12.5587 3.75826 12.5587 6.12693Z" fill-rule="evenodd" clip-rule="evenodd" fill="url(#paint1_linear_0_49)"/>
+</g>
+<defs>
+<radialGradient id="paint0_radial_0_49" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8.26641 6.12693) rotate(90) scale(4.28885 4.29228)">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0.75"/>
+</radialGradient>
+<linearGradient id="paint1_linear_0_49" x1="14.1032" y1="0.306347" x2="0.0115431" y2="14.7157" gradientUnits="userSpaceOnUse">
+<stop stop-color="#E8E9EB"/>
+<stop offset="1" stop-color="#D7DBDD"/>
+</linearGradient>
+</defs>
+</svg>

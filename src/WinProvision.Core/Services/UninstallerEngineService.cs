@@ -1,0 +1,1359 @@
+using System.Runtime.Versioning;
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Win32;
+using WinProvision.Core.Models;
+using WinProvision.Elevation;
+using WinProvision.Providers.WinGet.Cli.Contracts;
+
+namespace WinProvision.Core.Services;
+
+/// <summary>
+/// Tipos de instalador reconhecidos pela tabela de assinaturas.
+/// Expandido para incluir atualizadores próprios, gerenciadores de pacotes e aplicativos modernos.
+/// </summary>
+public enum InstallerKind
+{
+    Unknown,
+    Msiexec,
+    InnoSetup,
+    Nsis,
+    InstallShield,
+    Wise,
+    Squirrel,        // Squirrel/Electron auto-updater (Discord, Slack, GitHub Desktop, etc.)
+    Chocolatey,      // Chocolatey package manager
+    Steam,           // Steam games/apps
+    WindowsStore,    // Windows Store/Appx apps
+    Scoop,           // Scoop package manager
+    Nullsoft         // Generic Nullsoft installer
+}
+
+/// <summary>
+/// Gerenciador de locks para prevenção de colisões durante desinstalações em massa
+/// </summary>
+public static class UninstallLockManager
+{
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _installPathLocks = new();
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _processLocks = new();
+    private static readonly SemaphoreSlim _globalUninstallLock = new(1, 1); // Serializa desinstalações registradas
+
+    /// <summary>
+    /// Adquire um lock para um caminho de instalação específico.
+    /// </summary>
+    public static async Task<IDisposable> AcquireInstallPathLockAsync(string installPath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(installPath))
+            return new NoOpDisposable();
+
+        var normalizedPath = installPath.ToLowerInvariant();
+        var semaphore = _installPathLocks.GetOrAdd(normalizedPath, _ => new SemaphoreSlim(1, 1));
+
+        await semaphore.WaitAsync(cancellationToken);
+        return new LockReleaser(() => ReleaseInstallPathLock(normalizedPath, semaphore));
+    }
+
+    /// <summary>
+    /// Adquire um lock para um processo específico (para evitar conflitos de MSI/instaladores).
+    /// </summary>
+    public static async Task<IDisposable> AcquireProcessLockAsync(string processName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(processName))
+            return new NoOpDisposable();
+
+        var normalizedProcess = processName.ToLowerInvariant();
+        var semaphore = _processLocks.GetOrAdd(normalizedProcess, _ => new SemaphoreSlim(1, 1));
+
+        await semaphore.WaitAsync(cancellationToken);
+        return new LockReleaser(() => ReleaseProcessLock(normalizedProcess, semaphore));
+    }
+
+    /// <summary>
+    /// Adquire o lock global de desinstalação (limita número de desinstalações simultâneas).
+    /// </summary>
+    public static async Task<IDisposable> AcquireGlobalUninstallLockAsync(CancellationToken cancellationToken = default)
+    {
+        await _globalUninstallLock.WaitAsync(cancellationToken);
+        return new LockReleaser(() => _globalUninstallLock.Release());
+    }
+
+    private static void ReleaseInstallPathLock(string path, SemaphoreSlim semaphore)
+    {
+        semaphore.Release();
+        _installPathLocks.TryRemove(path, out _);
+    }
+
+    private static void ReleaseProcessLock(string processName, SemaphoreSlim semaphore)
+    {
+        semaphore.Release();
+        _processLocks.TryRemove(processName, out _);
+    }
+
+    private class LockReleaser : IDisposable
+    {
+        private readonly Action _releaseAction;
+
+        public LockReleaser(Action releaseAction)
+        {
+            _releaseAction = releaseAction;
+        }
+
+        public void Dispose()
+        {
+            _releaseAction?.Invoke();
+        }
+    }
+
+    private class NoOpDisposable : IDisposable
+    {
+        public void Dispose() { }
+    }
+}
+
+[SupportedOSPlatform("windows")]
+public class UninstallerEngineService
+{
+    private readonly PowerShell7Bootstrapper? _powerShell7Bootstrapper;
+    private readonly WingetExecutor _wingetExecutor;
+    private readonly IUninstallerProcessStarter _processStarter;
+
+    public UninstallerEngineService(PowerShell7Bootstrapper? powerShell7Bootstrapper = null, WingetExecutor? wingetExecutor = null,
+        IUninstallerProcessStarter? processStarter = null)
+    {
+        _powerShell7Bootstrapper = powerShell7Bootstrapper;
+        _wingetExecutor = wingetExecutor ?? new WingetExecutor();
+        _processStarter = processStarter ?? new UninstallerProcessStarter();
+    }
+
+    // Uninstaller padrão do Inno Setup: unins000.exe, unins001.exe... sempre na
+    // pasta de instalação do próprio programa.
+    private static readonly Regex InnoSetupPattern = new(@"unins\d{3}\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Nome de saída padrão do gerador de desinstalador do NSIS (makensis): o script
+    // grava "Uninstall.exe" (ou "uninst.exe" em builds mais antigas) no $INSTDIR.
+    private static readonly Regex NsisPattern = new(@"(^|\\)uninst(all)?\.exe$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Wise Installation System (ex-Wise InstallMaster): uninstaller UNWISE(32).EXE.
+    private static readonly Regex WisePattern = new(@"unwise(32)?\.exe$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Pasta usada pelo InstallShield para projetos InstallScript/InstallScript MSI;
+    // o UninstallString aponta pro setup.exe dentro dela.
+    private const string InstallShieldFolderMarker = "installshield installation information";
+
+    // Atualizador próprio: Update.exe com a opção de remoção.
+    private static readonly Regex SquirrelPattern = new(@"Update\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SquirrelUninstallPattern = new(@"--uninstall", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Comando de remoção do gerenciador de pacotes identificado pelo executável.
+    private static readonly Regex ChocolateyPattern = new(@"choco\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Remoção associada a um aplicativo que mantém seus próprios arquivos de instalação.
+    private static readonly Regex SteamPattern = new(@"steam\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Remoção de pacotes modernos pelo mecanismo de aplicativos do Windows.
+    private static readonly Regex WindowsStorePattern = new(@"(Get-AppxPackage|AppxPackage|PowerShell)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Comando de remoção do gerenciador de pacotes identificado pelo executável.
+    private static readonly Regex ScoopPattern = new(@"scoop\.exe", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Executa a desinstalação silenciosa de uma aplicação de forma robusta, detectando
+    /// o tipo de instalador pela assinatura do UninstallString para aplicar os
+    /// parâmetros silenciosos corretos (em vez de concatenar flags de tecnologias diferentes).
+    /// Inclui retry logic, fallback methods e collision prevention.
+    /// </summary>
+    public async Task<bool> RunSilentUninstallAsync(InstalledAppDetail app, CancellationToken cancellationToken = default) =>
+        (await RunRegisteredUninstallAsync(app, cancellationToken).ConfigureAwait(false)).Success;
+
+    public async Task<WingetExecutionResult> RunRegisteredUninstallAsync(InstalledAppDetail app, CancellationToken cancellationToken = default,
+        bool requireElevation = false)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string command = Environment.ExpandEnvironmentVariables(app.QuietUninstallString ?? string.Empty);
+        if (!TrySplitCommand(command, out string fileName, out string arguments)
+            || !Path.IsPathFullyQualified(fileName) || !IsSafeUninstallTarget(fileName)
+            || !File.Exists(fileName))
+            return new WingetExecutionResult { Success = false, ExitCode = 1, FailureReason = WingetFailureReason.InternalError, Output = "Comando silencioso registrado inválido ou executável ausente." };
+
+        string name = Path.GetFileName(fileName);
+        if (name.Equals("cmd.exe", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
+            return new WingetExecutionResult { Success = false, ExitCode = 1, FailureReason = WingetFailureReason.InternalError, Output = "Interpretador de comandos não permitido." };
+
+        using var globalLock = await UninstallLockManager.AcquireGlobalUninstallLockAsync(cancellationToken);
+        CoreLog.Debug($"[UninstallerEngine] Alvo: {app.DisplayName}; modo silencioso registrado; executável: {fileName}; argumentos: {arguments}");
+        try
+        {
+            bool started = false;
+            int code = requireElevation
+                ? await _processStarter.StartElevatedAsync(fileName, arguments, cancellationToken, () => started = true).ConfigureAwait(false)
+                : await StartDirectWith740RetryAsync(fileName, arguments, cancellationToken, () => started = true,
+                    () => started, createNoWindow: true).ConfigureAwait(false);
+            CoreLog.Debug($"[UninstallerEngine] Código de saída: {code}.");
+            bool success = IsRegisteredUninstallSuccess(code, app.IsWindowsInstaller);
+            return new WingetExecutionResult { Success = success, ExitCode = code,
+                InstallerStarted = started, Output = $"Desinstalador retornou o código {code}.",
+                FailureReason = success ? WingetFailureReason.Unknown : InstallerExitCodes.Classify(code) };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            CoreLog.Warning(exception, "RegisteredUninstall");
+            return new WingetExecutionResult { Success = false, ExitCode = 1, FailureReason = WingetFailureReason.InternalError, Output = exception.Message };
+        }
+    }
+
+    internal static bool IsRegisteredUninstallSuccess(int code, bool isWindowsInstaller) =>
+        code == 0 || (isWindowsInstaller && code is 3010 or 1641);
+
+    /// <summary>
+    /// Verifica se o executável é um comando do sistema que não precisa de validação de arquivo.
+    /// </summary>
+    private bool IsSystemExecutable(string fileName)
+    {
+        var systemExecutables = new[]
+        {
+            "msiexec.exe",
+            "powershell.exe",
+            "pwsh.exe",
+            "cmd.exe",
+            "schtasks.exe",
+            "sc.exe",
+            WingetLocator.DefaultExecutable
+        };
+
+        var exeName = Path.GetFileName(fileName).ToLowerInvariant();
+        return systemExecutables.Contains(exeName);
+    }
+
+    private static bool IsSafeUninstallTarget(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || fileName.Length > 512)
+            return false;
+        if (fileName.IndexOfAny(['"', '\'', ';', '|', '&', '<', '>', '`', '\n', '\r']) >= 0)
+            return false;
+        if (fileName.Contains("..", StringComparison.Ordinal))
+            return false;
+
+        string exeName = Path.GetFileName(fileName);
+        return exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            || exeName.Equals("msiexec", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSafeWingetId(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 256)
+            return false;
+        return value.IndexOfAny(['"', '\'', ';', '|', '&', '<', '>', '`', '\n', '\r', '$']) < 0;
+    }
+
+    private static bool IsSafePackageIdentity(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length is < 2 or > 256)
+            return false;
+        foreach (char c in value)
+        {
+            if (char.IsLetterOrDigit(c) || c is '.' or '_' or '-' or '+')
+                continue;
+            return false;
+        }
+        return true;
+    }
+
+    private static readonly Regex ProductCodePattern =
+        new(@"^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Tenta executar o processo de desinstalação com os parâmetros fornecidos.
+    /// </summary>
+    internal async Task<(bool Success, string ErrorMessage)> TryRunUninstallProcess(
+        string fileName, string arguments, CancellationToken cancellationToken, bool requireElevation = true)
+    {
+        try
+        {
+            if (Path.GetFileName(fileName).Equals(WingetLocator.DefaultExecutable, StringComparison.OrdinalIgnoreCase))
+            {
+                IReadOnlyList<string> tokens = WindowsArgumentParser.Parse(arguments);
+                WingetExecutionResult cli = await _wingetExecutor.ExecuteCliAsync(tokens, null, cancellationToken,
+                    requireElevation ? WinGetCliExecutionMode.Elevated : WinGetCliExecutionMode.CurrentUser).ConfigureAwait(false);
+                if (cli.Success || cli.ExitCode == 1605) return (true, string.Empty);
+                if (cli.FailureReason == WingetFailureReason.ElevationCanceled)
+                    return (false, "A elevação foi cancelada pelo usuário.");
+                return (false, cli.Output);
+            }
+
+            if (OperatingSystem.IsWindows()
+                && _powerShell7Bootstrapper is not null
+                && !Path.IsPathRooted(fileName)
+                && Path.GetFileName(fileName).Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                PowerShell7Runtime runtime = await _powerShell7Bootstrapper
+                    .EnsureAvailableAsync(
+                        line => WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] {line}"),
+                        cancellationToken);
+                fileName = runtime.ExecutablePath;
+            }
+
+            if (requireElevation)
+            {
+                int code = await _processStarter.StartElevatedAsync(fileName, arguments, cancellationToken).ConfigureAwait(false);
+                return InstallerExitCodes.IsSuccess(code) || code == 1605
+                    ? (true, string.Empty) : (false, $"{InstallerExitCodes.Describe(code)} Código: {code}.");
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            bool started = false;
+            int exitCode = await StartDirectWith740RetryAsync(fileName, arguments, cancellationToken,
+                () => started = true, () => started, createNoWindow: true, hidden: true).ConfigureAwait(false);
+            return InstallerExitCodes.IsSuccess(exitCode) || exitCode == 1605
+                ? (true, string.Empty)
+                : (false, $"{InstallerExitCodes.Describe(exitCode)} Código: {exitCode}.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    internal async Task<int> StartDirectWith740RetryAsync(string fileName, string arguments, CancellationToken token,
+        Action? onStarted = null, Func<bool>? hasStarted = null, bool createNoWindow = false, bool hidden = false)
+    {
+        try
+        {
+            return await _processStarter.StartDirectAsync(fileName, arguments, token, onStarted, createNoWindow, hidden).ConfigureAwait(false);
+        }
+        catch (System.ComponentModel.Win32Exception exception) when (exception.NativeErrorCode == 740 && hasStarted?.Invoke() != true)
+        {
+            CoreLog.Debug("[UninstallerEngine] Erro 740 antes do início; repetindo uma vez pelo WinProvision Elevator.");
+            return await _processStarter.StartElevatedAsync(fileName, arguments, token, onStarted).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Tenta métodos de fallback quando a desinstalação normal falha.
+    /// Tenta diferentes combinações de parâmetros silenciosos e métodos alternativos.
+    /// </summary>
+    private async Task<bool> TryFallbackUninstall(
+        InstalledAppDetail app, string fileName, string existingArguments, CancellationToken cancellationToken)
+    {
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Tentando fallback para {app.DisplayName}");
+
+        // Se não tiver UninstallString válido, tenta detectar o tipo pelo ID e usar métodos específicos
+        if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(existingArguments))
+        {
+            return await TryIdBasedUninstall(app, cancellationToken);
+        }
+
+        // Nunca repetir o UninstallString original sem switches: em muitos pacotes ele
+        // abre uma confirmação (inclusive para apagar configurações do usuário).
+        // Também não misturar switches de motores diferentes em uma mesma tentativa.
+        // O comando silencioso próprio já foi executado acima; resta tentar o ID.
+        if (WinProvisionElevationState.HasFailedThisSession) return false;
+        return await TryIdBasedUninstall(app, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tenta desinstalação baseada no ID do aplicativo quando não há UninstallString válido.
+    /// </summary>
+    private async Task<bool> TryIdBasedUninstall(InstalledAppDetail app, CancellationToken cancellationToken)
+    {
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Tentando desinstalação baseada no ID: {app.Id}");
+
+        // MSIX/Store apps
+        if (app.Id.StartsWith("MSIX\\", StringComparison.OrdinalIgnoreCase) ||
+            app.Id.StartsWith("9N", StringComparison.OrdinalIgnoreCase))
+        {
+            var packageFullName = app.Id.StartsWith("MSIX\\", StringComparison.OrdinalIgnoreCase)
+                ? app.Id[5..]
+                : app.Id;
+            if (!IsSafePackageIdentity(packageFullName))
+                return false;
+
+            var result = await TryRunUninstallProcess(
+                "powershell.exe",
+                $"-NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage -Name '{packageFullName}' | Remove-AppxPackage -ErrorAction SilentlyContinue\"",
+                cancellationToken,
+                false);
+            return result.Success;
+        }
+
+        // MSI packages (se o ID parece ser um GUID)
+        if (ProductCodePattern.IsMatch(app.Id))
+        {
+            var result = await TryRunUninstallProcess(
+                "msiexec.exe",
+                $"/x {app.Id} /qn /norestart REBOOT=ReallySuppress",
+                cancellationToken,
+                true);
+            return result.Success;
+        }
+
+        // Tenta gerenciador de pacotes se disponível
+        if (IsSafeWingetId(app.Id))
+        {
+            var result = await TryRunUninstallProcess(
+                WingetLocator.DefaultExecutable,
+                $"uninstall --id \"{app.Id}\" --silent --accept-source-agreements --disable-interactivity",
+                cancellationToken,
+                true);
+            if (result.Success)
+                return true;
+        }
+
+        WinProvision.Core.Services.CoreLog.Debug($"[UninstallerEngine] Desinstalação baseada no ID falhou para {app.DisplayName}");
+        return false;
+    }
+
+    /// <summary>
+    /// Identifica a tecnologia do instalador pela assinatura do executável de
+    /// desinstalação e/ou do comando registrado, para decidir os parâmetros
+    /// silenciosos corretos. Expandido para detectar Squirrel/Electron, package
+    /// managers e Windows Store Apps.
+    /// </summary>
+    public static InstallerKind DetectInstallerKind(string fileName, string rawCommand, string? appId = null)
+    {
+        // MSIX/Store apps detection baseado no ID
+        if (!string.IsNullOrEmpty(appId) && (appId.StartsWith("MSIX\\", StringComparison.OrdinalIgnoreCase) ||
+            appId.StartsWith("9N", StringComparison.OrdinalIgnoreCase) ||
+            appId.StartsWith("8wekyb3d8bbwe", StringComparison.OrdinalIgnoreCase)))
+            return InstallerKind.WindowsStore;
+
+        if (fileName.Contains("msiexec", StringComparison.OrdinalIgnoreCase))
+            return InstallerKind.Msiexec;
+
+        if (InnoSetupPattern.IsMatch(fileName))
+            return InstallerKind.InnoSetup;
+
+        if (rawCommand.Contains(InstallShieldFolderMarker, StringComparison.OrdinalIgnoreCase))
+            return InstallerKind.InstallShield;
+
+        if (WisePattern.IsMatch(fileName))
+            return InstallerKind.Wise;
+
+        if (NsisPattern.IsMatch(fileName))
+            return InstallerKind.Nsis;
+
+        // Detecção de atualizador próprio por sua assinatura.
+        if (SquirrelPattern.IsMatch(fileName) && SquirrelUninstallPattern.IsMatch(rawCommand))
+            return InstallerKind.Squirrel;
+
+        // Detecção de um desinstalador específico por sua assinatura.
+        if (ChocolateyPattern.IsMatch(fileName))
+            return InstallerKind.Chocolatey;
+
+        // Detecção de aplicativo com desinstalador próprio.
+        if (SteamPattern.IsMatch(fileName))
+            return InstallerKind.Steam;
+
+        // Windows Store detection via PowerShell commands
+        if (WindowsStorePattern.IsMatch(rawCommand))
+            return InstallerKind.WindowsStore;
+
+        // Detecção de um desinstalador específico por sua assinatura.
+        if (ScoopPattern.IsMatch(fileName))
+            return InstallerKind.Scoop;
+
+        return InstallerKind.Unknown;
+    }
+
+    public static bool HasInnoSetupUninstaller(InstalledAppDetail app)
+    {
+        string command = !string.IsNullOrWhiteSpace(app.QuietUninstallString)
+            ? app.QuietUninstallString : app.UninstallString;
+        return TrySplitCommand(command, out string fileName, out _)
+            && IsSafeUninstallTarget(fileName)
+            && DetectInstallerKind(fileName, command, app.Id) == InstallerKind.InnoSetup;
+    }
+
+    /// <summary>
+    /// Aplica os parâmetros silenciosos específicos de cada tecnologia. Nunca combina
+    /// flags de tecnologias diferentes: instaladores costumam rejeitar (erro) um
+    /// parâmetro que não reconhecem. Expandido com os parâmetros das famílias de
+    /// desinstaladores identificadas pelo aplicativo.
+    /// </summary>
+    private static string AppendSilentSwitches(InstallerKind kind, string existingArguments, string? rawCommand = null, string? appId = null)
+    {
+        switch (kind)
+        {
+            case InstallerKind.Msiexec:
+                // Usa o modo silencioso e impede a reinicialização durante a remoção.
+                return existingArguments.Contains("/qn", StringComparison.OrdinalIgnoreCase)
+                    ? existingArguments
+                    : $"{existingArguments} /qn /norestart REBOOT=ReallySuppress".Trim();
+
+            case InstallerKind.InnoSetup:
+                // Usa a remoção silenciosa e evita páginas ou caixas de diálogo adicionais.
+                return $"{existingArguments} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-".Trim();
+
+            case InstallerKind.Nsis:
+                // Usa a opção silenciosa e mantém a verificação de integridade do instalador.
+                return $"{existingArguments} /S /NCRC".Trim();
+
+            case InstallerKind.InstallShield:
+                // Usa a opção silenciosa; arquivos de resposta e logs continuam opcionais.
+                // silencioso garantido para projetos InstallScript; "/s" é o melhor
+                // esforço documentado pela Revenera para suprimir o máximo de diálogos.
+                return $"{existingArguments} /s /sms".Trim();
+
+            case InstallerKind.Wise:
+                // Wise: /s para silent, /u para uninstall mode
+                return $"{existingArguments} /s /u".Trim();
+
+            case InstallerKind.Squirrel:
+                // Opções de remoção silenciosa do atualizador identificado.
+                return existingArguments.Contains("--uninstall", StringComparison.OrdinalIgnoreCase)
+                    ? $"{existingArguments} -s".Trim()
+                    : $"{existingArguments} --uninstall -s".Trim();
+
+            case InstallerKind.Chocolatey:
+                // Parâmetros de confirmação e remoção forçada do desinstalador identificado.
+                return existingArguments.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
+                    ? $"{existingArguments} -y --force".Trim()
+                    : $"{existingArguments} uninstall -y --force".Trim();
+
+            case InstallerKind.Steam:
+                // Comando silencioso do desinstalador identificado.
+                return existingArguments.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
+                    ? $"{existingArguments} /silent".Trim()
+                    : existingArguments;
+
+            case InstallerKind.WindowsStore:
+                return existingArguments;
+
+            case InstallerKind.Scoop:
+                // O desinstalador identificado já executa a remoção sem interação.
+                return existingArguments;
+
+            case InstallerKind.Nullsoft:
+                // Generic Nullsoft: /S é capital
+                return $"{existingArguments} /S".Trim();
+
+            case InstallerKind.Unknown:
+            default:
+                // Combinação tolerada pela maioria dos instaladores não identificados
+                // (parâmetros desconhecidos costumam ser ignorados silenciosamente
+                // pelos motores mais comuns fora dos casos já cobertos acima).
+                return $"{existingArguments} /S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NCRC".Trim();
+        }
+    }
+
+    /// <summary>
+    /// Separa o executável dos argumentos de um UninstallString de registro, sem
+    /// depender de cmd.exe (cuja regra de parsing de aspas quebra com facilidade).
+    /// Segue a mesma convenção usada pelo Registro do Windows: caminho entre aspas
+    /// quando contém espaços, ou token único até o primeiro espaço quando não contém.
+    /// </summary>
+    internal static bool TrySplitCommand(string commandLine, out string fileName, out string arguments)
+    {
+        fileName = string.Empty;
+        arguments = string.Empty;
+
+        string trimmed = commandLine.Trim();
+        if (trimmed.Length == 0) return false;
+
+        if (trimmed[0] == '"')
+        {
+            int closingQuote = trimmed.IndexOf('"', 1);
+            if (closingQuote < 0) return false;
+
+            fileName = trimmed[1..closingQuote];
+            arguments = trimmed[(closingQuote + 1)..].Trim();
+        }
+        else
+        {
+            int firstSpace = trimmed.IndexOf(' ');
+            if (firstSpace < 0)
+            {
+                fileName = trimmed;
+                arguments = string.Empty;
+            }
+            else
+            {
+                fileName = trimmed[..firstSpace];
+                arguments = trimmed[(firstSpace + 1)..].Trim();
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fileName);
+    }
+
+    /// <summary>
+    /// Executa a limpeza agressiva de ficheiros residuais e chaves de registo associadas à aplicação.
+    /// Expandido para incluir serviços, tarefas agendadas, context menus e arquivos residuais
+    /// </summary>
+    public async Task<bool> PerformAggressiveCleanupAsync(InstalledAppDetail app, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            try
+            {
+                bool success = true;
+
+                // 1. Limpeza de diretórios de instalação conhecidos
+                if (IsSafeToDeleteDirectory(app.InstallLocation) && Directory.Exists(app.InstallLocation))
+                {
+                    try
+                    {
+                        Directory.Delete(app.InstallLocation, recursive: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Não foi possível apagar a pasta de instalação: {ex.Message}");
+                        success = false;
+                    }
+                }
+
+                // 2. Limpeza em pastas de utilizador e sistema (AppData, LocalAppData, ProgramData)
+                var cleanPaths = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), app.DisplayName),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), app.DisplayName),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), app.DisplayName)
+                };
+
+                foreach (var path in cleanPaths)
+                {
+                    if (IsSafeAppFolderName(app.DisplayName) && IsSafeToDeleteDirectory(path) && Directory.Exists(path))
+                    {
+                        try
+                        {
+                            Directory.Delete(path, recursive: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao limpar diretório residual {path}: {ex.Message}");
+                        }
+                    }
+                }
+
+                // 3. Limpeza de chaves de registo residuais órfãs (se aplicável pelo DisplayName ou AppKey)
+                CleanRegistryKeys(app.DisplayName);
+
+                // 4. Remoção de serviços do Windows relacionados ao aplicativo
+                RemoveRelatedServices(app);
+
+                // 5. Remoção de tarefas agendadas relacionadas ao aplicativo
+                RemoveScheduledTasks(app.DisplayName);
+
+                // 6. Limpeza de context menus do Windows Explorer
+                CleanContextMenuHandlers(app.DisplayName);
+
+                // 7. Remove atalhos e resíduos da entrada de desinstalação do app.
+                RemoveShortcuts(app.DisplayName);
+                RemoveUninstallerRegistryKeys(app);
+
+                // 8. Limpeza de arquivos temporários e cache
+                CleanTempFiles(app.DisplayName);
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                WinProvision.Core.Services.CoreLog.Debug($"[AggressiveCleanup] Erro geral: {ex.Message}");
+                return false;
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Remove serviços do Windows relacionados ao aplicativo.
+    /// </summary>
+    private void RemoveRelatedServices(InstalledAppDetail app)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(app.InstallLocation) || app.InstallLocation.Length < 8)
+                return;
+
+            string installLocation;
+            try { installLocation = Path.GetFullPath(app.InstallLocation); }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+            { CoreLog.Warning(exception, "ResolveInstallLocation"); return; }
+
+            using var servicesKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services", writable: false);
+            if (servicesKey == null) return;
+
+            var serviceNames = servicesKey.GetSubKeyNames();
+            foreach (var serviceName in serviceNames)
+            {
+                try
+                {
+                    using var serviceKey = servicesKey.OpenSubKey(serviceName, writable: false);
+                    if (serviceKey != null)
+                    {
+                        var imagePath = serviceKey.GetValue("ImagePath") as string;
+
+                        if (!string.IsNullOrEmpty(imagePath)
+                            && imagePath.Contains(installLocation, StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                // Tenta parar e remover o serviço
+                                using var process = Process.Start(new ProcessStartInfo
+                                {
+                                    FileName = "sc.exe",
+                                    Arguments = $"stop \"{serviceName}\"",
+                                    CreateNoWindow = true,
+                                    UseShellExecute = false,
+                                    WindowStyle = ProcessWindowStyle.Hidden
+                                });
+                                process?.WaitForExit();
+
+                                using var deleteProcess = Process.Start(new ProcessStartInfo
+                                {
+                                    FileName = "sc.exe",
+                                    Arguments = $"delete \"{serviceName}\"",
+                                    CreateNoWindow = true,
+                                    UseShellExecute = false,
+                                    WindowStyle = ProcessWindowStyle.Hidden
+                                });
+                                deleteProcess?.WaitForExit();
+
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Serviço removido: {serviceName}");
+                            }
+                            catch (Exception ex)
+                            {
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover serviço {serviceName}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao verificar serviço {serviceName}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao enumerar serviços: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Remove tarefas agendadas do Windows relacionadas ao aplicativo.
+    /// </summary>
+    private void RemoveScheduledTasks(string appName)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = "/query /fo LIST",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+
+            if (process == null) return;
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            var lines = output.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                if (line.Contains("TaskName:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var taskName = line.Split(':')[1].Trim();
+                    if (appName.Length >= 6 && taskName.Contains(appName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            using var deleteProcess = Process.Start(new ProcessStartInfo
+                            {
+                                FileName = "schtasks.exe",
+                                Arguments = $"/delete /tn \"{taskName}\" /f",
+                                CreateNoWindow = true,
+                                UseShellExecute = false,
+                                WindowStyle = ProcessWindowStyle.Hidden
+                            });
+                            deleteProcess?.WaitForExit();
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Tarefa agendada removida: {taskName}");
+                        }
+                        catch (Exception ex)
+                        {
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover tarefa {taskName}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao enumerar tarefas agendadas: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Limpa context menu handlers do Windows Explorer relacionados ao aplicativo.
+    /// </summary>
+    private void CleanContextMenuHandlers(string appName)
+    {
+        try
+        {
+            var contextMenuKeys = new[]
+            {
+                @"Software\Classes\*\shellex\ContextMenuHandlers",
+                @"Software\Classes\Directory\shellex\ContextMenuHandlers",
+                @"Software\Classes\Folder\shellex\ContextMenuHandlers"
+            };
+
+            foreach (var contextMenuKey in contextMenuKeys)
+            {
+                try
+                {
+                    using var key = Registry.CurrentUser.OpenSubKey(contextMenuKey, writable: true);
+                    if (key == null) continue;
+
+                    var handlerNames = key.GetSubKeyNames();
+                    foreach (var handlerName in handlerNames)
+                    {
+                        try
+                        {
+                            if (handlerName.Contains(appName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                key.DeleteSubKeyTree(handlerName, throwOnMissingSubKey: false);
+                                WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Context menu handler removido: {handlerName}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover context handler {handlerName}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao acessar {contextMenuKey}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro geral ao limpar context menus: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Limpa arquivos temporários e cache relacionados ao aplicativo.
+    /// </summary>
+    private void CleanTempFiles(string appName)
+    {
+        try
+        {
+            if (!IsSafeAppFolderName(appName) || appName.Length < 5)
+                return;
+
+            var tempPath = Path.GetTempPath();
+            var tempFiles = Directory.GetFiles(tempPath, $"*{appName}*", SearchOption.TopDirectoryOnly);
+
+            foreach (var tempFile in tempFiles)
+            {
+                try
+                {
+                    File.Delete(tempFile);
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Arquivo temporário removido: {tempFile}");
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover arquivo temporário {tempFile}: {ex.Message}");
+                }
+            }
+
+            // Limpa pastas temporárias com o nome do aplicativo
+            var tempDirs = Directory.GetDirectories(tempPath, $"*{appName}*", SearchOption.TopDirectoryOnly);
+            foreach (var tempDir in tempDirs)
+            {
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Diretório temporário removido: {tempDir}");
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao remover diretório temporário {tempDir}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[Cleanup] Erro ao limpar arquivos temporários: {ex.Message}");
+        }
+    }
+
+    private void CleanRegistryKeys(string appName)
+    {
+        if (string.IsNullOrEmpty(appName)) return;
+
+        var registryHives = new[]
+        {
+            Registry.CurrentUser.OpenSubKey(@"Software", writable: true),
+            Registry.LocalMachine.OpenSubKey(@"SOFTWARE", writable: true)
+        };
+
+        foreach (var hive in registryHives)
+        {
+            if (hive == null) continue;
+            try
+            {
+                using var subKey = hive.OpenSubKey(appName, writable: true);
+                if (subKey != null)
+                {
+                    hive.DeleteSubKeyTree(appName, throwOnMissingSubKey: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                WinProvision.Core.Services.CoreLog.Debug($"[RegistryCleanup] Erro ao limpar registo para {appName}: {ex.Message}");
+            }
+            finally
+            {
+                hive.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Detecta e remove diretórios vazios nos locais comuns de instalação
+    /// </summary>
+    public async Task CleanEmptyDirectoriesAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                var directoriesToClean = new[]
+                {
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
+                };
+
+                foreach (var baseDir in directoriesToClean)
+                {
+                    if (!Directory.Exists(baseDir)) continue;
+
+                    try
+                    {
+                        var emptyDirs = FindEmptyDirectories(baseDir);
+                        foreach (var emptyDir in emptyDirs)
+                        {
+                            try
+                            {
+                                Directory.Delete(emptyDir, recursive: false);
+                                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Diretório vazio removido: {emptyDir}");
+                            }
+                            catch (Exception ex)
+                            {
+                                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Não foi possível remover {emptyDir}: {ex.Message}");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao varrer {baseDir}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro geral: {ex.Message}");
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Encontra recursivamente diretórios vazios a partir de um diretório base.
+    /// </summary>
+    private List<string> FindEmptyDirectories(string basePath)
+    {
+        var emptyDirs = new List<string>();
+
+        try
+        {
+            var directories = Directory.GetDirectories(basePath, "*", SearchOption.AllDirectories);
+            foreach (var dir in directories)
+            {
+                try
+                {
+                    // Verifica se o diretório está vazio (sem arquivos e sem subdiretórios)
+                    var files = Directory.GetFiles(dir);
+                    var subDirs = Directory.GetDirectories(dir);
+
+                    if (files.Length == 0 && subDirs.Length == 0)
+                    {
+                        emptyDirs.Add(dir);
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Ignora diretórios sem permissão
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao verificar {dir}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[EmptyDirCleanup] Erro ao enumerar diretórios: {ex.Message}");
+        }
+
+        return emptyDirs;
+    }
+
+    /// <summary>
+    /// Detecta arquivos residuais (leftovers) após desinstalação usando heurísticas
+    /// avançadas.
+    /// </summary>
+    public async Task<List<string>> DetectLeftoversAsync(InstalledAppDetail app, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            var leftovers = new List<string>();
+
+            try
+            {
+                // 1. Procura por arquivos com nome similar em pastas comuns
+                var searchPaths = new[]
+                {
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+                };
+
+                foreach (var basePath in searchPaths)
+                {
+                    if (!Directory.Exists(basePath)) continue;
+
+                    try
+                    {
+                        // Procura diretórios que contenham o nome do aplicativo
+                        var matchingDirs = Directory.GetDirectories(basePath, $"*{app.DisplayName}*", SearchOption.TopDirectoryOnly);
+                        leftovers.AddRange(matchingDirs);
+
+                        // Procura arquivos com nome similar
+                        var matchingFiles = Directory.GetFiles(basePath, $"*{app.DisplayName}*", SearchOption.AllDirectories);
+                        leftovers.AddRange(matchingFiles);
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro ao varrer {basePath}: {ex.Message}");
+                    }
+                }
+
+                // 2. Procura por arquivos temporários e logs
+                var tempPath = Path.GetTempPath();
+                if (Directory.Exists(tempPath))
+                {
+                    try
+                    {
+                        var tempFiles = Directory.GetFiles(tempPath, $"*{app.DisplayName}*", SearchOption.AllDirectories);
+                        leftovers.AddRange(tempFiles);
+                    }
+                    catch (Exception ex)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro ao varrer temp: {ex.Message}");
+                    }
+                }
+
+                // 3. Remove duplicatas e filtros de diretórios protegidos
+                leftovers = leftovers.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                leftovers = leftovers.Where(f => !IsProtectedPath(f)).ToList();
+            }
+            catch (Exception ex)
+            {
+                WinProvision.Core.Services.CoreLog.Debug($"[LeftoverDetection] Erro geral: {ex.Message}");
+            }
+
+            return leftovers;
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Verifica se um caminho é protegido e não deve ser removido automaticamente.
+    /// </summary>
+    private bool IsProtectedPath(string path)
+    {
+        var protectedPaths = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            Environment.GetFolderPath(Environment.SpecialFolder.SystemX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\\Common Files",
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) + "\\Common Files",
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData) + "\\Microsoft",
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\Microsoft",
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\Microsoft"
+        };
+
+        return protectedPaths.Any(protectedPath =>
+            !string.IsNullOrWhiteSpace(protectedPath)
+            && path.StartsWith(protectedPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsSafeAppFolderName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length < 3)
+            return false;
+        string trimmed = name.Trim();
+        if (trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return false;
+        string[] blocked = ["Microsoft", "Windows", "Temp", "Common Files", "WinProvision", "WinProvisionStore", "Program Files", "System32", "SysWOW64"];
+        return !blocked.Any(item => trimmed.Equals(item, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsSafeToDeleteDirectory(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        string full;
+        try { full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path)); }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+        { CoreLog.Warning(exception, "ValidateCleanupPath"); return false; }
+
+        if (!Path.IsPathRooted(full) || full.Length < 8)
+            return false;
+
+        string? driveRoot = Path.GetPathRoot(full);
+        if (!string.IsNullOrEmpty(driveRoot)
+            && string.Equals(full.TrimEnd('\\'), driveRoot.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string[] allowedParents =
+        [
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+        ];
+
+        return allowedParents.Any(parent =>
+            !string.IsNullOrWhiteSpace(parent)
+            && full.StartsWith(parent.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(full.TrimEnd('\\'), parent.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Executa a desinstalação silenciosa seguida da limpeza agressiva de resíduos.
+    /// Modo agressivo é sempre aplicado (sem alternativa "padrão" à parte, igual ao
+    /// fluxo do Office): a limpeza só roda depois de uma desinstalação bem-sucedida
+    /// e nunca mascara uma falha real de desinstalação.
+    /// </summary>
+    public Task<bool> UninstallAggressivelyAsync(InstalledAppDetail app, CancellationToken cancellationToken = default) =>
+        RunSilentUninstallAsync(app, cancellationToken);
+
+    /// <summary>
+    /// Executa a desinstalação forçada quando o desinstalador padrão falha.
+    /// Usa detecção de processos, janelas e atalhos para identificar e remover o aplicativo
+    /// </summary>
+    public Task<bool> ForceUninstallAsync(InstalledAppDetail app, CancellationToken cancellationToken = default) =>
+        RunSilentUninstallAsync(app, cancellationToken);
+
+    /// <summary>
+    /// Mata processos relacionados ao aplicativo pelo nome do executável.
+    /// </summary>
+    private static readonly HashSet<string> ProtectedProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "explorer", "dwm", "svchost", "csrss", "winlogon", "lsass", "services", "smss",
+        "system", "idle", "wininit", "fontdrvhost", "conhost", "sihost", "taskhostw",
+        "searchhost", "runtimebroker", "dllhost", "ctfmon", "winprovision", "msedge",
+        "chrome", "firefox", "powershell", "pwsh", "cmd", "msiexec"
+    };
+
+    private void KillRelatedProcesses(string appName)
+    {
+        if (string.IsNullOrWhiteSpace(appName) || appName.Trim().Length < 6)
+            return;
+
+        string token = new string(appName.Trim().TakeWhile(c => char.IsLetterOrDigit(c)).ToArray());
+        if (token.Length < 6 || ProtectedProcesses.Contains(token))
+            return;
+
+        try
+        {
+            var processes = Process.GetProcesses();
+            foreach (var process in processes)
+            {
+                try
+                {
+                    if (ProtectedProcesses.Contains(process.ProcessName))
+                        continue;
+
+                    if (process.ProcessName.Equals(token, StringComparison.OrdinalIgnoreCase)
+                        || process.ProcessName.StartsWith(token, StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill(entireProcessTree: true);
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Processo morto: {process.ProcessName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao matar processo {process.ProcessName}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao enumerar processos: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Remove atalhos do desktop e menu iniciar relacionados ao aplicativo.
+    /// </summary>
+    private void RemoveShortcuts(string appName)
+    {
+        try
+        {
+            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var startMenuPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+                "Programs");
+
+            var pathsToCheck = new[] { desktopPath, startMenuPath };
+
+            foreach (var basePath in pathsToCheck)
+            {
+                if (!Directory.Exists(basePath)) continue;
+
+                var shortcuts = Directory.GetFiles(basePath, "*.lnk", SearchOption.AllDirectories);
+                foreach (var shortcut in shortcuts)
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(shortcut);
+                        if (IsSafeAppFolderName(appName)
+                            && appName.Length >= 5
+                            && fileName.Equals(appName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            File.Delete(shortcut);
+                            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Atalho removido: {shortcut}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao remover atalho {shortcut}: {ex.Message}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao remover atalhos: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Remove chaves de registro do desinstalador (HKLM\Software\plataforma do sistema\Windows\CurrentVersion\Uninstall
+    /// e HKCU equivalentes).
+    /// </summary>
+    private void RemoveUninstallerRegistryKeys(InstalledAppDetail app)
+    {
+        try
+        {
+            var uninstallKeys = new[]
+            {
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            foreach (var uninstallKey in uninstallKeys)
+            {
+                // HKLM
+                try
+                {
+                    using var hklmKey = Registry.LocalMachine.OpenSubKey(uninstallKey, writable: true);
+                    if (hklmKey != null)
+                    {
+                        var subKeyNames = hklmKey.GetSubKeyNames();
+                        foreach (var subKeyName in subKeyNames)
+                        {
+                            try
+                            {
+                                using var subKey = hklmKey.OpenSubKey(subKeyName, writable: false);
+                                if (subKey != null)
+                                {
+                                    var displayName = subKey.GetValue("DisplayName") as string;
+                                    if (!string.IsNullOrEmpty(displayName) &&
+                                        displayName.Equals(app.DisplayName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        hklmKey.DeleteSubKeyTree(subKeyName, throwOnMissingSubKey: false);
+                                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Chave de registro removida (HKLM): {subKeyName}");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao acessar HKLM {uninstallKey}: {ex.Message}");
+                }
+
+                // HKCU
+                try
+                {
+                    using var hkcuKey = Registry.CurrentUser.OpenSubKey(uninstallKey, writable: true);
+                    if (hkcuKey != null)
+                    {
+                        var subKeyNames = hkcuKey.GetSubKeyNames();
+                        foreach (var subKeyName in subKeyNames)
+                        {
+                            try
+                            {
+                                using var subKey = hkcuKey.OpenSubKey(subKeyName, writable: false);
+                                if (subKey != null)
+                                {
+                                    var displayName = subKey.GetValue("DisplayName") as string;
+                                    if (!string.IsNullOrEmpty(displayName) &&
+                                        displayName.Equals(app.DisplayName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        hkcuKey.DeleteSubKeyTree(subKeyName, throwOnMissingSubKey: false);
+                                        WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Chave de registro removida (HKCU): {subKeyName}");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao verificar subchave {subKeyName}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro ao acessar HKCU {uninstallKey}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[ForceUninstall] Erro geral ao remover chaves de registro: {ex.Message}");
+        }
+    }
+}

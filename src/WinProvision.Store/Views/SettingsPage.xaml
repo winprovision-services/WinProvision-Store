@@ -1,0 +1,854 @@
+<Page xmlns:vm="using:WinProvision.Store.ViewModels" xmlns:ic="using:FluentIcons.WinUI" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="using:WinProvision.Store.Controls" xmlns:settings="using:CommunityToolkit.WinUI.Controls" xmlns:services="using:WinProvision.Store.Services" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="WinProvision.Store.Views.SettingsPage" Background="Transparent" UseLayoutRounding="True" FontFamily="{StaticResource StoreFontFamily}" FontSize="13" x:DataType="vm:SettingsViewModel">
+    <Page.Resources>
+<ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="ms-appx:///CommunityToolkit.WinUI.Controls.SettingsControls/SettingsExpander/SettingsExpander.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <services:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </ResourceDictionary>
+  </Page.Resources>
+  <Grid Margin="{StaticResource PageContentMargin}" MaxWidth="{StaticResource PageContentMaxWidth}" HorizontalAlignment="Stretch">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Grid Grid.Row="0" Margin="{StaticResource PageHeaderMargin}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Button x:Name="BackButton" AutomationProperties.AutomationId="BackButton" AutomationProperties.Name="Voltar às categorias de configurações" Visibility="Collapsed" Style="{StaticResource StoreActionButtonStyle}" Width="36" Height="36" MinWidth="36" Padding="0" Margin="0,0,8,0" Click="BackButton_Click" ToolTipService.ToolTip="Voltar às categorias de configurações">
+        <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" IconSize="Size20" />
+      </Button>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+        <TextBlock x:Name="SettingsTitleTextBlock" Text="Configurações do WinProvision Store" Style="{StaticResource FluentPageTitleStyle}" />
+        <TextBlock x:Name="SettingsSubtitleTextBlock" Visibility="Collapsed" />
+      </StackPanel>
+    </Grid>
+    <Grid Grid.Row="1" Margin="0,0,0,8">
+      <TextBlock x:Name="SettingsSearchResultText" Text="{Binding SearchResultSummary}" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" TextWrapping="Wrap" />
+    </Grid>    <Grid Grid.Row="2" HorizontalAlignment="Stretch">
+      <ScrollViewer x:Name="HomepageScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,0,24">
+          <StackPanel x:Name="SettingsHomeContentPanel">
+          <StackPanel x:Name="SettingsCategoryListPanel" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+            <Button x:Name="CardGeneral" AutomationProperties.AutomationId="CardGeneral" AutomationProperties.Name="Preferências gerais" Tag="General" Height="76" Padding="16,0" Margin="0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Settings" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Preferências gerais" FontSize="14" />
+                  <TextBlock Text="Idioma, tema e outras preferências do aplicativo." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Border Height="16" />
+            <Button x:Name="CardInterface" AutomationProperties.AutomationId="CardInterface" AutomationProperties.Name="Interface e inicialização" Tag="Interface" Height="76" Padding="16,0" Margin="0" CornerRadius="8,8,0,0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Interface e inicialização" FontSize="14" />
+                  <TextBlock Text="Tema do aplicativo, página inicial e comportamento da interface." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardNotifications" AutomationProperties.AutomationId="CardNotifications" AutomationProperties.Name="Notificações" Tag="Notifications" Height="76" Padding="16,0" Margin="0" CornerRadius="0,0,8,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Alert" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Preferências de notificação" FontSize="14" />
+                  <TextBlock Text="Exibir notificações em diferentes eventos." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Border Height="16" />
+            <Button x:Name="CardElevator" AutomationProperties.AutomationId="CardElevator" AutomationProperties.Name="WinProvision Elevator" Tag="Elevator" Height="76" Padding="16,0" Margin="0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Shield" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Direitos de administrador e segurança" FontSize="14" />
+                  <TextBlock Text="Autorizações, elevação de operações e integridade do WinProvision Elevator." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Border Height="16" />
+            <Button x:Name="CardExecution" AutomationProperties.AutomationId="CardExecution" AutomationProperties.Name="Operações e downloads" Tag="Execution" Height="76" Padding="16,0" Margin="0" CornerRadius="8,8,0,0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="ArrowClockwiseDashes" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Preferências das operações de pacotes" FontSize="14" />
+                  <TextBlock Text="Downloads, instalação e comportamento das operações de pacotes." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardMaintenance" AutomationProperties.AutomationId="CardMaintenance" AutomationProperties.Name="Manutenção agendada" Tag="Maintenance" Height="76" Padding="16,0" Margin="0" CornerRadius="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Clock" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Manutenção agendada" FontSize="14" />
+                  <TextBlock Text="Frequência das verificações, atualizações automáticas e notificações." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button x:Name="CardOperations" AutomationProperties.AutomationId="CardOperations" AutomationProperties.Name="Armazenamento e cache" Tag="Operations" Height="76" Padding="16,0" Margin="0" CornerRadius="0,0,8,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,1,1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Database" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Armazenamento e cache" FontSize="14" />
+                  <TextBlock Text="Gerencie arquivos temporários e cache das operações de pacotes." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Border Height="16" />
+            <Button x:Name="CardDeveloper" AutomationProperties.AutomationId="CardDeveloper" AutomationProperties.Name="Configurações de Desenvolvedor" Tag="Developer" Height="76" Padding="16,0" Margin="0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Click="CategoryButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ic:FluentIcon Icon="Code" IconVariant="Regular" IconSize="Size20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="Configurações de Desenvolvedor" FontSize="14" />
+                  <TextBlock Text="Provisionamento autenticado de instaladores pela rede local." FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" IconSize="Size16" Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+          </StackPanel>          <StackPanel x:Name="SettingsSearchResultsPanel" Visibility="{Binding IsSearching, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="Opções encontradas" Margin="0,0,0,12" FontSize="16" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{Binding SearchResults}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Padding="18" CornerRadius="12" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" AutomationProperties.Name="{Binding AccessibleName}" AutomationProperties.HelpText="{Binding Description}" Click="SearchResult_Click" ToolTipService.ToolTip="{Binding Description}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <ic:FluentIcon Icon="Settings" IconVariant="Color" IconSize="Size20" FontSize="20" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,3,0,0" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="4" Text="{Binding Category}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Right" VerticalAlignment="Center" MaxWidth="180" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="SettingsSearchEmptyText" Text="Nenhuma configuração corresponde à pesquisa. Tente outro termo." Visibility="{Binding HasNoSearchResults, Converter={StaticResource BoolToVisibilityConverter}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          </StackPanel>
+          </StackPanel>
+          <StackPanel x:Name="SettingsSubCategoryContentPanel" Visibility="Collapsed">
+          <StackPanel x:Name="PanelGeneral" Visibility="Collapsed">
+            <ItemsControl ItemsSource="{Binding GeneralSettingsGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SettingsCatalogGroupOption">
+                  <StackPanel Margin="0,0,0,12">
+                    <Grid ColumnSpacing="8" Margin="4,12,4,8">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <FontIcon Glyph="{Binding Icon}" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"
+                                Visibility="{Binding HasIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Settings}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingsCatalogSettingOption">
+                          <StackPanel>
+                            <controls:SettingsNavigationCard Title="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                             TargetPage="{Binding TargetPage}"
+                                                             NavigationRequested="CatalogNavigationCard_NavigationRequested"
+                                                             Visibility="{Binding IsNavigation, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <settings:SettingsCard Header="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                 Style="{StaticResource DeveloperSettingsCardStyle}" ContentAlignment="Vertical"
+                                                 Visibility="{Binding IsRendered, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 Opacity="{Binding CardOpacity}">
+                            <StackPanel Spacing="8">
+                              <Grid ColumnSpacing="8" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="*" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="{Binding Icon}" FontSize="20" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                          VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"
+                                          Visibility="{Binding HasIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <TextBlock Grid.Column="1" Text="{Binding StateText}" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"
+                                           Visibility="{Binding IsToggleSetting, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <ProgressRing Grid.Column="2" Width="16" Height="16" IsActive="{Binding IsAuxiliaryActionChecking}"
+                                              AutomationProperties.Name="Verificando atualizações"
+                                              Visibility="{Binding IsAuxiliaryActionChecking, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <ToggleSwitch Grid.Column="3" IsOn="{Binding ToggleValue, Mode=OneWay}" Tag="{Binding}"
+                                              IsEnabled="{Binding IsEnabled}" OnContent="" OffContent=""
+                                              Toggled="GeneralCatalogToggle_Toggled" AutomationProperties.Name="{Binding Title}"
+                                              Visibility="{Binding IsToggle, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <ToggleSwitch Grid.Column="3" IsOn="{Binding ToggleValue, Mode=OneWay}" Tag="{Binding}"
+                                              IsEnabled="{Binding IsEnabled}" OnContent="" OffContent=""
+                                              Toggled="GeneralCatalogToggle_Toggled" AutomationProperties.Name="{Binding Title}"
+                                              Visibility="{Binding IsToggleCard, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <Button Grid.Column="4" Content="{Binding ActionButtonText}" Command="{Binding ActionCommand}"
+                                        IsEnabled="{Binding IsAuxiliaryActionEnabled}" Style="{StaticResource AccentButtonStyle}"
+                                        AutomationProperties.Name="{Binding ActionButtonText}"
+                                        Visibility="{Binding HasAuxiliaryAction, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <Button Grid.Column="4" Content="{Binding ActionButtonText}" Command="{Binding ActionCommand}"
+                                        Style="{StaticResource StoreActionButtonStyle}"
+                                        AutomationProperties.Name="{Binding ActionButtonText}"
+                                        Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibilityConverter}}" />
+                              </Grid>
+                              <TextBlock Text="{Binding SecondaryDescription}" FontSize="12"
+                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                                         Visibility="{Binding HasSecondaryDescription, Converter={StaticResource BoolToVisibilityConverter}}" />
+                              <ProgressBar Value="{Binding AuxiliaryActionProgress}" Maximum="1" Height="4"
+                                           Visibility="{Binding IsAuxiliaryActionDownloading, Converter={StaticResource BoolToVisibilityConverter}}" />
+                              <Button Content="{Binding CancelOperationText}" Command="{Binding CancelOperationCommand}"
+                                      Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Right"
+                                      AutomationProperties.Name="{Binding CancelOperationText}"
+                                      Visibility="{Binding HasCancelableOperation, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
+                            </settings:SettingsCard>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <StackPanel x:Name="PanelInterface" Visibility="Collapsed">
+            <TextBlock Text="Aparência" Margin="4,0,4,8" FontSize="14" FontWeight="SemiBold" />
+            <settings:SettingsCard x:Name="ThemeCard" Header="Tema do aplicativo" Description="Escolha o esquema de cores da interface." Margin="0,0,0,8">
+                <controls:WrapPanel VerticalAlignment="Center">
+                  <Button x:Name="LightThemeButton" AutomationProperties.AutomationId="LightThemeButton" Content="Claro" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Command="{Binding LightThemeCommand}" />
+                  <Button x:Name="DarkThemeButton" AutomationProperties.AutomationId="DarkThemeButton" Content="Escuro" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,8,0" Command="{Binding DarkThemeCommand}" />
+                  <Button x:Name="SystemThemeButton" AutomationProperties.AutomationId="SystemThemeButton" Content="Sistema" Style="{StaticResource StoreActionButtonStyle}" Command="{Binding SystemThemeCommand}" />
+                </controls:WrapPanel>
+            </settings:SettingsCard>
+            <settings:SettingsCard x:Name="BackdropCard" Header="Plano de fundo" Description="Escolha o material da janela. Opções sem suporte aparecem desabilitadas." Margin="0,0,0,8">
+              <ComboBox x:Name="BackdropComboBox" Style="{StaticResource SettingsInlineComboBoxStyle}" AutomationProperties.AutomationId="BackdropComboBox" AutomationProperties.Name="Plano de fundo da janela" ItemsSource="{Binding BackdropOptions}" SelectedItem="{Binding SelectedBackdropOption, Mode=TwoWay}" DisplayMemberPath="Label" MinWidth="220">
+                <ComboBox.ItemContainerStyle>
+                  <Style TargetType="ComboBoxItem">
+                    <Setter Property="IsEnabled" Value="{Binding IsSupported}" />
+                    <Setter Property="ToolTipService.ToolTip" Value="{Binding SupportDescription}" />
+                  </Style>
+                </ComboBox.ItemContainerStyle>
+              </ComboBox>
+            </settings:SettingsCard>
+            <ItemsControl x:Name="PackageVisualPreferencesList" ItemsSource="{Binding PackageVisualPreferences}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <settings:SettingsCard Header="{Binding Label}" Description="{Binding Description}" Margin="0,0,0,8">
+                    <ToggleSwitch IsOn="{Binding IsEnabled, Mode=TwoWay}" OnContent="Ativado" OffContent="Desativado" />
+                  </settings:SettingsCard>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <settings:SettingsCard x:Name="SearchOnDemandCard" Header="Pesquisa sob demanda" Description="Carrega banners e aplicativos somente depois que você pesquisar. Limpar a pesquisa libera os dados da vitrine da memória." Margin="0,0,0,8">
+              <ToggleSwitch x:Name="SearchOnDemandSwitch" AutomationProperties.AutomationId="SearchOnDemandSwitch" AutomationProperties.Name="Carregar aplicativos somente ao pesquisar" IsOn="{Binding SearchOnDemand, Mode=OneWay}" OnContent="Ativado" OffContent="Desativado" Toggled="SearchOnDemandSwitch_Toggled" />
+            </settings:SettingsCard>
+            <TextBlock Text="Inicialização" Margin="4,24,4,8" FontSize="14" FontWeight="SemiBold" />
+            <settings:SettingsCard x:Name="StartupPageCard" Header="Página inicial" Description="Escolha qual seção será aberta quando o WinProvision Store iniciar." Margin="0,0,0,8">
+              <ComboBox x:Name="StartupPageComboBox" Style="{StaticResource SettingsInlineComboBoxStyle}" AutomationProperties.AutomationId="StartupPageComboBox" AutomationProperties.Name="Página inicial do aplicativo" ItemsSource="{Binding StartupPageOptions}" SelectedItem="{Binding SelectedStartupPageOption, Mode=TwoWay}" DisplayMemberPath="Label" MinWidth="220" />
+            </settings:SettingsCard>
+            <settings:SettingsCard x:Name="StartupCard" Header="Iniciar com o Windows" Description="Executa atualizações automáticas pela CLI ao entrar nesta conta do Windows, sem abrir a interface." Margin="0,0,0,8">
+              <ToggleSwitch x:Name="LaunchAtStartupSwitch" AutomationProperties.AutomationId="LaunchAtStartupSwitch" IsOn="{Binding LaunchAtStartup, Mode=OneWay}" OnContent="Ativado" OffContent="Desativado" Toggled="LaunchAtStartupSwitch_Toggled" AutomationProperties.Name="Iniciar com o Windows" />
+            </settings:SettingsCard>
+          </StackPanel>
+          <StackPanel x:Name="PanelProvisioning" Visibility="Collapsed">
+            <settings:SettingsCard x:Name="ProvisioningMenuCard" Visibility="Collapsed" Header="Menu Provisionamento" Description="Mostra na navegação o menu para preparar perfis de configuração do Windows." Margin="0,0,0,8">
+              <ToggleSwitch x:Name="ProvisioningMenuSwitch" AutomationProperties.AutomationId="ProvisioningMenuSwitch" AutomationProperties.Name="Exibir menu Provisionamento" IsOn="{Binding ProvisioningMenuEnabled, Mode=OneWay}" OnContent="Ativado" OffContent="Desativado" Toggled="ProvisioningMenuSwitch_Toggled" />
+            </settings:SettingsCard>
+          </StackPanel>
+          <StackPanel x:Name="PanelElevator" Visibility="Collapsed">
+            <ItemsControl ItemsSource="{Binding ElevatorNotices}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate><controls:NoticeBar DataContext="{Binding}" /></DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl x:Name="ElevationSettingsCatalogList" ItemsSource="{Binding ElevationSettingGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,0,0,12">
+                    <TextBlock Text="{Binding Title}" Margin="4,12,4,8" FontSize="14" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Settings}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Padding="16" Margin="0,0,0,8" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Opacity="{Binding CardOpacity}">
+                            <Grid ColumnSpacing="16">
+                              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                              <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Description}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding RiskWarning}" Visibility="{Binding ShowRiskWarning, Converter={StaticResource BoolToVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource SystemFillColorCautionBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding LockedReason}" Visibility="{Binding HasLockedReason, Converter={StaticResource BoolToVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                              </StackPanel>
+                              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Visibility="{Binding ShowToggle, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Text="{Binding StateText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                <ToggleSwitch IsOn="{Binding IsEnabled, Mode=OneWay}" Tag="{Binding IsEnabled, Mode=OneWay}" IsEnabled="{Binding IsToggleEnabled}" OnContent="" OffContent="" Toggled="ElevationSetting_Toggled" />
+                              </StackPanel>
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Padding="16" Margin="0,0,0,8" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Autorização desta sessão" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding ElevationCacheMessage}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ElevationAuthorizationDescription}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <controls:WrapPanel>
+                  <Button x:Name="AuthorizeElevationButton" Content="Autorizar nesta sessão" Command="{Binding AuthorizeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" AutomationProperties.AutomationId="AuthorizeElevationButton" Margin="0,0,8,8" />
+                  <Button x:Name="RevokeElevationButton" Content="Encerrar autorização" Command="{Binding RevokeElevationCommand}" Style="{StaticResource StoreActionButtonStyle}" Margin="0,0,0,8" />
+                </controls:WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Padding="16" Margin="0,0,0,8" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Estado e integridade do WinProvision Elevator" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding ElevatorIntegrityMessage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="RefreshElevatorButton" Content="Verificar e atualizar estado" Command="{Binding RefreshElevatorCommand}" Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Left" />
+                <settings:SettingsExpander Header="Detalhes" IsExpanded="False" Margin="0,4,0,0">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Caminho, versão e última verificação" Description="{Binding ElevatorDetailsMessage}" ContentAlignment="Vertical" />
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+              </StackPanel>
+            </Border>
+            <Button Click="InspectElevationPolicy_Click" Margin="0,0,0,8" Padding="16"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    AutomationProperties.Name="Inspecionar política ativa">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Inspecionar política ativa" FontSize="14" FontWeight="SemiBold" />
+                  <TextBlock Text="Consulte os valores efetivos, a origem e as proteções fixas." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <FontIcon Grid.Column="1" Glyph="&#xE76C;" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Button Click="OpenElevatedLogs_Click" Margin="0,0,0,8" Padding="16"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    AutomationProperties.Name="Abrir registros de operações elevadas">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Registros de operações elevadas" FontSize="14" FontWeight="SemiBold" />
+                  <TextBlock Text="Abre o log principal filtrado por source=Elevated." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+                <FontIcon Grid.Column="1" Glyph="&#xE76C;" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+          </StackPanel>
+          <StackPanel x:Name="PanelDeveloper" Visibility="Collapsed">
+            <TextBlock Text="Motor de operações WinGet" Style="{StaticResource DeveloperSettingsSectionTitleStyle}" />
+            <Border Style="{StaticResource DeveloperSettingsGroupStyle}">
+              <settings:SettingsCard Header="Mecanismo preferido" Description="{Binding WinGetEngineDescription}" Style="{StaticResource DeveloperSettingsCardStyle}">
+                <ComboBox x:Name="WinGetEngineSelector" SelectedValue="{Binding SelectedWinGetEngineName, Mode=TwoWay}" SelectedValuePath="Tag"
+                          AutomationProperties.Name="Mecanismo preferido do WinGet">
+                  <ComboBoxItem Content="Automático" Tag="Automatic" />
+                  <ComboBoxItem Content="API COM" Tag="ComApi" />
+                  <ComboBoxItem Content="winget.exe" Tag="WingetCli" />
+                </ComboBox>
+              </settings:SettingsCard>
+            </Border>
+            <TextBlock Text="Servidor LAN" Style="{StaticResource DeveloperSettingsSectionTitleStyle}" />
+            <ItemsControl ItemsSource="{Binding LanServerNotices}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate><controls:NoticeBar DataContext="{Binding}" /></DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Style="{StaticResource DeveloperSettingsGroupStyle}">
+              <StackPanel>
+                <settings:SettingsCard Header="Servidor LAN" Description="{Binding LanServerStatus}" Style="{StaticResource DeveloperSettingsCardStyle}" AutomationProperties.LiveSetting="Polite">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Iniciar" Command="{Binding StartLanServerCommand}" Visibility="{Binding IsLanServerRunning, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="Iniciar servidor LAN" />
+                    <Button Content="Parar" Command="{Binding StopLanServerCommand}" Visibility="{Binding IsLanServerRunning, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Parar servidor LAN" />
+                    <ProgressRing IsActive="{Binding IsLanBusy}" Width="20" Height="20" />
+                  </StackPanel>
+                </settings:SettingsCard>
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource DeveloperSettingsSeparatorMargin}" />
+                <settings:SettingsCard Header="Pasta de instaladores" Description="{Binding LanServerFolder}" Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <Button Content="Escolher pasta" Command="{Binding PickLanFolderCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Escolher pasta de instaladores" />
+                </settings:SettingsCard>
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource DeveloperSettingsSeparatorMargin}" />
+                <settings:SettingsCard Header="Endereço do servidor" Description="Use este endereço para conectar outros computadores." Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding LanPrimaryAddress}" FontFamily="Consolas" Style="{StaticResource LanInstallerMetadataStyle}" AutomationProperties.Name="Endereço principal do servidor" />
+                    <Button Content="Copiar" Command="{Binding CopyLanServerAddressCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Copiar endereço do servidor" />
+                  </StackPanel>
+                </settings:SettingsCard>
+                <settings:SettingsExpander Header="Outros endereços" IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Adaptadores de rede" ContentAlignment="Vertical" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <ItemsControl ItemsSource="{Binding LanOtherAddresses}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate><TextBlock Text="{Binding}" FontFamily="Consolas" Style="{StaticResource LanInstallerMetadataStyle}" Margin="0,4,0,0" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource DeveloperSettingsSeparatorMargin}" />
+                <settings:SettingsCard Header="Código de conexão" Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <StackPanel Spacing="8">
+                    <ItemsControl ItemsSource="{Binding LanCredentialNotices}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate><controls:NoticeBar DataContext="{Binding}" /></DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="Copiar código" Command="{Binding CopyLanConnectionCodeCommand}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="Copiar código de conexão" />
+                  </StackPanel>
+                </settings:SettingsCard>
+                <settings:SettingsExpander Header="Token" Description="Token de autenticação do servidor. Não o compartilhe separadamente do código de conexão." IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Token" ContentAlignment="Vertical" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="8">
+                          <PasswordBox x:Name="LanServerTokenPasswordBox" IsEnabled="False" Visibility="{Binding IsLanServerTokenVisible, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" AutomationProperties.Name="Token do servidor, oculto" />
+                          <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Text="{Binding LanServerToken, Mode=OneWay}" IsReadOnly="True" Visibility="{Binding IsLanServerTokenVisible, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Token do servidor" />
+                          <TextBlock Text="Pare o servidor para gerar outro token." Style="{StaticResource DeveloperSettingsDescriptionStyle}" Visibility="{Binding IsLanServerRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="8">
+                          <Button Content="{Binding LanServerTokenVisibilityLabel}" Command="{Binding ToggleLanServerTokenCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="{Binding LanServerTokenVisibilityLabel}" />
+                          <Button Content="Copiar token" Command="{Binding CopyLanTokenCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Copiar token do servidor" />
+                          <Button Content="Gerar novo token" Command="{Binding GenerateLanTokenCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Gerar novo token" />
+                        </StackPanel>
+                      </Grid>
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+                <settings:SettingsExpander Header="Instaladores servidos" IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Instaladores indexados" ContentAlignment="Vertical" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <ItemsControl ItemsSource="{Binding LanServedInstallers}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Margin="0,4,0,0" Style="{StaticResource DeveloperSettingsDescriptionStyle}">
+                              <Run Text="{Binding Name}" /><Run Text=" · " /><Run Text="{Binding Version}" /><Run Text=" · " /><Run Text="{Binding Type}" />
+                            </TextBlock>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+                <settings:SettingsExpander Header="Atividade" IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Requisições recentes" ContentAlignment="Vertical" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <ItemsControl ItemsSource="{Binding LanRequestLog}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Style="{StaticResource DeveloperSettingsDescriptionStyle}">
+                              <Run Text="{Binding Timestamp}" /><Run Text="  " /><Run Text="{Binding IpAddress}" /><Run Text="  " /><Run Text="{Binding File}" /><Run Text="  HTTP " /><Run Text="{Binding StatusCode}" />
+                            </TextBlock>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+                <settings:SettingsExpander Header="Avançado" IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Porta" Description="Firewall limitado ao perfil Privado e à sub-rede local. O token HTTP trafega sem criptografia." ContentAlignment="Right" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Text="{Binding LanServerPort, Mode=TwoWay}" InputScope="Number" MaxLength="5" Width="120" AutomationProperties.Name="Porta do servidor" />
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Text="Cliente LAN" Style="{StaticResource DeveloperSettingsSectionTitleStyle}" />
+            <Border Style="{StaticResource DeveloperSettingsGroupStyle}">
+              <StackPanel>
+                <settings:SettingsCard Header="Cliente LAN" Description="{Binding LanConnectionStatus}" Style="{StaticResource DeveloperSettingsCardStyle}" AutomationProperties.LiveSetting="Polite">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Conectar" Command="{Binding ConnectLanClientCommand}" Visibility="{Binding IsLanConnected, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="Conectar ao servidor LAN" />
+                    <Button Content="Colar código" Command="{Binding PasteLanConnectionCodeCommand}" Visibility="{Binding IsLanConnected, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Colar código de conexão" />
+                    <Button Content="Sincronizar novamente" Command="{Binding SyncLanFolderCommand}" Visibility="{Binding IsLanConnected, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Sincronizar novamente" />
+                  </StackPanel>
+                </settings:SettingsCard>
+                <settings:SettingsCard Header="Lembrar este servidor neste computador" Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <ToggleSwitch IsOn="{Binding RememberLanServer, Mode=TwoWay}" OnContent="Habilitado" OffContent="Desativado" AutomationProperties.Name="Lembrar este servidor neste computador" />
+                </settings:SettingsCard>
+                <settings:SettingsExpander Header="Avançado" IsExpanded="False" Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                  <settings:SettingsExpander.Items>
+                    <settings:SettingsCard Header="Endereço HTTP" Description="Endereço privado do servidor LAN." ContentAlignment="Right" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Text="{Binding LanClientAddress, Mode=TwoWay}" PlaceholderText="http://192.168.1.20:8080" Width="320" AutomationProperties.Name="Endereço HTTP do servidor" />
+                    </settings:SettingsCard>
+                    <settings:SettingsCard Header="Token" ContentAlignment="Right" Style="{StaticResource DeveloperSettingsCardStyle}">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PasswordBox x:Name="LanClientTokenPasswordBox" PasswordChanged="LanClientTokenPasswordBox_PasswordChanged" Visibility="{Binding IsLanClientTokenVisible, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" MinWidth="240" AutomationProperties.Name="Token do servidor, oculto" />
+                        <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Text="{Binding LanClientToken, Mode=TwoWay}" Visibility="{Binding IsLanClientTokenVisible, Converter={StaticResource BoolToVisibilityConverter}}" MinWidth="240" AutomationProperties.Name="Token do servidor" />
+                        <Button Content="{Binding LanClientTokenVisibilityLabel}" Command="{Binding ToggleLanClientTokenCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="{Binding LanClientTokenVisibilityLabel}" />
+                      </StackPanel>
+                    </settings:SettingsCard>
+                  </settings:SettingsExpander.Items>
+                </settings:SettingsExpander>
+                <settings:SettingsCard Header="Sincronização" Description="{Binding LanSyncFile}" Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <ProgressBar Width="220" Minimum="0" Maximum="100" Value="{Binding LanSyncProgress}" AutomationProperties.Name="Progresso da sincronização" />
+                </settings:SettingsCard>
+                <TextBlock Text="Nenhum instalador sincronizado ainda." Visibility="{Binding HasLanInstallers, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Style="{StaticResource DeveloperSettingsDescriptionStyle}" Margin="12,4" />
+                <Grid Margin="12,4,12,8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Button Content="{Binding InstallLanPackagesLabel}" Command="{Binding InstallLanPackagesCommand}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="{Binding InstallLanPackagesLabel}" />
+                  <Button Grid.Column="1" Content="Selecionar todos/nenhum" Command="{Binding ToggleAllLanInstallersCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Selecionar todos ou nenhum instalador" />
+                </Grid>
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                <settings:SettingsCard Header="Instalação" Description="{Binding LanInstallCurrentItem}" Style="{StaticResource DeveloperSettingsCardStyle}">
+                  <ProgressBar Width="220" Minimum="0" Maximum="100" Value="{Binding LanInstallProgress}" AutomationProperties.Name="Progresso da instalação" />
+                </settings:SettingsCard>
+                <Grid Margin="12,4,12,8" ColumnSpacing="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding LanClientStatus}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Style="{StaticResource DeveloperSettingsDescriptionStyle}" />
+                  <Button Grid.Column="1" Content="Abrir pasta de logs" Command="{Binding OpenLogsCommand}" Style="{StaticResource DeveloperSettingsActionButtonStyle}" AutomationProperties.Name="Abrir pasta de logs de diagnóstico" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding LanClientInstallers}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource LanInstallerRowBorderStyle}">
+                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="{Binding DisplayName}">
+                          <Expander.Header>
+                            <Grid ColumnSpacing="8" VerticalAlignment="Center">
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="{StaticResource LanInstallerVersionColumnWidth}" />
+                                <ColumnDefinition Width="{StaticResource LanInstallerTypeColumnWidth}" />
+                                <ColumnDefinition Width="{StaticResource LanInstallerHashColumnWidth}" />
+                                <ColumnDefinition Width="{StaticResource LanInstallerSignatureColumnWidth}" />
+                                <ColumnDefinition Width="{StaticResource LanInstallerStatusColumnWidth}" />
+                              </Grid.ColumnDefinitions>
+                              <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding CanInstall}" AutomationProperties.Name="{Binding DisplayName}" />
+                              <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding DisplayName}" />
+                              <TextBlock Grid.Column="2" Text="{Binding Version}" Visibility="{Binding IsVersionVisible, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource LanInstallerMetadataStyle}" TextAlignment="Center" />
+                              <Border Grid.Column="3" Padding="8,4" CornerRadius="8" Background="{ThemeResource SubtleFillColorTertiaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding TypeBadge}" FontSize="12" VerticalAlignment="Center" />
+                              </Border>
+                              <TextBlock Grid.Column="4" Text="Hash ✓" Visibility="{Binding HashVerified, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource LanInstallerMetadataStyle}" HorizontalAlignment="Center" />
+                              <TextBlock Grid.Column="4" Text="Hash —" Visibility="{Binding HashVerified, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" Style="{StaticResource LanInstallerMetadataStyle}" HorizontalAlignment="Center" />
+                              <TextBlock Grid.Column="5" Text="{Binding SignatureStatus}" Style="{StaticResource LanInstallerMetadataStyle}" ToolTipService.ToolTip="{Binding Signature}" />
+                              <TextBlock Grid.Column="6" Text="{Binding Status}" Style="{StaticResource LanInstallerMetadataStyle}" ToolTipService.ToolTip="{Binding Status}" />
+                            </Grid>
+                          </Expander.Header>
+                          <Border Padding="12" Margin="0,8,0,0" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8">
+                            <StackPanel Spacing="8">
+                              <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Style="{StaticResource DeveloperSettingsDescriptionStyle}" />
+                              <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" Style="{StaticResource DeveloperSettingsDescriptionStyle}" AutomationProperties.Name="Arquivo do instalador" />
+                              <TextBlock Text="{Binding Sha256}" TextWrapping="Wrap" FontFamily="Consolas" Style="{StaticResource LanInstallerMetadataStyle}" AutomationProperties.Name="Hash SHA-256 completo" />
+                              <TextBlock Text="{Binding Signature}" TextWrapping="Wrap" Style="{StaticResource DeveloperSettingsDescriptionStyle}" AutomationProperties.Name="Assinatura digital detalhada" />
+                              <TextBlock Text="{Binding SupportStatus}" TextWrapping="Wrap" Style="{StaticResource DeveloperSettingsDescriptionStyle}" />
+                              <TextBlock Text="Zone.Identifier detectado" Visibility="{Binding HasZoneIdentifier, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource DeveloperSettingsWarningStyle}" />
+                              <CheckBox Content="Remover Zone.Identifier deste instalador" IsChecked="{Binding RemoveZoneIdentifier, Mode=TwoWay}" Visibility="{Binding HasZoneIdentifier, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Remover Zone.Identifier deste instalador" />
+                              <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Header="Argumentos silenciosos" Text="{Binding SilentArguments, Mode=TwoWay}" IsEnabled="{Binding CanEditArguments}" TextWrapping="Wrap" AutomationProperties.Name="Argumentos silenciosos" />
+                              <TextBlock Text="{Binding ArgumentsOrigin}" Style="{StaticResource DeveloperSettingsDescriptionStyle}" />
+                              <NumberBox Header="Timeout (segundos)" Minimum="30" Maximum="21600" Value="{Binding TimeoutSeconds, Mode=TwoWay}" AutomationProperties.Name="Timeout por instalador em segundos" />
+                            </StackPanel>
+                          </Border>
+                        </Expander>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel x:Name="PanelMaintenance" Visibility="Collapsed">
+            <ItemsControl ItemsSource="{Binding ScheduledMaintenanceGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,0,0,12">
+                    <Grid ColumnSpacing="8" Margin="4,12,4,8">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <FontIcon Glyph="{Binding Icon}" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                    <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                      <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                          <FontIcon Glyph="{Binding PrimarySetting.Icon}" FontSize="20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+                          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding PrimarySetting.Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding PrimarySetting.Description}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding PrimarySetting.HasDescription, Converter={StaticResource BoolToVisibilityConverter}}" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding PrimarySetting.StateText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            <ToggleSwitch IsOn="{Binding PrimarySetting.ToggleValue, Mode=OneWay}" Tag="{Binding PrimarySetting}" IsEnabled="{Binding PrimarySetting.IsEnabled}" OnContent="" OffContent="" Toggled="MaintenanceSetting_Toggled" AutomationProperties.Name="{Binding PrimarySetting.Title}" />
+                          </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding PrimarySetting.DependencyMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding PrimarySetting.IsDimmed, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <settings:SettingsExpander Header="{Binding DetailsTitle}" Description="{Binding PrimarySetting.DependencyMessage}" IsExpanded="{Binding PrimarySetting.ToggleValue}" Margin="0,4,0,0">
+                          <settings:SettingsExpander.Items>
+                            <settings:SettingsCard ContentAlignment="Vertical">
+                              <ItemsControl ItemsSource="{Binding Settings}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <StackPanel Spacing="4">
+                                      <controls:SettingsNavigationCard Title="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                                       TargetPage="{Binding TargetPage}"
+                                                                       NavigationRequested="CatalogNavigationCard_NavigationRequested"
+                                                                       Visibility="{Binding IsNavigation, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                      <Border Padding="12,8" Margin="0,0,0,4" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" Opacity="{Binding CardOpacity}" Visibility="{Binding IsRendered, Converter={StaticResource BoolToVisibilityConverter}}">
+                                      <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="240" /></Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                                          <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                          <TextBlock Text="{Binding DisplayDescription}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"
+                                                     Visibility="{Binding HasDescription, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                          <TextBlock Text="{Binding DependencyMessage}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding IsDimmed, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </StackPanel>
+                                        <ComboBox Style="{StaticResource SettingsInlineComboBoxStyle}" Grid.Column="1" ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Value, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}" MinWidth="220" MaxWidth="240" HorizontalAlignment="Right" Visibility="{Binding IsCombo, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="{Binding Title}" />
+                                        <TextBox Style="{StaticResource SettingsInlineTextBoxStyle}" Grid.Column="1" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="{Binding Definition.MaxLength}" IsEnabled="{Binding IsEnabled}" MinWidth="220" MaxWidth="240" HorizontalAlignment="Right" Visibility="{Binding IsText, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="{Binding Title}" />
+                                        <Button Grid.Column="1" Content="{Binding ActionButtonText}" Command="{Binding ActionCommand}" IsEnabled="{Binding IsEnabled}" HorizontalAlignment="Right" Style="{StaticResource StoreActionButtonStyle}" Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="{Binding ActionButtonText}" />
+                                      </Grid>
+                                      </Border>
+                                    </StackPanel>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                            </settings:SettingsCard>
+                          </settings:SettingsExpander.Items>
+                        </settings:SettingsExpander>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <StackPanel x:Name="PanelNotifications" Visibility="Collapsed" Spacing="0">
+            <TextBlock x:Name="NotificationCategoriesCard" Text="Preferências de notificação" Margin="4,0,4,8" FontSize="14" FontWeight="SemiBold" />
+            <TextBlock Text="O nível filtra apenas pela gravidade. O Windows também respeita permissões e o modo Não incomodar." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="4,0,4,12" />
+            <settings:SettingsCard Header="Notificações" Description="Escolha quais gravidades aparecem no app." Margin="0">
+              <ComboBox Style="{StaticResource SettingsInlineComboBoxStyle}" AutomationProperties.Name="Nível de notificações" SelectedValuePath="Tag" SelectedValue="{Binding NotificationLevel, Mode=TwoWay}" MinWidth="180">
+                <ComboBoxItem Content="Todas" Tag="All" />
+                <ComboBoxItem Content="Importantes" Tag="Important" />
+                <ComboBoxItem Content="Somente erros" Tag="ErrorsOnly" />
+              </ComboBox>
+            </settings:SettingsCard>
+            <settings:SettingsCard Header="Notificações do Windows quando o app estiver em segundo plano" Margin="0">
+              <ToggleSwitch AutomationProperties.Name="Notificações do Windows em segundo plano" IsOn="{Binding BackgroundWindowsNotificationsEnabled, Mode=TwoWay}" OnContent="Ativadas" OffContent="Desativadas" />
+            </settings:SettingsCard>
+            <Border Padding="12" Margin="0,8,0,0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="8">
+                <Grid ColumnSpacing="12">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="Histórico de notificações" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Content="Limpar histórico" Command="{Binding ClearNotificationHistoryCommand}" Style="{StaticResource StoreActionButtonStyle}" />
+                </Grid>
+                <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                  <ItemsControl ItemsSource="{Binding NotificationHistory}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Padding="0,6">
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+            </Border>
+            <Border Padding="12,8" Margin="0,8,0,0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Salvar preferências" VerticalAlignment="Center" />
+                <Button x:Name="SaveNotificationCategoriesButton" Grid.Column="1" Content="Salvar" Command="{Binding SaveNotificationsCommand}" Style="{StaticResource AccentButtonStyle}" />
+              </Grid>
+            </Border>
+          </StackPanel>                  <StackPanel x:Name="PanelExecution" Visibility="Collapsed" Spacing="8">
+            <ItemsControl x:Name="OperationSettingsList" ItemsSource="{Binding OperationSettingsGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SettingsCatalogGroupOption">
+                  <Border Style="{StaticResource DeveloperSettingsGroupStyle}">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Title}" Style="{StaticResource DeveloperSettingsSectionTitleStyle}" Margin="4,4,4,8" />
+                      <TextBlock Text="{Binding HelpText}" Style="{StaticResource DeveloperSettingsDescriptionStyle}" Margin="4,0,4,8"
+                                 Visibility="{Binding HasHelpText, Converter={StaticResource BoolToVisibilityConverter}}" />
+                      <ItemsControl ItemsSource="{Binding Settings}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SettingsCatalogSettingOption">
+                            <StackPanel>
+                              <controls:SettingsNavigationCard Title="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                               TargetPage="{Binding TargetPage}"
+                                                               NavigationRequested="CatalogNavigationCard_NavigationRequested"
+                                                               Visibility="{Binding IsNavigation, Converter={StaticResource BoolToVisibilityConverter}}" />
+                              <settings:SettingsCard Header="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                     Style="{StaticResource DeveloperSettingsCardStyle}" ContentAlignment="Right"
+                                                     Visibility="{Binding IsRendered, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid ColumnSpacing="8" VerticalAlignment="Center">
+                                  <ComboBox Style="{StaticResource SettingsInlineComboBoxStyle}" Width="280" ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                            SelectedValue="{Binding Value, Mode=OneWay}" SelectionChanged="CatalogCombo_SelectionChanged"
+                                            Visibility="{Binding IsCombo, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                  <ToggleSwitch IsOn="{Binding ToggleValue, Mode=OneWay}" OnContent="{Binding StateText}" OffContent="{Binding StateText}"
+                                                Toggled="CatalogToggle_Toggled"
+                                                Visibility="{Binding IsToggle, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                  <StackPanel Orientation="Horizontal" Spacing="8"
+                                              Visibility="{Binding IsFolder, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Button Content="{Binding SelectFolderText}" Click="ChooseCatalogFolder_Click" Style="{StaticResource DeveloperSettingsActionButtonStyle}" />
+                                    <Button Content="{Binding ResetFolderText}" Click="ResetCatalogFolder_Click" Style="{StaticResource DeveloperSettingsActionButtonStyle}" />
+                                  </StackPanel>
+                                  <Button Content="{Binding ActionButtonText}" Command="{Binding ActionCommand}" Style="{StaticResource SettingsInlineButtonStyle}"
+                                          Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </Grid>
+                              </settings:SettingsCard>
+                              <StackPanel Visibility="{Binding HasRiskWarning, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <controls:NoticeBar DataContext="{Binding RiskNotice}" />
+                              </StackPanel>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <settings:SettingsExpander Header="{Binding DetailsTitle}" IsExpanded="False"
+                                                 Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                        <settings:SettingsExpander.Items>
+                          <settings:SettingsCard Description="{Binding DetailsText}" ContentAlignment="Vertical"
+                                                 Style="{StaticResource DeveloperSettingsCardStyle}" />
+                        </settings:SettingsExpander.Items>
+                      </settings:SettingsExpander>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        <StackPanel x:Name="PanelOperations" Visibility="Collapsed">
+            <Border x:Name="CatalogRefreshCard" Visibility="Collapsed" Padding="16" Margin="0,0,0,8" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="Atualizar catálogo" FontWeight="SemiBold" />
+                  <TextBlock Text="Busca os aplicativos e versões mais recentes sem limpar os instaladores e imagens em cache." FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
+                <Button x:Name="RefreshCatalogButton" Grid.Column="1" Content="Atualizar catálogo" AutomationProperties.AutomationId="RefreshCatalogButton"
+                        Style="{StaticResource StoreActionButtonStyle}" Command="{Binding RefreshCatalogCommand}" />
+              </Grid>
+            </Border>
+            <Border x:Name="OwnCatalogCacheCard" Visibility="Collapsed" Padding="16" Margin="0,0,0,8" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Catálogo e metadados" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CatalogCacheUsage}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="Remove índices, detalhes e métricas locais. A próxima consulta poderá precisar de internet. Para apenas buscar dados recentes, use Atualizar catálogo; imagens e instaladores não são apagados." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="ClearCatalogCacheButton" Content="Limpar catálogo e metadados" Command="{Binding ClearCatalogCacheCommand}" Style="{StaticResource StoreActionButtonStyle}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <ItemsControl ItemsSource="{Binding CacheSettingsGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SettingsCatalogGroupOption">
+                  <Border Style="{StaticResource DeveloperSettingsGroupStyle}">
+                    <StackPanel>
+                      <Grid ColumnSpacing="8" Margin="4,4,4,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <FontIcon Glyph="{Binding Icon}" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                  VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"
+                                  Visibility="{Binding HasIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource DeveloperSettingsSectionTitleStyle}" Margin="0" />
+                      </Grid>
+                      <ItemsControl ItemsSource="{Binding Settings}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SettingsCatalogSettingOption">
+                            <StackPanel>
+                              <settings:SettingsCard Header="{Binding Title}" Description="{Binding DisplayDescription}"
+                                                     Style="{StaticResource DeveloperSettingsCardStyle}" ContentAlignment="Vertical"
+                                                     IsEnabled="{Binding IsEnabled}" Opacity="{Binding CardOpacity}"
+                                                     Visibility="{Binding IsRendered, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel Spacing="8">
+                                  <Grid HorizontalAlignment="Stretch">
+                                    <ComboBox Style="{StaticResource SettingsInlineComboBoxStyle}" Width="280" MaxWidth="280" HorizontalAlignment="Right"
+                                              ItemsSource="{Binding Options}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Value, Mode=OneWay}" SelectionChanged="CatalogCombo_SelectionChanged"
+                                              IsEnabled="{Binding IsEnabled}" AutomationProperties.Name="{Binding Title}"
+                                              Visibility="{Binding IsCombo, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <Button Content="{Binding ActionButtonText}" Command="{Binding ActionCommand}"
+                                            IsEnabled="{Binding IsEnabled}" HorizontalAlignment="Right"
+                                            Style="{StaticResource DeveloperSettingsActionButtonStyle}"
+                                            AutomationProperties.Name="{Binding ActionButtonText}"
+                                            Visibility="{Binding IsAction, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                  </Grid>
+                                  <TextBlock Text="{Binding SecondaryDescription}" Style="{StaticResource DeveloperSettingsDescriptionStyle}"
+                                             Visibility="{Binding HasSecondaryDescription, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </StackPanel>
+                              </settings:SettingsCard>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <settings:SettingsExpander Header="{Binding DetailsTitle}" IsExpanded="False"
+                                                 Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 Style="{StaticResource DeveloperSettingsExpanderStyle}">
+                        <settings:SettingsExpander.Items>
+                          <settings:SettingsCard Description="{Binding DetailsText}" ContentAlignment="Vertical"
+                                                 Style="{StaticResource DeveloperSettingsCardStyle}" />
+                        </settings:SettingsExpander.Items>
+                      </settings:SettingsExpander>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding ImageCacheClearNotice}" Margin="4,0,4,8" FontSize="12"
+                       Foreground="{ThemeResource SystemFillColorCautionBrush}" TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite"
+                       Visibility="{Binding HasImageCacheClearNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
+          </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+    <Border Grid.Row="3" Margin="0,8,0,0" MinHeight="32">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="StatusText" Grid.Column="0" Text="{Binding StatusText}"
+                   VerticalAlignment="Center" TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock x:Name="VersionText" Text="{Binding VersionText}" Grid.Column="1" Margin="16,0,0,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+  </Grid>
+</Page>

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "id": "updates",
+  "title": "Atualizações",
+  "icon": "updates",
+  "subtitle": "{filtered} de {total} {packageLabel}",
+  "search": {
+    "enabled": true,
+    "placeholder": "search.placeholder",
+    "trigger": "live",
+    "debounceMs": 0,
+    "minLength": 0,
+    "keepQuery": true
+  },
+  "data": {
+    "provider": "updates"
+  },
+  "toolbar": {
+    "primary": {
+      "action": "update",
+      "menu": [
+        "updateInteractive",
+        "updateAdmin"
+      ]
+    },
+    "overflow": [
+      "details",
+      "manualUpdate",
+      "ignoreSelection",
+      "showIgnored",
+      "exportCsv",
+      "selectAll",
+      "clearSelection",
+      "updateOptions",
+      "cancel",
+      "updateAll"
+    ]
+  },
+  "sidebar": {
+    "sections": [
+      {
+        "id": "sources",
+        "title": "filters.sources",
+        "type": "sources",
+        "bulkActions": [
+          "select-all",
+          "clear"
+        ]
+      },
+      {
+        "id": "search",
+        "title": "search.options",
+        "type": "search-options",
+        "modes": [
+          "name",
+          "id",
+          "both",
+          "exact"
+        ],
+        "items": [
+          {
+            "id": "searchMode",
+            "title": "search.mode.title"
+          }
+        ]
+      },
+      {
+        "id": "filters",
+        "title": "filters.filters",
+        "type": "toggles",
+        "items": [
+          {
+            "id": "hideSameVersion",
+            "title": "Ocultar versões idênticas"
+          }
+        ]
+      }
+    ]
+  },
+  "views": {
+    "list": {
+      "columns": ["name", "id", "version", "newVersion", "source"]
+    },
+    "details": {
+      "columns": ["name", "id", "version", "newVersion", "source"],
+      "subtitle": "status"
+    },
+    "grid": {
+      "card": ["name", "id", "versionTransition"],
+      "badge": "source"
+    }
+  },
+  "row": {
+    "tap": "select",
+    "doubleTap": "details",
+    "contextActions": [
+      "update",
+      "updateAdmin",
+      "updateInteractive",
+      "updateIgnoreHash",
+      "details",
+      "ignoreSelection",
+      "ignore",
+      "copyId"
+    ]
+  },
+  "selection": "multiple",
+  "defaults": {
+    "view": "list",
+    "sort": {
+      "column": "name",
+      "direction": "ascending"
+    }
+  }
+}

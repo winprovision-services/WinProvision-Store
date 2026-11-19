@@ -1,0 +1,157 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <!-- These classes live in the App Installer COM server, not in the local WinRT factory. -->
+    <MicrosoftManagementDeployment-FactoryLinkage>none</MicrosoftManagementDeployment-FactoryLinkage>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">ARM64</PlatformTarget>
+    <PlatformTarget Condition="'$(PlatformTarget)' == ''">x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
+    <CsWinRTAotWarningLevel>2</CsWinRTAotWarningLevel>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>1.0.15</Version>
+    <AssemblyName>WinProvision.Store</AssemblyName>
+    <RootNamespace>WinProvision.Store</RootNamespace>
+    <Product>WinProvision Store</Product>
+    <Company>WinProvision Store</Company>
+    <Title>WinProvision Store</Title>
+    <AssemblyTitle>WinProvision Store</AssemblyTitle>
+  </PropertyGroup>
+  <PropertyGroup>
+    <EnableValidationHarness Condition="'$(EnableValidationHarness)' == ''">false</EnableValidationHarness>
+    <CopyOutputSymbolsToPublishDirectory Condition="'$(EnableValidationHarness)' != 'true'">false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnableValidationHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);VALIDATION_HARNESS</DefineConstants>
+    <OutputPath>$(MSBuildProjectDirectory)\..\..\artifacts\validation\bin\$(Platform)\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(EnableValidationHarness)' == 'true'">
+    <Compile Include="..\..\tests\WinProvision.Store.Smoke\**\*.cs" Link="Validation\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\tests\WinProvision.Core.Tests\Fixtures\operations-menu-golden.json" LogicalName="WinProvision.Store.Validation.operations-menu-golden.json" />
+    <EmbeddedResource Include="..\..\tests\WinProvision.Store.Smoke\Fixtures\app-preferences-pre-refactor.json" LogicalName="WinProvision.Store.Validation.app-preferences-pre-refactor.json" />
+    <Content Include="..\..\tests\WinProvision.Store.Smoke\Fixtures\operation-icon-alpha.png" Link="Assets\Icons\operation-icon-alpha.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\tests\WinProvision.Store.Smoke\validation-harness.flag" Link="validation-harness.flag" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\Tools\FluentUI\LICENSE.txt" Link="Tools\FluentUI\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\Tools\FluentUI\FluentSystemIcons-LICENSE.txt" Link="Tools\FluentUI\FluentSystemIcons-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="app.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Remove="Assets\Notifications\notification-policy.json" />
+    <EmbeddedResource Include="Assets\Notifications\notification-policy.json" LogicalName="WinProvision.Store.Assets.Notifications.notification-policy.json" />
+    <Content Remove="Assets\main-shell.json" />
+    <EmbeddedResource Include="Assets\main-shell.json" LogicalName="WinProvision.Store.Assets.main-shell.json" />
+    <Content Remove="Assets\about-content.json" />
+    <EmbeddedResource Include="Assets\about-content.json" LogicalName="WinProvision.Store.Assets.about-content.json" WithCulture="false" />
+    <Content Remove="Assets\Localization\about.pt-BR.json" />
+    <EmbeddedResource Include="Assets\Localization\about.pt-BR.json" LogicalName="WinProvision.Store.Assets.Localization.about.pt-BR.json" WithCulture="false" />
+    <Content Remove="Assets\window-backdrops.json" />
+    <EmbeddedResource Include="Assets\window-backdrops.json" LogicalName="WinProvision.Store.Assets.window-backdrops.json" />
+    <Content Remove="Assets\package-visual-preferences.json" />
+    <EmbeddedResource Include="Assets\package-visual-preferences.json" LogicalName="WinProvision.Store.Assets.package-visual-preferences.json" />
+    <Content Remove="Assets\operations-panel.json" />
+    <EmbeddedResource Include="Assets\operations-panel.json" LogicalName="WinProvision.Store.Assets.operations-panel.json" />
+    <Content Remove="Assets\Localization\operations.pt-BR.json" />
+    <EmbeddedResource Include="Assets\Localization\operations.pt-BR.json" LogicalName="WinProvision.Store.Assets.Localization.operations.pt-BR.json" WithCulture="false" />
+    <Content Remove="Assets\elevation-settings.json" />
+    <EmbeddedResource Include="Assets\elevation-settings.json" LogicalName="WinProvision.Store.Assets.elevation-settings.json" />
+    <Content Remove="Assets\office-page.json" />
+    <EmbeddedResource Include="Assets\office-page.json" LogicalName="WinProvision.Store.Assets.office-page.json" />
+    <Content Remove="Assets\notices.json" />
+    <EmbeddedResource Include="Assets\notices.json" LogicalName="WinProvision.Store.Assets.notices.json" WithCulture="false" />
+    <Content Remove="Assets\Localization\elevation-settings.pt-BR.json" />
+    <EmbeddedResource Include="Assets\Localization\elevation-settings.pt-BR.json" LogicalName="WinProvision.Store.Assets.Localization.elevation-settings.pt-BR.json" WithCulture="false" />
+    <Content Remove="Assets\Localization\notices.pt-BR.json" />
+    <EmbeddedResource Include="Assets\Localization\notices.pt-BR.json" LogicalName="WinProvision.Store.Assets.Localization.notices.pt-BR.json" WithCulture="false" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" Version="0.7.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="FluentIcons.WinUI" Version="2.2.344" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Behaviors" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="2.88.9" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
+    <ProjectReference Include="../WinProvision.Providers.WinGet.Com/WinProvision.Providers.WinGet.Com.csproj" />
+  </ItemGroup>
+  <Target Name="ExcludeUnavailableRuntimeInstrumentation"
+          BeforeTargets="_CopyOutOfDateSourceItemsToOutputDirectory">
+    <ItemGroup>
+      <_SourceItemsToCopyToOutputDirectory
+        Remove="@(_SourceItemsToCopyToOutputDirectory)"
+        Condition="'%(Filename)%(Extension)' == 'WindowsAppSdk.AppxDeploymentExtensions.Desktop-EventLog-Instrumentation.dll' and !Exists('%(FullPath)')" />
+    </ItemGroup>
+  </Target>
+  <Target Name="UnblockVerifiedElevatorInBuildOutput" AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and Exists('$(TargetDir)Tool/gsudo/WinProvision Elevator.exe')">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\unblock-verified-elevator.ps1&quot; -ExecutablePath &quot;$(TargetDir)Tool\gsudo\WinProvision Elevator.exe&quot;" />
+  </Target>
+  <Target Name="UnblockVerifiedElevatorInPublishOutput" AfterTargets="Publish"
+          Condition="'$(DesignTimeBuild)' != 'true' and Exists('$(PublishDir)Tool/gsudo/WinProvision Elevator.exe')">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\unblock-verified-elevator.ps1&quot; -ExecutablePath &quot;$(PublishDir)Tool\gsudo\WinProvision Elevator.exe&quot;" />
+  </Target>
+  <!-- A compilação local também precisa do host COM elevado; o script de build substitui
+       esta cópia de desenvolvimento pelo worker self-contained antes de validar a saída. -->
+  <Target Name="IncludeDevelopmentComWorker" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="..\WinProvision.Cli\WinProvision.Cli.csproj" Targets="Restore;Build" Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=$(RuntimeIdentifier)" />
+    <ItemGroup>
+      <_ComWorkerFile Include="..\WinProvision.Cli\bin\$(Configuration)\net10.0-windows10.0.26100.0\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ComWorkerFile)" DestinationFiles="@(_ComWorkerFile->'$(TargetDir)cli\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(TargetDir)cli\winprovision.exe')" Text="O host COM elevado não foi copiado para a saída da Store." />
+  </Target>
+  <!-- The unpackaged publish pipeline must carry the application's compiled XAML
+       and PRI alongside the native runtime. Build output already contains them. -->
+  <Target Name="IncludeWinUIResourcesInPublish" AfterTargets="ComputeFilesToPublish">
+    <Error Condition="!Exists('$(OutDir)$(AssemblyName).pri')" Text="The compiled WinUI resource index is missing from the build output." />
+    <ItemGroup>
+      <!-- The universal COM marshaler needs this metadata even when all managed code is AOT. -->
+      <ResolvedFileToPublish Include="$(MicrosoftManagementDeployment-WinMDPath)">
+        <RelativePath>Microsoft.Management.Deployment.winmd</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <_WinUICompiledResource Include="$(OutDir)**\*.xbf" />
+      <ResolvedFileToPublish Include="$(OutDir)$(AssemblyName).pri">
+        <RelativePath>$(AssemblyName).pri</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_WinUICompiledResource)">
+        <RelativePath>%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

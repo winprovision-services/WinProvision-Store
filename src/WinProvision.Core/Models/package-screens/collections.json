@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "id": "collections",
+  "title": "Coleção",
+  "icon": "collections",
+  "subtitle": "{total} {packageLabel} na coleção atual",
+  "search": {
+    "enabled": true,
+    "placeholder": "search.placeholder",
+    "trigger": "live",
+    "debounceMs": 0,
+    "minLength": 0,
+    "keepQuery": true
+  },
+  "data": {
+    "provider": "collections"
+  },
+  "toolbar": {
+    "primary": {
+      "action": "install",
+      "menu": [
+        "installSelected"
+      ]
+    },
+    "overflow": [
+      "newCollection",
+      "openCollection",
+      "saveCollection",
+      "importCloud",
+      "renameCollection",
+      "deleteCollection",
+      "clearCollection",
+      "removeFromCollection",
+      "details",
+      "download",
+      "exportScript",
+      "offlineExport",
+      "selectAll",
+      "clearSelection",
+      "cancel",
+      "offlineCancel",
+      "installAll"
+    ]
+  },
+  "sidebar": {
+    "sections": [
+      {
+        "id": "sources",
+        "title": "filters.sources",
+        "type": "sources",
+        "bulkActions": [
+          "select-all",
+          "clear"
+        ],
+        "items": [
+          {
+            "id": "office",
+            "title": "sources.office",
+            "icon": "office"
+          }
+        ]
+      },
+      {
+        "id": "profiles",
+        "title": "collection.profile",
+        "type": "choice",
+        "items": [
+          {
+            "id": "profile",
+            "title": "collection.profile"
+          }
+        ]
+      },
+      {
+        "id": "search",
+        "title": "search.options",
+        "type": "search-options",
+        "modes": [
+          "name",
+          "id",
+          "both",
+          "exact"
+        ],
+        "items": [
+          {
+            "id": "searchMode",
+            "title": "search.mode.title"
+          }
+        ]
+      },
+      {
+        "id": "filters",
+        "title": "filters.filters",
+        "type": "toggles",
+        "items": [
+          {
+            "id": "selected",
+            "title": "filters.onlySelected"
+          }
+        ]
+      }
+    ]
+  },
+  "views": {
+    "list": {
+      "columns": ["name", "id", "version", "source"]
+    },
+    "details": {
+      "columns": ["name", "id", "version", "source"],
+      "subtitle": "status"
+    },
+    "grid": {
+      "card": ["name", "id", "version"],
+      "badge": "source"
+    }
+  },
+  "row": {
+    "tap": "select",
+    "doubleTap": "details",
+    "contextActions": [
+      "details",
+      "install",
+      "installAdmin",
+      "installInteractive",
+      "download",
+      "removeFromCollection"
+    ]
+  },
+  "selection": "multiple",
+  "defaults": {
+    "view": "grid",
+    "sort": {
+      "column": "name",
+      "direction": "ascending"
+    }
+  }
+}

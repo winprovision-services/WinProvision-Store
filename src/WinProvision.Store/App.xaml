@@ -1,0 +1,12 @@
+<Application x:Class="WinProvision.Store.App"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:services="using:WinProvision.Store.Services">
+ <Application.Resources>
+  <ResourceDictionary>
+   <ResourceDictionary.MergedDictionaries><XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" /><ResourceDictionary Source="Styles/Shell.xaml"/><ResourceDictionary Source="Styles/Storefront.xaml"/><ResourceDictionary Source="Styles/OperationsQueue.xaml"/><ResourceDictionary Source="Styles/AppDetails.xaml"/><ResourceDictionary Source="Styles/Updates.xaml"/><ResourceDictionary Source="Styles/InstalledPackages.xaml"/><ResourceDictionary Source="Styles/Office.xaml"/><ResourceDictionary Source="Styles/Settings.xaml"/><ResourceDictionary Source="Styles/PackageManagers.xaml"/><ResourceDictionary Source="Styles/NavigationViewBackgrounds.xaml"/></ResourceDictionary.MergedDictionaries>
+   <services:BoolVisibilityConverter x:Key="BoolVisibility"/>
+   <FontFamily x:Key="SymbolThemeFontFamily">ms-appx:///FluentIcons.WinUI/Assets/SeagullFluentIcons.otf#Seagull Fluent Icons</FontFamily>
+   <Style TargetType="FontIcon"><Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}"/></Style>
+   <Style x:Key="Description" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+  </ResourceDictionary>
+ </Application.Resources>
+</Application>

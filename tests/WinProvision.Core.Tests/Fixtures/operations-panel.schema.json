@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winprovision.local/schemas/operations-panel.schema.json",
+  "title": "WinProvision operations panel configuration",
+  "type": "object",
+  "required": ["schemaVersion"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "panelMinHeight": { "type": "number", "minimum": 80, "maximum": 1000 },
+        "panelMaxHeight": { "type": "number", "minimum": 120, "maximum": 2000 },
+        "panelDefaultHeight": { "type": "number", "minimum": 80, "maximum": 2000 },
+        "rowHeight": { "type": "number", "minimum": 24, "maximum": 120 },
+        "rowSpacing": { "type": "number", "minimum": 0, "maximum": 32 },
+        "rowHorizontalPadding": { "type": "number", "minimum": 0, "maximum": 24 },
+        "rowVerticalPadding": { "type": "number", "minimum": 0, "maximum": 16 },
+        "iconColumnWidth": { "type": "number", "minimum": 24, "maximum": 80 },
+        "iconSize": { "type": "number", "minimum": 16, "maximum": 64 },
+        "rowIconHeight": { "type": "number", "minimum": 16, "maximum": 48 },
+        "flexibleColumnSpacing": { "type": "number", "minimum": 4, "maximum": 24 },
+        "titleMaxWidthFraction": { "type": "number", "minimum": 0.1, "maximum": 0.8 },
+        "titleMaxWidth": { "type": "number", "minimum": 160, "maximum": 800 },
+        "titleMinWidth": { "type": "number", "minimum": 48, "maximum": 240 },
+        "descriptionMinWidth": { "type": "number", "minimum": 100, "maximum": 400 },
+        "descriptionHeight": { "type": "number", "minimum": 24, "maximum": 64 },
+        "actionButtonWidth": { "type": "number", "minimum": 80, "maximum": 180 },
+        "moreButtonWidth": { "type": "number", "minimum": 28, "maximum": 56 },
+        "actionButtonHeight": { "type": "number", "minimum": 24, "maximum": 48 }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "rowCornerRadius": { "type": "number", "minimum": 0, "maximum": 16 },
+        "messageCornerRadius": { "type": "number", "minimum": 0, "maximum": 16 },
+        "progressCornerRadius": { "type": "number", "minimum": 0, "maximum": 16 },
+        "neutralBackgroundAlpha": { "$ref": "#/$defs/alpha" },
+        "attentionBackgroundAlpha": { "$ref": "#/$defs/alpha" },
+        "messageBackgroundAlpha": { "$ref": "#/$defs/alpha" }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "progressTrackHeight": { "type": "number", "minimum": 4, "maximum": 18 },
+        "progressHeight": { "type": "number", "minimum": 1, "maximum": 8 },
+        "messagePaddingHorizontal": { "type": "number", "minimum": 0, "maximum": 24 },
+        "messagePaddingTop": { "type": "number", "minimum": 0, "maximum": 16 },
+        "messagePaddingBottom": { "type": "number", "minimum": 0, "maximum": 16 },
+        "titleFontSize": { "type": "number", "minimum": 10, "maximum": 24 },
+        "messageFontSize": { "type": "number", "minimum": 10, "maximum": 20 },
+        "messageFontFamily": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "actionFontSize": { "type": "number", "minimum": 10, "maximum": 20 }
+      },
+      "additionalProperties": false
+    },
+    "behavior": {
+      "type": "object",
+      "properties": {
+        "autoClose": {
+          "type": "object",
+          "properties": {
+            "delaySeconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+            "pauseOnPointer": { "type": "boolean" },
+            "pauseOnFocus": { "type": "boolean" },
+            "pauseOnPopup": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "height": {
+          "type": "object",
+          "properties": {
+            "default": { "type": "number", "minimum": 80, "maximum": 2000 },
+            "min": { "type": "number", "minimum": 80, "maximum": 1000 },
+            "max": { "type": "number", "minimum": 120, "maximum": 2000 },
+            "maxFractionOfContent": { "type": "number", "minimum": 0.2, "maximum": 0.8 }
+          },
+          "additionalProperties": false
+        },
+        "defaultExpanded": { "type": "boolean" },
+        "ordering": { "type": "object", "properties": { "mode": { "enum": ["pendingFirst", "queueOrder"] } }, "additionalProperties": false }
+      },
+      "additionalProperties": false
+    },
+    "states": {
+      "type": "object",
+      "propertyNames": { "enum": ["queued", "running", "completed", "failed", "canceled", "unconfirmed"] },
+      "additionalProperties": { "$ref": "#/$defs/state" }
+    },
+    "managerIcons": {
+      "type": "object",
+      "additionalProperties": { "enum": ["apps", "managerWinget", "managerChocolatey", "managerOffice"] }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "scope", "commandId", "textKey", "iconId", "placement", "group", "order", "states", "visibleWhen", "enabledWhen", "whenUnavailable", "locked"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "scope": { "enum": ["item", "header"] },
+          "commandId": { "type": "string", "minLength": 1 },
+          "textKey": { "type": "string" },
+          "iconId": { "enum": ["apps", "document", "info", "settings", "folderOpen", "arrowClockwise", "shield", "desktop", "dismiss", "delete", "checkmark", "none"] },
+          "placement": { "enum": ["primary", "menu"] },
+          "group": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer" },
+          "states": { "type": "array", "items": { "enum": ["Queued", "Running", "Completed", "Failed", "Canceled", "Unconfirmed"] } },
+          "visibleWhen": { "$ref": "#/$defs/conditions" },
+          "enabledWhen": { "$ref": "#/$defs/conditions" },
+          "whenUnavailable": { "enum": ["hide", "disable"] },
+          "parentId": { "type": "string" },
+          "locked": { "type": "boolean" },
+          "visible": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+    "conditions": {
+      "type": "array",
+      "items": { "enum": ["isQueued", "isRunning", "isFinished", "isSucceeded", "isFailed", "isCanceled", "isUnconfirmed", "canCancel", "canReplay", "hasPackage", "hasInstallLocation", "isWinget", "isChocolatey", "canReplayElevated", "canReplayInteractive", "hasFailed", "hasSucceeded", "hasFinished", "hasCancelable"] }
+    },
+    "state": {
+      "type": "object",
+      "properties": {
+        "iconId": { "enum": ["apps", "document", "info", "settings", "folderOpen", "arrowClockwise", "shield", "desktop", "dismiss", "delete", "checkmark"] },
+        "colorToken": { "enum": ["OperationNeutralBackgroundBrush", "OperationAttentionBackgroundBrush", "OperationDescriptionBackgroundBrush", "OperationProgressTrackTransparentBrush", "AppOperationDefaultBrush", "AppOperationSuccessBrush", "AppOperationWingetBrush", "AppOperationSuccessSurfaceBrush", "AppOperationFailureBrush", "AppOperationFailureSurfaceBrush", "AppOperationCanceledBrush", "AppOperationCanceledSurfaceBrush", "AppOperationUnconfirmedBrush", "AppOperationUnconfirmedSurfaceBrush"] },
+        "messageColorToken": { "enum": ["OperationNeutralBackgroundBrush", "OperationAttentionBackgroundBrush", "OperationDescriptionBackgroundBrush", "OperationProgressTrackTransparentBrush", "AppOperationDefaultBrush", "AppOperationSuccessBrush", "AppOperationWingetBrush", "AppOperationSuccessSurfaceBrush", "AppOperationFailureBrush", "AppOperationFailureSurfaceBrush", "AppOperationCanceledBrush", "AppOperationCanceledSurfaceBrush", "AppOperationUnconfirmedBrush", "AppOperationUnconfirmedSurfaceBrush"] },
+        "trackColorToken": { "enum": ["OperationNeutralBackgroundBrush", "OperationAttentionBackgroundBrush", "OperationDescriptionBackgroundBrush", "OperationProgressTrackTransparentBrush", "AppOperationDefaultBrush", "AppOperationSuccessBrush", "AppOperationWingetBrush", "AppOperationSuccessSurfaceBrush", "AppOperationFailureBrush", "AppOperationFailureSurfaceBrush", "AppOperationCanceledBrush", "AppOperationCanceledSurfaceBrush", "AppOperationUnconfirmedBrush", "AppOperationUnconfirmedSurfaceBrush"] },
+        "fillColorToken": { "enum": ["OperationNeutralBackgroundBrush", "OperationAttentionBackgroundBrush", "OperationDescriptionBackgroundBrush", "OperationProgressTrackTransparentBrush", "AppOperationDefaultBrush", "AppOperationSuccessBrush", "AppOperationWingetBrush", "AppOperationSuccessSurfaceBrush", "AppOperationFailureBrush", "AppOperationFailureSurfaceBrush", "AppOperationCanceledBrush", "AppOperationCanceledSurfaceBrush", "AppOperationUnconfirmedBrush", "AppOperationUnconfirmedSurfaceBrush"] },
+        "backgroundAlpha": { "$ref": "#/$defs/alpha" },
+        "messageAlpha": { "$ref": "#/$defs/alpha" },
+        "messageFont": { "enum": ["messageDefault", "messageMonospace"] },
+        "messageFontWeight": { "enum": ["normal", "semibold", "bold"] },
+        "progress": { "type": "object", "required": ["mode", "visible"], "properties": { "mode": { "enum": ["none", "indeterminate", "value", "complete"] }, "visible": { "type": "boolean" } }, "additionalProperties": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

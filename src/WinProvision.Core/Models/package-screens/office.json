@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "office",
+  "title": "Office",
+  "icon": "office",
+  "iconUriLight": "ms-appx:///Assets/Icons/microsoft-office.svg",
+  "iconUriDark": "ms-appx:///Assets/Icons/microsoft-office.svg",
+  "subtitle": "{selected} de {total} aplicativos · {status}",
+  "search": { "enabled": true, "placeholder": "Pesquisar nome ou identificador", "trigger": "live", "debounceMs": 120, "minLength": 0, "keepQuery": true },
+  "data": { "provider": "office" },
+  "toolbar": { "primary": { "action": "officeApply", "menu": ["officeAddCollection"] }, "overflow": ["officeRefresh", "officeOpenFolder", "officeUninstall"] },
+  "sidebar": { "width": 220, "sections": [
+    { "id": "selection", "title": "Aplicativos", "type": "toggles", "items": [{"id":"selected","title":"Somente selecionados","kind":"selectedOnly"}] }
+  ] },
+  "views": { "list": { "columns": ["name", "id", "state", "source"] }, "details": { "columns": ["name", "id", "state", "source"], "subtitle": "id" }, "grid": { "card": ["name", "id", "state"], "badge": "source" } },
+  "row": { "tap": "select", "doubleTap": null, "contextActions": [] },
+  "selection": "multiple",
+  "sortColumns": ["name", "id", "state"],
+  "defaults": { "view": "list", "sort": { "column": "name", "direction": "ascending" } }
+}

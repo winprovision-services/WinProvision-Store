@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "name": {
+    "display": "package.name, falling back to package id; preserve original casing and characters",
+    "search": "casefold each non-empty term and join with LF; wrap the joined terms with LF for D1 token boundaries"
+  },
+  "architecture": {
+    "x86": 1,
+    "x64": 2,
+    "arm": 4,
+    "arm64": 8,
+    "neutral": 16
+  },
+  "installerType": {
+    "exe": 1,
+    "msi": 2,
+    "msix": 4,
+    "appx": 8,
+    "inno": 16,
+    "nullsoft": 32,
+    "wix": 64,
+    "burn": 128,
+    "portable": 256,
+    "zip": 512
+  },
+  "scope": {
+    "user": 1,
+    "machine": 2
+  },
+  "elevation": {
+    "elevationrequired": 1,
+    "elevationprohibited": 2,
+    "elevatesself": 3
+  }
+}

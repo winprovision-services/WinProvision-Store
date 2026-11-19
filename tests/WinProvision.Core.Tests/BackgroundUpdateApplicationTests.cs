@@ -1,0 +1,286 @@
+using WinProvision.Cli;
+using WinProvision.Core.Models;
+using WinProvision.Core.Services;
+using WinProvision.Store.Services;
+using Xunit;
+
+namespace WinProvision.Core.Tests;
+
+[CollectionDefinition("BackgroundUpdates", DisableParallelization = true)]
+public class BackgroundUpdatesCollection;
+
+[Collection("BackgroundUpdates")]
+public sealed class BackgroundUpdateApplicationTests : IDisposable
+{
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    private readonly ApplicationPreferencesService _preferences;
+    private readonly IgnoredUpdatesService _ignored;
+    private readonly Backend _backend = new();
+
+    public BackgroundUpdateApplicationTests()
+    {
+        Directory.CreateDirectory(_folder);
+        AotJson.Register(BackgroundJsonContext.Default);
+        _preferences = new(Path.Combine(_folder, "preferences.json"), persistStartup: false);
+        _ignored = new(Path.Combine(_folder, "ignored.json"));
+        WinProvisionElevationState.ResetForTests();
+    }
+
+    [Fact]
+    public void OfficeDownloaderPreferencePersistsAndPortableImportKeepsLegacyDefault()
+    {
+        Assert.False(_preferences.UseViperOfficeDownload);
+        _preferences.SetUseViperOfficeDownload(true);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.True(reloaded.UseViperOfficeDownload);
+        Assert.True(reloaded.ExportPortablePreferences().UseViperOfficeDownload);
+        reloaded.ImportPortablePreferences(reloaded.ExportPortablePreferences() with { UseViperOfficeDownload = false });
+        Assert.False(new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false).UseViperOfficeDownload);
+        File.WriteAllText(Path.Combine(_folder, "legacy-office.json"), "{\"Theme\":0}");
+        Assert.False(new ApplicationPreferencesService(Path.Combine(_folder, "legacy-office.json"), false).UseViperOfficeDownload);
+    }
+
+    [Fact]
+    public void AutomaticAppUpdateCheckPreferencePersistsBothStatesAndNotifiesChanges()
+    {
+        bool? notified = null;
+        _preferences.AppUpdateCheckPreferencesChanged += (_, _) =>
+            notified = _preferences.AutomaticAppUpdateChecksEnabled;
+
+        _preferences.SetAutomaticAppUpdateChecksEnabled(false);
+
+        Assert.False(notified);
+        Assert.False(new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false)
+            .AutomaticAppUpdateChecksEnabled);
+
+        _preferences.SetAutomaticAppUpdateChecksEnabled(true);
+
+        Assert.True(notified);
+        Assert.True(new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false)
+            .AutomaticAppUpdateChecksEnabled);
+    }
+
+    [Fact]
+    public void StartupPagePersistsAndLegacyPortableSettingsDefaultToDiscover()
+    {
+        Assert.Equal(ApplicationStartupPage.Discover, _preferences.StartupPage);
+        _preferences.SetStartupPage(ApplicationStartupPage.Installed);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.Equal(ApplicationStartupPage.Installed, reloaded.StartupPage);
+
+        var portable = reloaded.ExportPortablePreferences();
+        Assert.Equal(ApplicationStartupPage.Installed, portable.StartupPage);
+        reloaded.ImportPortablePreferences(portable with { StartupPage = ApplicationStartupPage.Updates });
+        Assert.Equal(ApplicationStartupPage.Updates, new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false).StartupPage);
+
+        File.WriteAllText(Path.Combine(_folder, "legacy-startup-page.json"), "{\"Theme\":0}");
+        Assert.Equal(ApplicationStartupPage.Discover, new ApplicationPreferencesService(Path.Combine(_folder, "legacy-startup-page.json"), false).StartupPage);
+    }
+
+    [Fact]
+    public void LegacyMicrosoftStorePreferenceIsIgnoredAndWinGetOwnsItsSource()
+    {
+        string defaultPath = Path.Combine(_folder, "first-run.json");
+        var firstRun = new ApplicationPreferencesService(defaultPath, false);
+        Assert.True(firstRun.WingetEnabled);
+        Assert.False(firstRun.ChocolateyEnabled);
+
+        string legacyPath = Path.Combine(_folder, "legacy-store.json");
+        File.WriteAllText(legacyPath,
+            "{\"Theme\":0,\"MicrosoftStoreEnabled\":false,\"WingetEnabled\":true,\"ChocolateyEnabled\":false,\"PackageManagerEnabledStates\":{\"msstore\":false}}");
+        var legacy = new ApplicationPreferencesService(legacyPath, false);
+        Assert.True(legacy.GetPackageManagerEnabled("msstore"));
+        legacy.SetChocolateyEnabled(true);
+        string saved = File.ReadAllText(legacyPath);
+        Assert.DoesNotContain("MicrosoftStoreEnabled", saved, StringComparison.Ordinal);
+        Assert.DoesNotContain("msstore", saved, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ChocolateyPreferenceDefaultsDisabledForLegacyFilesAndPersistsOptIn()
+    {
+        string legacyPath = Path.Combine(_folder, "legacy-chocolatey.json");
+        File.WriteAllText(legacyPath, "{\"Theme\":0}");
+        Assert.False(new ApplicationPreferencesService(legacyPath, false).ChocolateyEnabled);
+
+        _preferences.SetChocolateyEnabled(true);
+        Assert.True(new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false).ChocolateyEnabled);
+
+        string explicitDisabledPath = Path.Combine(_folder, "explicit-chocolatey-disabled.json");
+        File.WriteAllText(explicitDisabledPath, "{\"Theme\":0,\"ChocolateyEnabled\":false}");
+        Assert.False(new ApplicationPreferencesService(explicitDisabledPath, false).ChocolateyEnabled);
+    }
+
+    [Fact]
+    public void IntervalPreferencesRoundTripAndOldFilesKeepDefaults()
+    {
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.SelectedPackagesOnly,
+            BackgroundUpdateSchedule.Interval, "10:30", DayOfWeek.Friday, 120, false);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.Equal(BackgroundUpdateSchedule.Interval, reloaded.UpdateSchedule);
+        Assert.Equal(120, reloaded.UpdateIntervalMinutes);
+        Assert.False(reloaded.UpdateNotificationsEnabled);
+        Assert.NotNull(reloaded.UpdateScheduleAnchorUtc);
+        Assert.Throws<ArgumentOutOfRangeException>(() => _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly,
+            BackgroundUpdateScope.AllSupportedPackages, BackgroundUpdateSchedule.Interval, "09:00", DayOfWeek.Monday, 0));
+        Assert.Equal(120, _preferences.UpdateIntervalMinutes);
+        File.WriteAllText(Path.Combine(_folder, "legacy.json"), "{\"Theme\":0,\"UpdateSchedule\":2}");
+        var legacy = new ApplicationPreferencesService(Path.Combine(_folder, "legacy.json"), false);
+        Assert.Equal(BackgroundUpdateSchedule.Weekly, legacy.UpdateSchedule);
+        Assert.Equal(60, legacy.UpdateIntervalMinutes);
+        Assert.True(legacy.UpdateNotificationsEnabled);
+    }
+
+    [Fact]
+    public async Task ExplicitRunWorksWhenScheduleIsDisabledAndFingerprintTracksVersions()
+    {
+        string? first = null, second = null;
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly, BackgroundUpdateScope.AllSupportedPackages,
+            BackgroundUpdateSchedule.Interval, "09:00", DayOfWeek.Monday);
+        await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, force: true,
+            discovered: (_, fingerprint) => first = fingerprint);
+        Assert.NotNull(first);
+        Assert.Empty(_backend.Executed);
+        _backend.Packages[0] = new() { Id = "One", Name = "One", Source = "winget", AvailableVersion = "3" };
+        await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, force: true,
+            discovered: (_, fingerprint) => second = fingerprint);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void RunStateRoundTripsAndCorruptStateDoesNotBreakTheApp()
+    {
+        string path = Path.Combine(_folder, "state.json");
+        var state = new BackgroundUpdateRunState(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 1, 2, "abc");
+        BackgroundUpdateRunStore.Write(state, path);
+        Assert.Equal(state, BackgroundUpdateRunStore.Read(path));
+        File.WriteAllText(path, "incompleto");
+        Assert.Null(BackgroundUpdateRunStore.Read(path));
+    }
+
+    [Fact]
+    public async Task StartupEnablesUpdatesWithoutOpeningUiAndSurvivesReload()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        var reloaded = new ApplicationPreferencesService(Path.Combine(_folder, "preferences.json"), false);
+        Assert.True(reloaded.AutoUpdateAtStartup);
+        Assert.Equal(0, await BackgroundUpdateApplication.RunAsync(_backend, reloaded, _ignored, _ => { }));
+        Assert.Equal(new[] { "One", "Two" }, _backend.Executed);
+        Assert.Equal("\"C:\\Program Files\\WinProvision\\cli\\winprovision.exe\" --background-update",
+            BackgroundUpdateCommand.ForDirectory(@"C:\Program Files\WinProvision"));
+        _preferences.SetLaunchAtStartup(false);
+        Assert.False(_preferences.AutoUpdateAtStartup);
+    }
+
+    [Fact]
+    public async Task SelectedPackagesIgnoredVersionsAndDuplicatesAreRespected()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.InstallAutomatically,
+            BackgroundUpdateScope.SelectedPackagesOnly, BackgroundUpdateSchedule.AtLogon, "09:00", DayOfWeek.Monday);
+        _preferences.ToggleAutoUpdatePackage("Two", "winget");
+        _ignored.Ignore("One", "2");
+        _backend.Packages.Add(_backend.Packages[1]);
+        Assert.Equal(0, await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }));
+        Assert.Equal(new[] { "Two" }, _backend.Executed);
+    }
+
+    [Fact]
+    public async Task NotifyOnlyNeverInstallsAndReportsAvailableCount()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        _preferences.SetUpdateAutomationOptions(BackgroundUpdateMode.NotifyOnly,
+            BackgroundUpdateScope.AllSupportedPackages, BackgroundUpdateSchedule.AtLogon, "09:00", DayOfWeek.Monday);
+        int count = -1;
+        Assert.Equal(0, await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, n => count = n));
+        Assert.Equal(2, count);
+        Assert.Empty(_backend.Executed);
+    }
+
+    [Fact]
+    public async Task RefusedElevationStopsTheBatchWithoutAnotherAttempt()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        _backend.RefuseElevation = true;
+        Assert.Equal(1, await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }));
+        Assert.Equal(new[] { "One" }, _backend.Executed);
+    }
+
+    [Fact]
+    public async Task AutoUpdateRetriesOnceOnlyWhenFailureHappenedBeforeInstallerStart()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        _backend.FailBeforeStartCount = 1;
+
+        Assert.Equal(0, await BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }));
+
+        Assert.Equal(new[] { "One", "One", "Two" }, _backend.Executed);
+    }
+
+    [Theory]
+    [InlineData(WingetFailureReason.DownloadError, false, false, true)]
+    [InlineData(WingetFailureReason.CatalogError, false, false, true)]
+    [InlineData(WingetFailureReason.Unknown, false, false, false)]
+    [InlineData(WingetFailureReason.InternalError, false, false, false)]
+    [InlineData(WingetFailureReason.DownloadError, true, false, false)]
+    [InlineData(WingetFailureReason.DownloadError, false, true, false)]
+    public void AutoUpdateRetryPolicyOnlyAllowsSafeTransientFailures(
+        WingetFailureReason reason, bool wasElevated, bool installerStarted, bool expected)
+    {
+        var result = new WingetExecutionResult
+        {
+            Success = false,
+            FailureReason = reason,
+            WasElevated = wasElevated,
+            InstallerStarted = installerStarted
+        };
+
+        Assert.Equal(expected, BackgroundUpdateApplication.ShouldRetryUpdate(result, 1, default));
+    }
+
+    [Fact]
+    public async Task CanceledBatchDoesNotStartAnotherPackage()
+    {
+        _preferences.SetLaunchAtStartup(true);
+        using var cancellation = new CancellationTokenSource();
+        _backend.AfterExecution = cancellation.Cancel;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            BackgroundUpdateApplication.RunAsync(_backend, _preferences, _ignored, _ => { }, token: cancellation.Token));
+        Assert.Single(_backend.Executed);
+    }
+
+    public void Dispose()
+    {
+        WinProvisionElevationState.ResetForTests();
+        Directory.Delete(_folder, recursive: true);
+    }
+
+    private sealed class Backend : ICliPackageBackend
+    {
+        public List<UpgradablePackage> Packages { get; } =
+            [new() { Id = "One", Name = "One", Source = "winget", AvailableVersion = "2" },
+             new() { Id = "Two", Name = "Two", Source = "winget", AvailableVersion = "2" }];
+        public List<string> Executed { get; } = [];
+        public bool RefuseElevation { get; set; }
+        public int FailBeforeStartCount { get; set; }
+        public Action? AfterExecution { get; set; }
+        public Task<List<UpgradablePackage>> UpdatesAsync(Action<string> log, CancellationToken token) => Task.FromResult(Packages);
+        public Task<WingetExecutionResult> ExecuteAsync(bool install, UpgradablePackage package, Action<string> log, CancellationToken token)
+        {
+            Assert.False(install);
+            Executed.Add(package.Id);
+            if (RefuseElevation) WinProvisionElevationState.MarkFailed();
+            AfterExecution?.Invoke();
+            if (FailBeforeStartCount > 0)
+            {
+                FailBeforeStartCount--;
+                return Task.FromResult(new WingetExecutionResult
+                    { Success = false, FailureReason = WingetFailureReason.DownloadError });
+            }
+            return Task.FromResult(new WingetExecutionResult { Success = !RefuseElevation });
+        }
+        public Task<List<UpgradablePackage>> SearchAsync(InteractiveCliRequest request, CancellationToken token) => throw new NotSupportedException();
+        public Task<List<UpgradablePackage>> ListAsync(string? source, CancellationToken token) => throw new NotSupportedException();
+        public Task<string> DetailsAsync(string id, string source, CancellationToken token) => throw new NotSupportedException();
+    }
+}

@@ -1,0 +1,4 @@
+
+# Preserve the upstream source patch byte-for-byte, including patch context whitespace.
+Tool/gsudo/winprovision.patch -text -whitespace
+src/WinProvision.Store/Assets/catalog-bits.json -text

@@ -1,0 +1,141 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using WinProvision.Core.Models;
+using WinProvision.Core.Services;
+using WinProvision.Store.Services;
+namespace WinProvision.Store.ViewModels;
+[WinRT.GeneratedBindableCustomProperty]
+public sealed partial class HomeViewModel : PageViewModel, IDisposable
+{
+    private readonly IStoreCatalog _store;
+    private readonly InstalledAppsService _installed;
+    private readonly IPackageBackend _backend;
+    private readonly IPresentationService _presentation;
+    private readonly CollectionsViewModel _collections;
+    private readonly IUiDispatcher _dispatcher;
+    private readonly ApplicationPreferencesService _preferences;
+    private IReadOnlyList<AppEntry> _catalog = [];
+    private int _limit = 80;
+    private bool _loaded;
+    public StorefrontViewModel Storefront { get; }
+    public ObservableCollection<PackageItemViewModel> Apps { get; } = new();
+    public IReadOnlyList<string> Sources { get; } = (string[])["Todas as origens", "WinGet", "Microsoft Store", "Catálogo WinProvision"];
+    [ObservableProperty] public partial string SearchText { get; set; } = "";
+    [ObservableProperty] public partial string SelectedSource { get; set; } = "Todas as origens";
+    [ObservableProperty] public partial bool HasMore { get; set; }
+    public IAsyncRelayCommand RefreshCommand { get; }
+    public IRelayCommand LoadMoreCommand { get; }
+    public IRelayCommand CancelCommand { get; }
+    public HomeViewModel(IStoreCatalog store, InstalledAppsService installed, IPackageBackend backend, IPresentationService presentation, CollectionsViewModel collections, IUiDispatcher dispatcher, StorefrontViewModel storefront, ApplicationPreferencesService preferences)
+    {
+        _store = store; _installed = installed; _backend = backend; _presentation = presentation; _collections = collections; _dispatcher = dispatcher;
+        Storefront = storefront;
+        _preferences = preferences;
+        _preferences.SearchOnDemandChanged += SearchOnDemandChanged;
+        RefreshCommand = new AsyncRelayCommand(token => LoadAsync(true, token));
+        CancelCommand = new RelayCommand(() => RefreshCommand.Cancel());
+        LoadMoreCommand = new RelayCommand(() => { _limit += 80; ApplyFilter(); }, () => HasMore);
+        installed.Changed += InstalledChanged;
+    }
+    private void SearchOnDemandChanged(bool enabled)
+    {
+        if (!enabled) return;
+        _dispatcher.Post(() =>
+        {
+            _catalog = [];
+            _loaded = false;
+            Apps.Clear();
+            HasMore = false;
+        });
+    }
+    internal void LoadPreview(IReadOnlyList<AppEntry> apps) { _catalog = apps; _loaded = true; ApplyFilter(); Storefront.LoadPreview(apps); }
+    public void AddApp(AppEntry app) => _collections.Add(app);
+    public async Task ShowDetailsAsync(AppEntry app)
+    {
+        try { await _presentation.ShowDetailsAsync(app); }
+        catch (Exception exception) { ReportError(exception); }
+    }
+    public Task EnsureLoadedAsync() => _loaded ? Task.CompletedTask : RefreshCommand.ExecutionTask is { IsCompleted: false } task ? task : RefreshCommand.ExecuteAsync(null);
+    private async Task LoadAsync(bool force, CancellationToken token)
+    {
+        IsBusy = true; HasError = false;
+        try
+        {
+#if DEBUG
+            long catalogLoadStartedAt = DebugPerformanceTelemetry.Start();
+#endif
+            _catalog = await _store.LoadCatalogAsync(forceRefresh: _loaded && force, cancellationToken: token);
+#if DEBUG
+            DebugPerformanceTelemetry.Duration("catalog-load", catalogLoadStartedAt, $"items={_catalog.Count}");
+#endif
+            _loaded = true; ApplyFilter();
+            await _installed.EnsureLoadedAsync(token);
+            RefreshInstalled();
+        }
+        catch (OperationCanceledException) { StatusText = "Carregamento cancelado."; }
+        catch (Exception exception) { ReportError(exception); }
+        finally { IsBusy = false; }
+    }
+    private void InstalledChanged() => _dispatcher.Post(RefreshInstalled);
+    private void RefreshInstalled()
+    {
+        foreach (var item in Apps)
+        {
+            _installed.ApplyInstallationStatus(item.App);
+            item.IsInstalled = item.App.IsInstalled;
+            item.IsInstalledUnconfirmed = item.App.IsInstalledUnconfirmed;
+        }
+    }
+    partial void OnSearchTextChanged(string value) { _limit = 80; ApplyFilter(); }
+    partial void OnSelectedSourceChanged(string value) { _limit = 80; ApplyFilter(); }
+    partial void OnHasMoreChanged(bool value) => LoadMoreCommand.NotifyCanExecuteChanged();
+    private void ApplyFilter()
+    {
+        IEnumerable<AppEntry> query = string.IsNullOrWhiteSpace(SearchText) ? _catalog.OrderByDescending(app => app.Score).ThenBy(app => app.Name) : _store.GetAll().Count > 0 ? _store.Search(SearchText) : _catalog.Where(app => app.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) || app.Id.Contains(SearchText, StringComparison.OrdinalIgnoreCase) || app.Publisher.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+        query = query.Where(app => SelectedSource == "Todas as origens" || app.CatalogSourceLabel == SelectedSource);
+        var matches = query.Take(_limit + 1).ToArray();
+        HasMore = matches.Length > _limit;
+        // Keep command state when a catalog refresh arrives during an installation.
+        var previous = Apps.ToDictionary(item => $"{item.App.Source}:{item.Id}", StringComparer.OrdinalIgnoreCase);
+        Apps.Clear();
+        foreach (var app in matches.Take(_limit))
+        {
+            if (!previous.TryGetValue($"{app.Source}:{app.Id}", out var item))
+                item = new PackageItemViewModel(app, InstallAsync, DetailsAsync, AddToCollection);
+            Apps.Add(item);
+        }
+        RefreshInstalled();
+        StatusText = $"{Apps.Count} aplicativos exibidos • {_catalog.Count:N0} no catálogo";
+    }
+    private void AddToCollection(PackageItemViewModel item)
+    {
+        _collections.Add(item.App);
+        StatusText = $"{item.Name} adicionado à coleção {_collections.SelectedProfile?.Title}.";
+    }
+    private async Task InstallAsync(PackageItemViewModel item)
+    {
+        item.IsWorking = true; HasError = false;
+        try
+        {
+            var result = await _backend.InstallAsync(item.App);
+            item.IsInstalled = result.Success;
+            item.App.IsInstalled = result.Success;
+            item.App.IsInstalledUnconfirmed = result.IsUnconfirmed;
+            item.IsInstalledUnconfirmed = result.IsUnconfirmed;
+            StatusText = result.Success
+                ? $"{item.Name} instalado."
+                : result.IsUnconfirmed
+                    ? $"{item.Name}: {result.Output}"
+                    : WingetErrorTranslator.ToMessage(result.FailureReason, "instalar", item.Name);
+        }
+        catch (Exception exception) { ReportError(exception); }
+        finally { item.IsWorking = false; }
+    }
+    private async Task DetailsAsync(PackageItemViewModel item)
+    {
+        try { await _presentation.ShowDetailsAsync(item.App); }
+        catch (Exception exception) { ReportError(exception); }
+    }
+    public void Dispose() { _installed.Changed -= InstalledChanged; _preferences.SearchOnDemandChanged -= SearchOnDemandChanged; }
+}

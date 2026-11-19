@@ -1,0 +1,10 @@
+<Page x:Class="WinProvision.Store.Views.UpdatesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:controls="using:WinProvision.Store.Controls"
+      Loaded="Page_Loaded" Unloaded="Page_Unloaded" Background="Transparent">
+    <Grid>
+        <controls:PackageScreen x:Name="PackageScreenControl" />
+        <ContentControl x:Name="DialogHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+    </Grid>
+</Page>

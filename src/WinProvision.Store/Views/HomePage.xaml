@@ -1,0 +1,7 @@
+<Page x:Class="WinProvision.Store.Views.HomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:controls="using:WinProvision.Store.Controls"
+      Loaded="Page_Loaded" Unloaded="Page_Unloaded" Background="Transparent">
+    <controls:PackageScreen x:Name="Screen" />
+</Page>

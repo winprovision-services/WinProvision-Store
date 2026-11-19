@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows10.0.26100": {
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"
+        }
+      },
+      "Microsoft.NET.ILLink.Tasks": {
+        "type": "Direct",
+        "requested": "[10.0.15, )",
+        "resolved": "10.0.15",
+        "contentHash": "u0WnRcZgBZYHlVFpbe/3Adpmb9rmNJ8/fmEwqc/xjB7fFppq+gfaLJd3Sdaw+J02zV0eP/T9dneQ3Dv5jWw6bw=="
+      },
+      "Microsoft.Windows.CsWinRT": {
+        "type": "Direct",
+        "requested": "[2.3.1, )",
+        "resolved": "2.3.1",
+        "contentHash": "ojoYrj8m8mAx6LVxofQXgfvsReDTv2LQFeDgXt5Lw99r5fv7dCR19ybd1JN0OueaWvL+BNqv0E7zZCgqptP9zA=="
+      },
+      "Microsoft.WindowsPackageManager.ComInterop": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "O2KWbqShmCi9KZgmweDo2DxPFDskM8IDtXkhnVt1d/lNL22eBqPAM69YobFLbMUB+cdTQrApQJx+qhQRXkiltw=="
+      },
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
+      },
+      "winprovision.winget.contracts": {
+        "type": "Project"
+      }
+    },
+    "net10.0-windows10.0.26100/win-x64": {
+      "Microsoft.WindowsPackageManager.InProcCom": {
+        "type": "Direct",
+        "requested": "[1.29.380, )",
+        "resolved": "1.29.380",
+        "contentHash": "SNmWtGjAPcAPLq+GM4GtGUZtkwsybptnSF2vinrjryfZhps5X6N2dmRgZrp2DkDBo9cnaUnTAAAy19WJWBeZZg=="
+      }
+    }
+  }
+}

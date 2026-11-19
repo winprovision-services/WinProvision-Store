@@ -1,0 +1,8 @@
+<Page
+    x:Class="WinProvision.Store.Views.OfficePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:WinProvision.Store.Controls"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <controls:PackageScreen x:Name="OfficeScreen" />
+</Page>

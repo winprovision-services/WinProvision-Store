@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "id": "installed",
+  "title": "Aplicativos instalados",
+  "icon": "installed",
+  "subtitle": "{filtered} de {total} {packageLabel}",
+  "search": {
+    "enabled": true,
+    "placeholder": "search.placeholder",
+    "trigger": "live",
+    "debounceMs": 0,
+    "minLength": 0,
+    "keepQuery": true
+  },
+  "data": {
+    "provider": "installed"
+  },
+  "toolbar": {
+    "primary": {
+      "action": "uninstall",
+      "menu": [
+        "uninstallInteractive",
+        "uninstallAdmin"
+      ]
+    },
+    "overflow": [
+      "details",
+      "download",
+      "manualUninstall",
+      "ignoreSelection",
+      "showIgnored",
+      "addToCollection",
+      "exportCsv",
+      "selectAll",
+      "clearSelection",
+      "uninstallOptions"
+    ]
+  },
+  "sidebar": {
+    "sections": [
+      {
+        "id": "sources",
+        "title": "filters.sources",
+        "type": "sources",
+        "bulkActions": [
+          "select-all",
+          "clear"
+        ],
+        "items": [
+          {
+            "id": "local",
+            "title": "filters.local",
+            "icon": "local"
+          }
+        ]
+      },
+      {
+        "id": "search",
+        "title": "search.options",
+        "type": "search-options",
+        "modes": [
+          "name",
+          "id",
+          "both",
+          "exact"
+        ],
+        "items": [
+          {
+            "id": "searchMode",
+            "title": "search.mode.title"
+          }
+        ]
+      },
+      {
+        "id": "filters",
+        "title": "filters.filters",
+        "type": "toggles",
+        "items": [
+          {
+            "id": "removable",
+            "title": "filters.onlyRemovable"
+          },
+          {
+            "id": "system",
+            "title": "filters.hideSystem"
+          },
+          {
+            "id": "selected",
+            "title": "filters.onlySelected"
+          }
+        ]
+      }
+    ]
+  },
+  "views": {
+    "list": {
+      "columns": ["name", "id", "version", "source"]
+    },
+    "details": {
+      "columns": ["name", "id", "version", "source"],
+      "subtitle": "status"
+    },
+    "grid": {
+      "card": ["name", "id", "version"],
+      "badge": "source"
+    }
+  },
+  "row": {
+    "tap": "select",
+    "doubleTap": "details",
+    "contextActions": [
+      "details",
+      "uninstall",
+      "uninstallAdmin",
+      "uninstallInteractive",
+      "manualUninstall",
+      "openLocation",
+      "download",
+      "ignore",
+      "autoUpdate",
+      "addToCollection",
+      "copyId",
+      "copyName"
+    ]
+  },
+  "selection": "multiple",
+  "defaults": {
+    "view": "list",
+    "sort": {
+      "column": "name",
+      "direction": "ascending"
+    }
+  }
+}

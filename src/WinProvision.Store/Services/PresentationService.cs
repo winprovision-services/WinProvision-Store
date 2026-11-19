@@ -1,0 +1,141 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
+using WinProvision.Core.Models;
+namespace WinProvision.Store.Services;
+public sealed record OfficeRemovalConfirmation(bool CleanStoreEdition);
+public interface IPresentationService
+{
+    Task<string?> PickOpenAsync();
+    Task<string?> PickExecutableAsync();
+    Task<string?> PickImageAsync();
+    Task<string?> PickSaveAsync(string name, string? extension = null);
+    Task<string?> PickFolderAsync();
+    Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar");
+    async Task<OfficeRemovalConfirmation?> ConfirmOfficeRemovalAsync(string title, string message, string primaryButtonText = "Desinstalar", bool showStoreOption = true) =>
+        await ConfirmAsync(title, message, primaryButtonText) ? new OfficeRemovalConfirmation(showStoreOption) : null;
+    Task<int?> ChooseAsync(string title, IReadOnlyList<string> options, string primaryButtonText = "Importar");
+    Task ShowDetailsAsync(AppEntry app, string? currentVersion = null, string? availableVersion = null, bool showOptions = false);
+    void ShowAppUpdates();
+}
+public sealed partial class PresentationService : IPresentationService
+{
+    public XamlRoot? Root { get; set; }
+    public nint WindowHandle { get; set; }
+    public Func<AppEntry, string?, string?, bool, Task>? DetailsPresenter { get; set; }
+    public Action? AppUpdatesPresenter { get; set; }
+    public void ShowAppUpdates() => AppUpdatesPresenter?.Invoke();
+    private readonly SemaphoreSlim _dialogs = new(1, 1);
+    private ContentDialog? _activeDialog;
+    public void CancelDialogs() => _activeDialog?.Hide();
+    public async Task<string?> PickOpenAsync()
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        picker.FileTypeFilter.Add(".json");
+        return (await picker.PickSingleFileAsync())?.Path;
+    }
+    public async Task<string?> PickExecutableAsync()
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        picker.FileTypeFilter.Add(".exe");
+        return (await picker.PickSingleFileAsync())?.Path;
+    }
+    public async Task<string?> PickImageAsync()
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        picker.FileTypeFilter.Add(".jpg");
+        picker.FileTypeFilter.Add(".jpeg");
+        picker.FileTypeFilter.Add(".png");
+        return (await picker.PickSingleFileAsync())?.Path;
+    }
+    public async Task<string?> PickSaveAsync(string name, string? extension = null)
+    {
+        var picker = new FileSavePicker { SuggestedFileName = name };
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        extension ??= Path.GetExtension(name);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = ".json";
+        if (!extension.StartsWith(".", StringComparison.Ordinal))
+            extension = "." + extension;
+        string description = extension.ToLowerInvariant() switch
+        {
+            ".csv" => "Arquivo CSV",
+            ".ps1" => "Script PowerShell",
+            ".zip" => "Arquivo ZIP",
+            ".txt" => "Arquivo de texto",
+            _ => "Perfil JSON"
+        };
+        picker.FileTypeChoices.Add(description, [extension]);
+        return (await picker.PickSaveFileAsync())?.Path;
+    }
+    public async Task<bool> ConfirmAsync(string title, string message, string primaryButtonText = "Confirmar", string closeButtonText = "Cancelar")
+    {
+        if (Root is null)
+            throw new InvalidOperationException("A confirmação exige um XamlRoot ativo.");
+        await _dialogs.WaitAsync();
+        try
+        {
+            var dialog = new ContentDialog { XamlRoot = Root, Title = title, Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap }, PrimaryButtonText = primaryButtonText, CloseButtonText = closeButtonText, DefaultButton = ContentDialogButton.Close };
+            _activeDialog = dialog;
+            return await ContentDialogCoordinator.ShowAsync(dialog) == ContentDialogResult.Primary;
+        }
+        finally { _activeDialog = null; _dialogs.Release(); }
+    }
+    public async Task<OfficeRemovalConfirmation?> ConfirmOfficeRemovalAsync(string title, string message, string primaryButtonText = "Desinstalar", bool showStoreOption = true)
+    {
+        if (Root is null) throw new InvalidOperationException("A confirmação exige um XamlRoot ativo.");
+        await _dialogs.WaitAsync();
+        try
+        {
+            var cleanStoreOption = new CheckBox
+            {
+                Content = "Remover também edições da Microsoft Store",
+                IsChecked = true,
+                Visibility = showStoreOption ? Visibility.Visible : Visibility.Collapsed,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            var content = new StackPanel { Spacing = 4 };
+            content.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+            content.Children.Add(cleanStoreOption);
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Root,
+                Title = title,
+                Content = content,
+                PrimaryButtonText = primaryButtonText,
+                CloseButtonText = "Cancelar",
+                DefaultButton = ContentDialogButton.Close
+            };
+            _activeDialog = dialog;
+            return await ContentDialogCoordinator.ShowAsync(dialog) == ContentDialogResult.Primary
+                ? new OfficeRemovalConfirmation(cleanStoreOption.IsChecked == true)
+                : null;
+        }
+        finally { _activeDialog = null; _dialogs.Release(); }
+    }
+    public async Task<int?> ChooseAsync(string title, IReadOnlyList<string> options, string primaryButtonText = "Importar")
+    {
+        if (options.Count == 0) return null;
+        await _dialogs.WaitAsync();
+        try
+        {
+            var list = new ListView { ItemsSource = options, SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360, SelectedIndex = 0 };
+            var dialog = new ContentDialog { XamlRoot = Root, Title = title, Content = list,
+                PrimaryButtonText = primaryButtonText, CloseButtonText = "Cancelar", DefaultButton = ContentDialogButton.Close };
+            _activeDialog = dialog;
+            return await ContentDialogCoordinator.ShowAsync(dialog) == ContentDialogResult.Primary ? list.SelectedIndex : null;
+        }
+        finally { _activeDialog = null; _dialogs.Release(); }
+    }
+    public async Task<string?> PickFolderAsync()
+    {
+        var picker = new FolderPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
+        picker.FileTypeFilter.Add("*");
+        return (await picker.PickSingleFolderAsync())?.Path;
+    }
+    public Task ShowDetailsAsync(AppEntry app, string? currentVersion = null, string? availableVersion = null, bool showOptions = false) => DetailsPresenter?.Invoke(app, currentVersion, availableVersion, showOptions) ?? throw new InvalidOperationException("A janela de detalhes ainda não está pronta.");
+}

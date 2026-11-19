@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../WinProvision.Providers.WinGet.Cli/WinProvision.Providers.WinGet.Cli.csproj" />
+    <ProjectReference Include="../WinProvision.Providers.WinGet.Com/WinProvision.Providers.WinGet.Com.csproj" />
+    <InternalsVisibleTo Include="WinProvision.Core.Tests" />
+    <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Fundo Squircle Roxo Escuro com Iluminação Superior -->
+    <radialGradient id="bgGrad" cx="50%" cy="15%" r="85%" fx="50%" fy="10%">
+      <stop offset="0%" stop-color="#4A178C" />
+      <stop offset="45%" stop-color="#280B52" />
+      <stop offset="80%" stop-color="#140729" />
+      <stop offset="100%" stop-color="#0D0817" />
+    </radialGradient>
+
+    <!-- Brilho na borda do Squircle -->
+    <linearGradient id="rimLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E5B8FF" stop-opacity="0.9" />
+      <stop offset="35%" stop-color="#9B4DFF" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#280B52" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Sombra projetada pelo ícone 3D -->
+    <filter id="dropShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#06020D" flood-opacity="0.85" />
+    </filter>
+
+    <!-- Losango superior (Lavanda claro para Magenta vibrante) -->
+    <linearGradient id="topDiamondGrad" x1="35%" y1="5%" x2="65%" y2="95%">
+      <stop offset="0%" stop-color="#F6E5FF" />
+      <stop offset="40%" stop-color="#D484FF" />
+      <stop offset="100%" stop-color="#B114FF" />
+    </linearGradient>
+
+    <!-- Aba interna esquerda (Roxo profundo com topo magenta) -->
+    <linearGradient id="innerLeftGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#8F14E8" />
+      <stop offset="40%" stop-color="#4A0D9E" />
+      <stop offset="100%" stop-color="#18053B" />
+    </linearGradient>
+
+    <!-- Aba interna direita (Roxo profundo com topo magenta) -->
+    <linearGradient id="innerRightGrad" x1="80%" y1="0%" x2="20%" y2="100%">
+      <stop offset="0%" stop-color="#8F14E8" />
+      <stop offset="40%" stop-color="#4A0D9E" />
+      <stop offset="100%" stop-color="#18053B" />
+    </linearGradient>
+
+    <!-- Face lateral esquerda (Brilho lilás na esquerda para violeta/índigo na base) -->
+    <linearGradient id="leftWingGrad" x1="5%" y1="20%" x2="90%" y2="85%">
+      <stop offset="0%" stop-color="#F2D4FF" />
+      <stop offset="28%" stop-color="#B94DFF" />
+      <stop offset="70%" stop-color="#761CEB" />
+      <stop offset="100%" stop-color="#4311A8" />
+    </linearGradient>
+
+    <!-- Face lateral direita (Brilho lilás na direita para violeta/índigo na base) -->
+    <linearGradient id="rightWingGrad" x1="95%" y1="20%" x2="10%" y2="85%">
+      <stop offset="0%" stop-color="#F2D4FF" />
+      <stop offset="28%" stop-color="#B94DFF" />
+      <stop offset="70%" stop-color="#761CEB" />
+      <stop offset="100%" stop-color="#4311A8" />
+    </linearGradient>
+
+    <!-- Face frontal em "W" (Gradiente lavanda suave para violeta elétrico) -->
+    <linearGradient id="frontWGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E7B5FF" />
+      <stop offset="45%" stop-color="#A838FF" />
+      <stop offset="100%" stop-color="#6B12E8" />
+    </linearGradient>
+
+    <!-- Realce de luz nas quinas frontais -->
+    <linearGradient id="creaseGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#E09EFF" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#761CEB" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="url(#bgGrad)" />
+  <rect x="1.5" y="1.5" width="1021" height="1021" rx="226.5" ry="226.5" fill="none" stroke="url(#rimLight)" stroke-width="3" />
+
+  <!-- Grupo do Ícone 3D -->
+  <g filter="url(#dropShadow)">
+    
+    <!-- 1. Aba Interna Esquerda -->
+    <path d="M 171 338
+             C 171 298, 208 282, 244 304
+             L 386 390
+             C 405 402, 414 416, 414 438
+             L 414 530
+             L 171 378 Z" fill="url(#innerLeftGrad)" />
+
+    <!-- 2. Aba Interna Direita -->
+    <path d="M 853 338
+             C 853 298, 816 282, 780 304
+             L 638 390
+             C 619 402, 610 416, 610 438
+             L 610 530
+             L 853 378 Z" fill="url(#innerRightGrad)" />
+
+    <!-- 3. Face Lateral Esquerda -->
+    <path d="M 171 338
+             C 171 356, 182 369, 200 380
+             L 354 475
+             C 374 487, 382 504, 382 532
+             L 382 754
+             C 366 754, 352 748, 336 737
+             L 204 646
+             C 181 630, 171 607, 171 576 Z" fill="url(#leftWingGrad)" />
+
+    <!-- 4. Face Lateral Direita -->
+    <path d="M 853 338
+             C 853 356, 842 369, 824 380
+             L 670 475
+             C 650 487, 642 504, 642 532
+             L 642 754
+             C 658 754, 672 748, 688 737
+             L 820 646
+             C 843 630, 853 607, 853 576 Z" fill="url(#rightWingGrad)" />
+
+    <!-- 5. Face Frontal em W -->
+    <path d="M 354 475
+             L 504 574
+             C 510 578, 514 578, 520 574
+             L 670 475
+             C 650 487, 642 504, 642 532
+             L 642 754
+             C 626 756, 612 751, 596 740
+             L 530 694
+             C 518 686, 506 686, 494 694
+             L 428 740
+             C 412 751, 398 756, 382 754
+             L 382 532
+             C 382 504, 374 487, 354 475 Z" fill="url(#frontWGrad)" />
+
+    <!-- Realces verticais nas dobras frontais -->
+    <path d="M 358 478 C 375 490, 382 506, 382 532 L 382 748" fill="none" stroke="url(#creaseGlow)" stroke-width="3" stroke-linecap="round" />
+    <path d="M 666 478 C 649 490, 642 506, 642 532 L 642 748" fill="none" stroke="url(#creaseGlow)" stroke-width="3" stroke-linecap="round" />
+
+    <!-- Linha de brilho na borda superior da estrutura em W -->
+    <path d="M 173 346
+             C 176 360, 185 371, 200 380
+             L 354 475
+             L 504 574
+             C 510 578, 514 578, 520 574
+             L 670 475
+             L 824 380
+             C 839 371, 848 360, 851 346" fill="none" stroke="#F8E8FF" stroke-width="3" stroke-linecap="round" opacity="0.85" />
+
+    <!-- 6. Losango Flutuante Superior -->
+    <path d="M 484 206
+             C 502 195, 522 195, 540 206
+             L 670 284
+             C 694 298, 694 328, 670 342
+             L 522 436
+             C 515 440, 509 440, 502 436
+             L 354 342
+             C 330 328, 330 298, 354 284 Z" fill="url(#topDiamondGrad)" />
+
+    <!-- Brilho na borda superior do losango -->
+    <path d="M 342 302
+             C 344 294, 348 288, 354 284
+             L 484 206
+             C 502 195, 522 195, 540 206
+             L 670 284
+             C 676 288, 680 294, 682 302" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.9" />
+  </g>
+</svg>

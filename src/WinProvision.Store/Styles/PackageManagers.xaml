@@ -1,0 +1,111 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:Double x:Key="PackageManagerPageFontSize">13</x:Double>
+  <x:Double x:Key="PackageManagerTitleFontSize">14</x:Double>
+  <x:Double x:Key="PackageManagerDescriptionFontSize">12</x:Double>
+  <x:Double x:Key="PackageManagerCardSpacing">16</x:Double>
+  <x:Double x:Key="PackageManagerControlSpacing">8</x:Double>
+  <x:Double x:Key="PackageManagerControlColumnWidth">260</x:Double>
+  <x:Double x:Key="PackageManagerComboWidth">200</x:Double>
+  <x:Double x:Key="PackageManagerButtonHeight">36</x:Double>
+  <x:Double x:Key="PackageManagerButtonMinimumWidth">104</x:Double>
+  <x:Double x:Key="PackageManagerToggleSwitchWidth">44</x:Double>
+  <x:Double x:Key="PackageManagerIconButtonSize">36</x:Double>
+  <x:Double x:Key="PackageManagerSimpleRowMinimumHeight">48</x:Double>
+  <x:Double x:Key="PackageManagerDescriptionRowMinimumHeight">64</x:Double>
+  <x:Double x:Key="PackageManagerInputRowMinimumHeight">64</x:Double>
+  <x:Double x:Key="PackageManagerPathRowMinimumHeight">64</x:Double>
+  <x:Double x:Key="PackageManagerCheckboxRowMinimumHeight">44</x:Double>
+  <x:Double x:Key="PackageManagerSourceRowMinimumHeight">40</x:Double>
+  <x:Double x:Key="PackageManagerStatusRowMinimumHeight">54</x:Double>
+  <x:Double x:Key="PackageManagerSourcesMaximumHeight">220</x:Double>
+  <x:Double x:Key="PackageManagerProgressIndicatorSize">16</x:Double>
+  <x:Double x:Key="PackageManagerCompactControlSpacing">4</x:Double>
+  <x:Double x:Key="PackageManagerSummaryTopMargin">16</x:Double>
+  <GridLength x:Key="PackageManagerControlColumnGridLength">260</GridLength>
+  <GridLength x:Key="PackageManagerPathControlColumnGridLength">440</GridLength>
+  <GridLength x:Key="PackageManagerIconColumnGridLength">34</GridLength>
+  <GridLength x:Key="PackageManagerSourceNameColumnGridLength">180</GridLength>
+  <GridLength x:Key="PackageManagerIconButtonGridLength">34</GridLength>
+  <Thickness x:Key="PackageManagerCardPadding">16</Thickness>
+  <Thickness x:Key="PackageManagerEnableCardPadding">16,14</Thickness>
+  <Thickness x:Key="PackageManagerSettingsHeaderPadding">16,12</Thickness>
+  <Thickness x:Key="PackageManagerButtonPadding">12,4</Thickness>
+  <Thickness x:Key="PackageManagerTextBoxPadding">10,4</Thickness>
+  <Thickness x:Key="PackageManagerTableHeaderPadding">4,8</Thickness>
+  <Thickness x:Key="PackageManagerSourceRowPadding">4,0</Thickness>
+  <Thickness x:Key="PackageManagerInstallToggleListMargin">16,8,16,4</Thickness>
+  <Thickness x:Key="PackageManagerInstallControlListMargin">16,0,16,12</Thickness>
+  <Thickness x:Key="PackageManagerNotesMargin">16,0,16,12</Thickness>
+  <Thickness x:Key="PackageManagerBottomDividerThickness">0,0,0,1</Thickness>
+  <Thickness x:Key="PackageManagerZeroThickness">0</Thickness>
+  <Thickness x:Key="PackageManagerStandardBorderThickness">1</Thickness>
+  <Thickness x:Key="PackageManagerControlBorderThickness">1</Thickness>
+  <Thickness x:Key="PackageManagerExpanderMargin">0,0,0,16</Thickness>
+  <Thickness x:Key="PackageManagerZeroPadding">0</Thickness>
+  <Thickness x:Key="PackageManagerRelatedActionMargin">0,0,0,8</Thickness>
+  <Thickness x:Key="PackageManagerSummaryMargin">0,16,0,0</Thickness>
+  <Thickness x:Key="PackageManagerScrollContentMargin">0,0,16,28</Thickness>
+  <Thickness x:Key="PackageManagerHomeScrollContentMargin">0,0,16,20</Thickness>
+  <Thickness x:Key="PackageManagerSectionTitleMargin">4,4,4,8</Thickness>
+  <Thickness x:Key="PackageManagerStatusTitleMargin">4,12,4,8</Thickness>
+  <Thickness x:Key="PackageManagerCardMargin">0,0,0,16</Thickness>
+  <CornerRadius x:Key="PackageManagerCardCornerRadius">12</CornerRadius>
+  <CornerRadius x:Key="PackageManagerControlCornerRadius">8</CornerRadius>
+  <CornerRadius x:Key="PackageManagerCheckboxCornerRadius">4</CornerRadius>
+
+  <Style x:Key="PackageManagerSettingsCardStyle" TargetType="Border" BasedOn="{StaticResource FluentCardStyle}">
+    <Setter Property="CornerRadius" Value="{StaticResource PackageManagerCardCornerRadius}" />
+    <Setter Property="Padding" Value="{StaticResource PackageManagerCardPadding}" />
+    <Setter Property="Margin" Value="{StaticResource PackageManagerCardMargin}" />
+  </Style>
+
+  <Style x:Key="PackageManagerActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SettingsInlineButtonStyle}">
+    <Setter Property="MinHeight" Value="{StaticResource PackageManagerButtonHeight}" />
+    <Setter Property="MinWidth" Value="{StaticResource PackageManagerButtonMinimumWidth}" />
+    <Setter Property="Padding" Value="{StaticResource PackageManagerButtonPadding}" />
+    <Setter Property="FontSize" Value="{StaticResource PackageManagerDescriptionFontSize}" />
+    <Setter Property="CornerRadius" Value="{StaticResource PackageManagerControlCornerRadius}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style x:Key="PackageManagerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource PackageManagerActionButtonStyle}">
+    <Setter Property="Width" Value="{StaticResource PackageManagerIconButtonSize}" />
+    <Setter Property="MinWidth" Value="{StaticResource PackageManagerIconButtonSize}" />
+    <Setter Property="Height" Value="{StaticResource PackageManagerIconButtonSize}" />
+    <Setter Property="MinHeight" Value="{StaticResource PackageManagerIconButtonSize}" />
+    <Setter Property="Padding" Value="{StaticResource PackageManagerZeroPadding}" />
+  </Style>
+
+  <Style x:Key="PackageManagerRelatedActionButtonStyle" TargetType="Button" BasedOn="{StaticResource PackageManagerActionButtonStyle}">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style x:Key="PackageManagerSettingsTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource SettingsInlineTextBoxStyle}">
+    <Setter Property="MinHeight" Value="{StaticResource PackageManagerButtonHeight}" />
+    <Setter Property="Padding" Value="{StaticResource PackageManagerTextBoxPadding}" />
+    <Setter Property="CornerRadius" Value="{StaticResource PackageManagerControlCornerRadius}" />
+    <Setter Property="Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}" />
+    <Setter Property="BorderThickness" Value="{StaticResource PackageManagerStandardBorderThickness}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style x:Key="PackageManagerSettingsComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource SettingsInlineComboBoxStyle}">
+    <Setter Property="MinHeight" Value="{StaticResource PackageManagerButtonHeight}" />
+    <Setter Property="Width" Value="{StaticResource PackageManagerComboWidth}" />
+    <Setter Property="MinWidth" Value="{StaticResource PackageManagerComboWidth}" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style x:Key="PackageManagerInstallOptionCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
+    <Setter Property="FontSize" Value="{StaticResource PackageManagerPageFontSize}" />
+    <Setter Property="CornerRadius" Value="{StaticResource PackageManagerCheckboxCornerRadius}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+</ResourceDictionary>

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "notices": [
+    {
+      "id": "elevator-security",
+      "severity": "warning",
+      "placement": "page-top",
+      "anchor": "Elevator",
+      "titleKey": "notice.elevator.title",
+      "messageKey": "notice.elevator.message",
+      "secondaryKey": "notice.elevator.secondary",
+      "dismissible": false,
+      "dismissPersistence": "none"
+    },
+    {
+      "id": "elevator-risk-changed",
+      "severity": "warning",
+      "placement": "page-top",
+      "anchor": "Elevator",
+      "titleKey": "notice.riskChanged.title",
+      "messageKey": "notice.riskChanged.message",
+      "dismissible": false,
+      "dismissPersistence": "none",
+      "showWhen": {
+        "risk": "dangerous",
+        "differsFromDefault": true,
+        "minimumCount": 1
+      }
+    },
+    {
+      "id": "lan-network-security",
+      "severity": "warning",
+      "placement": "group-top",
+      "anchor": "lan-server",
+      "titleKey": "notice.lanNetwork.title",
+      "messageKey": "notice.lanNetwork.message",
+      "dismissible": true,
+      "dismissPersistence": "session"
+    },
+    {
+      "id": "lan-credential-security",
+      "severity": "warning",
+      "placement": "group-top",
+      "anchor": "lan-credentials",
+      "titleKey": "notice.lanCredentials.title",
+      "messageKey": "notice.lanCredentials.message",
+      "dismissible": true,
+      "dismissPersistence": "session"
+    }
+  ]
+}

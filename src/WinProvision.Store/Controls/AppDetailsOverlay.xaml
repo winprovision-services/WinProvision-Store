@@ -1,0 +1,905 @@
+<UserControl xmlns:vm="using:WinProvision.Store.ViewModels" xmlns:ic="using:FluentIcons.WinUI" x:Class="WinProvision.Store.Controls.AppDetailsOverlay" x:DataType="vm:AppDetailsViewModel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:controls="using:WinProvision.Store.Controls"
+             xmlns:conv="using:WinProvision.Store.Services"
+             IsTabStop="True"
+             KeyDown="Overlay_KeyDown"
+             Style="{StaticResource AppDetailsOverlayStyle}"
+             TabFocusNavigation="Cycle">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid x:Name="Scrim"
+          Background="{ThemeResource AppDetailsScrimBrush}"
+          Opacity="1"
+          Tapped="Scrim_Tapped">
+        <Grid x:Name="DetailsShadowHost" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+            <Rectangle x:Name="DetailsShadowShape" Fill="White" RadiusX="24" RadiusY="24" Opacity="0"/>
+        </Grid>
+
+        <Border x:Name="Card" controls:RoundedClip.IsEnabled="True"
+                Background="{ThemeResource DetailsBackgroundBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="{StaticResource AppDetailsStroke1}"
+                CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                Margin="{StaticResource AppDetailsSpacing24}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                RenderTransformOrigin="0.5,0.5"
+                Opacity="1"
+                Tapped="Card_Tapped">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="CardTransform" Y="0" />
+            </Border.RenderTransform>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="{StaticResource AppDetailsLoadingRowHeight}" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="{StaticResource AppDetailsSpacing24_16_16_12}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" x:Name="OverlayTitleText"
+                               Grid.Column="0"
+                               Text="Detalhes do pacote"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" />
+
+                    <Button Grid.Column="1"
+                               x:Name="CloseButton" AutomationProperties.AutomationId="CloseButton"
+                               Width="{StaticResource AppDetailsSize32}"
+                               Height="{StaticResource AppDetailsSize32}"
+                               Padding="{StaticResource AppDetailsSpacing0}"
+                               AutomationProperties.Name="Fechar (Esc)"
+                               ToolTipService.ToolTip="Fechar (Esc)"
+                               Click="CloseButton_Click" Background="Transparent" BorderThickness="0">
+                        <controls:WinUiIcon IconName="dismiss" Width="16" Height="16"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Button>
+                </Grid>
+
+                <ProgressBar Grid.Row="1"
+                             x:Name="LoadingProgressBar" Visibility="{Binding IsLoadingProgressBarVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                             IsIndeterminate="True"
+                             Height="{StaticResource AppDetailsSize4}"
+                             />
+
+                <ScrollViewer x:Name="AppDetailsContent"
+                              Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="{StaticResource AppDetailsSpacing24_8_24_24}">
+                    <Grid x:Name="AppDetailsColumns">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="0" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{StaticResource AppDetailsColumnGap}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+
+                            <Grid Margin="{StaticResource AppDetailsSpacing0_0_0_16}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Width="{StaticResource AppDetailsSize112}"
+                                        Height="{StaticResource AppDetailsSize112}"
+                                        Visibility="{Binding ArePackageIconsEnabled, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Background="{ThemeResource DetailsSurfaceBrush}"
+                                        BorderBrush="{ThemeResource DetailsBorderBrush}"
+                                        BorderThickness="{StaticResource AppDetailsStroke1}"
+                                        CornerRadius="{StaticResource AppDetailsIconTileCornerRadius}"
+                                        Margin="{StaticResource AppDetailsSpacing0_0_16_0}">
+                                    <Grid>
+                                        <controls:WinUiIcon IconName="package" Width="36" Height="36"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Visibility="{Binding (conv:AsyncImage.HasContent), ElementName=AppIcon, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}" />
+                                        <Image x:Name="AppIcon" conv:AsyncImage.SourceUrl="{Binding IconUrl}" conv:AsyncImage.DecodePixelWidth="112" conv:AsyncImage.ImageKind="PackageIcon"
+                                               Width="{StaticResource AppDetailsSize72}"
+                                               Height="{StaticResource AppDetailsSize72}"
+                                               Stretch="Uniform"
+                                               Visibility="{Binding IsPackageIconVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                    <TextBlock Style="{StaticResource AppDetailsTitleStyle}" x:Name="AppNameText" Text="{Binding AppNameText}"
+                                               TextWrapping="Wrap"
+                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                    <TextBlock Style="{StaticResource AppDetailsBodyStyle}" x:Name="PackageSourceText" Text="{Binding PackageSourceText}"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               FontSize="13" />
+                                </StackPanel>
+                            </Grid>
+
+                            <ItemsControl x:Name="TagsList" Visibility="{Binding IsTagsListVisible, Converter={StaticResource BoolToVisibilityConverter}}" ItemsSource="{Binding Tags}" Margin="{StaticResource AppDetailsSpacing0_0_0_16}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <controls:WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{ThemeResource SystemAccentColorPrimaryBrush}"
+                                                CornerRadius="{StaticResource AppControlCornerRadius}"
+                                                Padding="{StaticResource AppDetailsSpacing12_4}"
+                                                Margin="{StaticResource AppDetailsSpacing0_0_8_8}"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="{Binding}"
+                                                       Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource AppDetailsBodyStyle}" x:Name="DescriptionText" Text="{Binding DescriptionText}"
+                                       Visibility="{Binding IsDescriptionVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       TextWrapping="Wrap"
+                                       LineHeight="{StaticResource AppDetailsSize20}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Margin="{StaticResource AppDetailsSpacing0_0_0_20}" />
+
+                            <Border x:Name="UpdateVersionPanel" Visibility="{Binding IsUpdateVersionPanelVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+
+                                    Background="{ThemeResource DetailsSurfaceBrush}"
+                                    BorderBrush="{ThemeResource DetailsBorderBrush}"
+                                    BorderThickness="{StaticResource AppDetailsStroke1}"
+                                    CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                                    Padding="{StaticResource AppDetailsSpacing16_12}"
+                                    Margin="{StaticResource AppDetailsSpacing0_0_0_16}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Versão instalada"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" x:Name="CurrentUpdateVersionText" Text="{Binding CurrentUpdateVersionText}"
+                                                   Margin="{StaticResource AppDetailsSpacing0_4_0_0}" />
+                                    </StackPanel>
+                                    <controls:WinUiIcon IconName="chevron_right" Width="16" Height="16" Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   Margin="{StaticResource AppDetailsSpacing12_0}"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Nova versão"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                        <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" x:Name="AvailableUpdateVersionText" Text="{Binding AvailableUpdateVersionText}"
+                                                   Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                   Margin="{StaticResource AppDetailsSpacing0_4_0_0}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <StackPanel Margin="{StaticResource AppDetailsSpacing0_0_0_20}">
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsHomepageRowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Página Inicial:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <HyperlinkButton x:Name="HomepageLink" AutomationProperties.AutomationId="HomepageLink" Tag="{Binding HomepageLinkTag}" Visibility="{Binding IsHomepageLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+                                                        Click="OpenLink_Click">
+                                        <TextBlock x:Name="HomepageLinkText" Text="{Binding HomepageLinkText}"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline"
+                                                   TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsDeveloperVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Desenvolvedor:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="DeveloperText" Text="{Binding DeveloperText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsAuthorVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Autor:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="AuthorText" Text="{Binding AuthorText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsLicenseRowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Licença:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="LicenseText" Text="{Binding LicenseText}"
+                                               Style="{StaticResource AppDetailsRowValueStyle}"
+                                               Margin="{StaticResource AppDetailsSpacing0_0_8_0}" />
+                                    <HyperlinkButton x:Name="LicenseLink" AutomationProperties.AutomationId="LicenseLink" Tag="{Binding LicenseLinkTag}" Visibility="{Binding IsLicenseLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+                                                        Click="OpenLink_Click">
+                                        <TextBlock x:Name="LicenseLinkText" Text="{Binding LicenseLinkText}"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline"
+                                                   TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsLastUpdatedVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Última atualização:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="LastUpdatedText" Text="{Binding LastUpdatedText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}">
+                                    <TextBlock Text="Gerenciador de pacotes:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="PackageManagerText" Text="{Binding PackageManagerText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                            </StackPanel>
+
+                            <StackPanel Margin="{StaticResource AppDetailsSpacing0_0_0_16}">
+
+                                <TextBlock Text="{Binding SelfInstalledVersionText}"
+                                           Style="{StaticResource AppDetailsBodyStrongStyle}"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <HyperlinkButton Content="Atualizações do aplicativo" Command="{Binding OpenAppUpdatesCommand}"
+                                                 Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <Grid HorizontalAlignment="Left">
+
+                                    <Button x:Name="AddSelfToPackagesButton" Content="Adicionar aos Pacotes"
+                                            AutomationProperties.AutomationId="AddSelfToPackagesButton"
+                                            Style="{StaticResource AppDetailsPrimaryButtonStyle}"
+                                            Height="{StaticResource AppDetailsSize36}"
+                                            Padding="{StaticResource AppDetailsSpacing24_0}"
+                                            CornerRadius="{StaticResource AppControlCornerRadius}"
+                                            Visibility="{Binding IsSelfPackage, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Click="AddSelfToPackages_Click" />
+
+                                    <Grid x:Name="InstallSplitGroup" Visibility="{Binding IsInstallSplitGroupVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button Style="{StaticResource AppDetailsPrimaryButtonStyle}" Grid.Column="0"
+                                                   x:Name="InstallButton" AutomationProperties.AutomationId="InstallButton" IsEnabled="{Binding InstallButtonIsEnabled}"
+                                                   Content="Instalar"
+                                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                   Height="{StaticResource AppDetailsSize36}"
+                                                   Padding="{StaticResource AppDetailsSpacing24_0}"
+                                                   CornerRadius="{StaticResource AppDetailsSplitActionCornerRadius}"
+                                                   Command="{Binding InstallCommand}" />
+
+                                        <Button Grid.Column="1"
+                                                   x:Name="InstallChevronButton" AutomationProperties.AutomationId="InstallChevronButton" IsEnabled="{Binding InstallChevronButtonIsEnabled}"
+                                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                   Height="{StaticResource AppDetailsSize36}"
+                                                   Width="{StaticResource AppDetailsSize32}"
+                                                   Padding="{StaticResource AppDetailsSpacing0}"
+                                                   BorderThickness="{StaticResource AppDetailsStroke1_0_0_0}"
+                                                   BorderBrush="{ThemeResource AppDetailsSplitDividerBrush}"
+                                                   CornerRadius="{StaticResource AppDetailsSplitMenuCornerRadius}"
+                                                   AutomationProperties.Name="Opções adicionais de instalação"
+                               ToolTipService.ToolTip="Opções adicionais de instalação"
+                                                   Click="InstallChevronButton_Click" Style="{StaticResource AppDetailsPrimaryButtonStyle}">
+                                            <controls:WinUiIcon IconName="chevron_down" Width="16" Height="16" />
+                                        </Button>
+                                    </Grid>
+                                    
+                                    <Button Style="{StaticResource AppDetailsPrimaryButtonStyle}" x:Name="UpdateButton" AutomationProperties.AutomationId="UpdateButton" Visibility="{Binding IsUpdateButtonVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsEnabled="{Binding UpdateButtonIsEnabled}"
+                                               Content="Atualizar"
+                                               Height="{StaticResource AppDetailsSize36}"
+                                               Padding="{StaticResource AppDetailsSpacing24_0}"
+                                               CornerRadius="{StaticResource AppControlCornerRadius}"
+
+                                               Command="{Binding UpdateCommand}" />
+
+                                    <Grid x:Name="UninstallSplitGroup" Visibility="{Binding IsUninstallSplitGroupVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Style="{StaticResource AppDetailsActionButtonStyle}" Grid.Column="0"
+                                                   x:Name="UninstallButton" AutomationProperties.AutomationId="UninstallButton" IsEnabled="{Binding UninstallButtonIsEnabled}"
+                                                   Height="{StaticResource AppDetailsSize36}"
+                                                   Padding="{StaticResource AppDetailsSpacing24_0}"
+                                                   CornerRadius="{StaticResource AppDetailsSplitActionCornerRadius}"
+                                                   Command="{Binding UninstallCommand}"
+                                                   ToolTipService.ToolTip="Desinstalar aplicativo">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <controls:WinUiIcon IconName="delete" Width="16" Height="16" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                                <TextBlock Text="Desinstalar" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="1"
+                                                   x:Name="UninstallChevronButton" AutomationProperties.AutomationId="UninstallChevronButton"
+                                                   Height="{StaticResource AppDetailsSize36}"
+                                                   Width="{StaticResource AppDetailsSize32}"
+                                                   Padding="{StaticResource AppDetailsSpacing0}"
+                                                   Margin="-1,0,0,0"
+                                                   Style="{StaticResource AppDetailsActionButtonStyle}"
+                                                   CornerRadius="{StaticResource AppDetailsSplitMenuCornerRadius}"
+                                                   AutomationProperties.Name="Mais opções"
+                               ToolTipService.ToolTip="Mais opções"
+                                                   Click="UninstallChevronButton_Click">
+                                            <controls:WinUiIcon IconName="chevron_down" Width="16" Height="16" />
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+
+                                <TextBlock x:Name="StatusText" Text="{Binding StatusText}"
+                                           TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           AutomationProperties.LiveSetting="Polite"
+                                           Margin="{StaticResource AppDetailsSpacing0_8_0_0}" />
+
+                            </StackPanel>
+
+                            <Border Visibility="{Binding ShowManagementOptions, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="{StaticResource AppDetailsStroke1}"
+                                    CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                                    Margin="{StaticResource AppDetailsSpacing0_0_0_12}">
+                                <StackPanel>
+                                    
+                                    <Grid Margin="{StaticResource AppDetailsSpacing12_8}"
+                                          x:Name="OptionsHeader"
+                                          
+                                          AutomationProperties.Name="Expandir ou recolher opções de instalação"
+                                          Tapped="OptionsHeader_Click">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <controls:WinUiIcon IconName="settings" Width="16" Height="16" Grid.Column="0"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Margin="{StaticResource AppDetailsSpacing0_0_12_0}"
+                                                       VerticalAlignment="Center" />
+
+                                        <TextBlock Style="{StaticResource AppDetailsBodyStrongStyle}" Grid.Column="1"
+                                                   Text="Opções de instalação"
+                                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                   VerticalAlignment="Center" />
+
+                                        <Button Style="{StaticResource AppDetailsPrimaryButtonStyle}" Grid.Column="2"
+                                                   x:Name="SaveOptionsButton" AutomationProperties.AutomationId="SaveOptionsButton"
+                                                   Content="Salvar opções"
+                                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                   CornerRadius="{StaticResource AppControlCornerRadius}"
+                                                   Height="{StaticResource AppDetailsSize28}"
+                                                   Padding="{StaticResource AppDetailsSpacing16_0}"
+                                                   Margin="{StaticResource AppDetailsSpacing0_0_8_0}"
+                                                   Click="SaveOptionsButton_Click" />
+
+                                        <Button Grid.Column="3" Padding="0" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Expandir ou recolher opções de instalação" Click="OptionsToggle_Click"><controls:WinUiIcon IconName="chevron_down" Width="16" Height="16" x:Name="OptionsChevronIcon"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                       VerticalAlignment="Center" /></Button>
+                                    </Grid>
+
+                                    <StackPanel x:Name="OptionsBodyPanel" Visibility="{Binding IsOptionsBodyPanelVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                Margin="{StaticResource AppDetailsSpacing16_0_16_16}">
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="{StaticResource AppDetailsSpacing0_0_0_8}">
+                                            <TextBlock Text="Escolha a operação para editar e conferir suas opções."
+                                                       Style="{StaticResource AppDetailsCaptionStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="Wrap"
+                                                       VerticalAlignment="Center" />
+                                            <ComboBox Grid.Column="1" x:Name="OptionsOperationComboBox"
+                                                      AutomationProperties.Name="Operação das opções"
+                                                      ItemsSource="{Binding OptionsOperations}"
+                                                      SelectedItem="{Binding SelectedOptionsOperation, Mode=TwoWay}"
+                                                      MinWidth="150" />
+                                            <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                      Style="{StaticResource AppDetailsCheckBoxStyle}"
+                                                      Visibility="{Binding IsGlobalOptionsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                      AutomationProperties.AutomationId="FollowGlobalOptionsCheckBox"
+                                                      IsChecked="{Binding FollowGlobalOptions, Mode=TwoWay}"
+                                                      Content="{Binding PackageManager.GlobalOptionsLabel}"
+                                                      Margin="0,8,0,0" />
+                                            <Button Grid.Row="2" Grid.Column="1"
+                                                    Style="{StaticResource AppDetailsActionButtonStyle}"
+                                                    Visibility="{Binding IsGlobalOptionsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                    AutomationProperties.AutomationId="SaveGlobalOptionsButton"
+                                                    Content="Salvar como padrão global"
+                                                    CornerRadius="{StaticResource AppControlCornerRadius}"
+                                                    Padding="{StaticResource AppDetailsSpacing12_4}"
+                                                    Margin="0,4,0,8"
+                                                    Click="SaveGlobalOptionsButton_Click" />
+                                        </Grid>
+
+                                        <controls:WrapPanel VerticalAlignment="Center" Margin="{StaticResource AppDetailsSpacing0_0_0_8}">
+                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="IgnoreFutureUpdatesCheckBox" IsChecked="{Binding IgnoreFutureUpdatesCheckBoxIsChecked, Mode=TwoWay}" Content="Ignorar futuras atualizações deste pacote" Checked="IgnoreFutureUpdatesCheckBox_Changed" Unchecked="IgnoreFutureUpdatesCheckBox_Changed" Margin="0,0,16,0" />
+                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="AutoUpdatePackageCheckBox" IsChecked="{Binding AutoUpdatePackageCheckBoxIsChecked, Mode=TwoWay}" Content="Atualizar este pacote automaticamente" Checked="AutoUpdatePackageCheckBox_Changed" Unchecked="AutoUpdatePackageCheckBox_Changed" />
+                                        </controls:WrapPanel>
+
+                                        <TabView x:Name="InstallOptionsTabs"
+                                                 IsEnabled="{Binding IsCustomOptionsMode}"
+                                                 IsAddTabButtonVisible="False"
+                                                 Background="Transparent"
+                                                 BorderThickness="0">
+                                            <TabView.TabItems>
+                                                <TabViewItem IsClosable="False" AutomationProperties.Name="Geral">
+                                                    <TabViewItem.Header>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <controls:WinUiIcon IconName="settings" Width="20" Height="20" />
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="Geral" FontSize="14" />
+                                                                <TextBlock Text="Instalação" FontSize="12" Opacity="0.7" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </TabViewItem.Header>
+                                                    <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing16_12}">
+                                                        <StackPanel Spacing="8">
+                                                            <TextBlock Text="Comportamento da operação" Style="{StaticResource AppDetailsBodyStrongStyle}" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="RequiresElevationCheckBox" Visibility="{Binding IsAdminOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsChecked="{Binding RequiresElevationCheckBoxIsChecked, Mode=TwoWay}" Content="Executar como administrador" Checked="InstallOptions_Changed" Unchecked="InstallOptions_Changed" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" x:Name="InteractiveInstallCheckBox" AutomationProperties.AutomationId="InteractiveInstallCheckBox" Visibility="{Binding IsInteractiveOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsEnabled="{Binding InteractiveInstallCheckBoxIsEnabled}" IsChecked="{Binding InteractiveInstallCheckBoxIsChecked, Mode=TwoWay}"
+                                                                      Content="Permitir instalação interativa" Checked="InstallOptions_Changed" Unchecked="InstallOptions_Changed" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="SkipMinorUpdatesCheckBox" Visibility="{Binding IsVersionOperationVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsChecked="{Binding SkipMinorUpdatesCheckBoxIsChecked, Mode=TwoWay}" Content="Pular atualizações menores" />
+                                                            <controls:WrapPanel VerticalAlignment="Center" Margin="{StaticResource AppDetailsSpacing20_0_0_8}" Visibility="{Binding IsVersionOperationVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                <TextBlock Text="Ignorar alterações a partir do componente:" Style="{StaticResource AppDetailsCaptionStyle}" VerticalAlignment="Center" Margin="{StaticResource AppDetailsSpacing0_0_8_0}" />
+                                                                <ComboBox AutomationProperties.Name="Componente para classificar como atualização menor" ItemsSource="{Binding SkipMinorUpdatesLevels}" SelectedItem="{Binding SkipMinorUpdatesLevel, Mode=TwoWay}" MinWidth="80" IsEnabled="{Binding IsSkipMinorLevelEnabled}" />
+                                                            </controls:WrapPanel>
+                                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource AppDetailsSpacing0_0_0_4}" />
+                                                            <StackPanel Visibility="{Binding IsOptionsOperationNotUninstall, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="4">
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="UninstallPreviousCheckBox" Visibility="{Binding IsUninstallPreviousOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsChecked="{Binding UninstallPrevious, Mode=TwoWay}" Content="Desinstalar versões anteriores antes de instalar" />
+                                                                <TextBlock Text="{Binding PackageManager.VersionOptionsLabel}" Style="{StaticResource AppDetailsCaptionStyle}" Visibility="{Binding IsVersionOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                                <Grid Visibility="{Binding IsVersionSelectorVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                    <ComboBox x:Name="InstallVersionComboBox" AutomationProperties.AutomationId="InstallVersionComboBox" ItemsSource="{Binding InstallVersions}" SelectedItem="{Binding SelectedInstallVersion, Mode=TwoWay}" IsEnabled="{Binding CanLoadVersions}" MinWidth="{StaticResource AppDetailsSize152}" Height="{StaticResource AppDetailsSize32}" SelectionChanged="InstallVersionComboBox_SelectionChanged" DropDownOpened="InstallVersionComboBox_DropDownOpened" />
+                                                                    <ProgressRing Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" IsActive="{Binding IsLoadingVersions}" Visibility="{Binding IsLoadingVersions, Converter={StaticResource BoolToVisibilityConverter}}" IsHitTestVisible="False" />
+                                                                </Grid>
+                                                                <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Não foi possível listar versões" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{Binding IsVersionLoadErrorVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                                <TextBox AutomationProperties.Name="Versão específica para instalar" Visibility="{Binding IsCustomVersionOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" Text="{Binding CustomInstallVersion, Mode=TwoWay}" PlaceholderText="Versão personalizada" MaxLength="128" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" x:Name="IgnoreSecurityHashCheckBox" AutomationProperties.AutomationId="IgnoreSecurityHashCheckBox" Visibility="{Binding IsIgnoreHashOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsChecked="{Binding IgnoreSecurityHashCheckBoxIsChecked, Mode=TwoWay}" Content="Ignorar verificação de hash nesta operação (menos seguro)" Checked="InstallOptions_Changed" Unchecked="InstallOptions_Changed" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </TabViewItem>
+
+                                                <TabViewItem IsClosable="False" AutomationProperties.Name="Localização" Visibility="{Binding IsLocationTabVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TabViewItem.Header>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <controls:WinUiIcon IconName="folder" Width="20" Height="20" />
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="Localização" FontSize="14" />
+                                                                <TextBlock Text="Escopo e arquitetura" FontSize="12" Opacity="0.7" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </TabViewItem.Header>
+                                                    <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing16_12}">
+                                                        <StackPanel Spacing="8">
+                                                            <TextBlock Text="Destino e compatibilidade" Style="{StaticResource AppDetailsBodyStrongStyle}" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" x:Name="InstallAllUsersCheckBox" AutomationProperties.AutomationId="InstallAllUsersCheckBox" Visibility="{Binding IsScopeOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" IsEnabled="{Binding CanEditScope}" IsChecked="{Binding InstallAllUsersCheckBoxIsChecked, Mode=TwoWay}" Content="Instalar para todos os usuários" Checked="InstallOptions_Changed" Unchecked="InstallOptions_Changed" />
+                                                            <controls:WrapPanel x:Name="InstallArchitecturePanel" Visibility="{Binding IsInstallArchitecturePanelVisible, Converter={StaticResource BoolToVisibilityConverter}}" VerticalAlignment="Center">
+                                                                <TextBlock Text="Arquitetura:" Style="{StaticResource AppDetailsCaptionStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Margin="{StaticResource AppDetailsSpacing0_0_8_0}" />
+                                                                <ComboBox x:Name="InstallArchitectureComboBox" AutomationProperties.AutomationId="InstallArchitectureComboBox" IsEnabled="{Binding IsOptionsOperationNotUninstall}" SelectedItem="{Binding SelectedArchitecture, Mode=TwoWay}" ItemsSource="{Binding Architectures}" MinWidth="{StaticResource AppDetailsSize152}" Height="{StaticResource AppDetailsSize32}" SelectionChanged="InstallArchitectureComboBox_SelectionChanged" />
+                                                            </controls:WrapPanel>
+                                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource AppDetailsSpacing0_0_0_4}" />
+                                                            <StackPanel Visibility="{Binding IsLocationOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="6">
+                                                            <TextBlock Text="Pasta de instalação" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                            <controls:WrapPanel VerticalAlignment="Center">
+                                                                <Button Style="{StaticResource AppDetailsActionButtonStyle}" x:Name="SelectLocationButton" AutomationProperties.AutomationId="SelectLocationButton" Content="Escolher pasta..." CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing12_4}" Click="SelectLocationButton_Click" Margin="{StaticResource AppDetailsSpacing0_0_8_0}" />
+                                                                <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" x:Name="SelectedLocationText" Text="{Binding SelectedLocationText}" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="{StaticResource AppDetailsSize220}" />
+                                                            </controls:WrapPanel>
+                                                            </StackPanel>
+                                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="{StaticResource AppDetailsSpacing0_0_0_4}" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" x:Name="PersistPackageOptionsCheckBox" AutomationProperties.AutomationId="PersistPackageOptionsCheckBox" IsEnabled="{Binding PersistPackageOptionsCheckBoxIsEnabled}" IsChecked="{Binding PersistPackageOptionsCheckBoxIsChecked, Mode=TwoWay}" Content="Reutilizar estas opções nas próximas instalações e atualizações" />
+                                                            <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" x:Name="PersistPackageOptionsHintText" Text="{Binding PersistPackageOptionsHintText}" Foreground="{ThemeResource TextFillColorTertiaryBrush}" TextWrapping="Wrap" Margin="{StaticResource AppDetailsSpacing20_0_0_8}" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </TabViewItem>
+
+                                                <TabViewItem IsClosable="False" AutomationProperties.Name="Argumentos" Visibility="{Binding IsCustomArgumentsOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TabViewItem.Header>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <controls:WinUiIcon IconName="code" Width="20" Height="20" />
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="Argumentos" FontSize="14" />
+                                                                <TextBlock Text="Linha de comando" FontSize="12" Opacity="0.7" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </TabViewItem.Header>
+                                                    <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing16_12}">
+                                                        <StackPanel Spacing="8">
+                                                            <TextBlock Text="Argumentos personalizados" Style="{StaticResource AppDetailsBodyStrongStyle}" />
+                                                            <TextBlock Text="{Binding PackageManager.CustomArgumentsDescription}" Style="{StaticResource AppDetailsCaptionStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                                            <TextBox Visibility="{Binding IsInstallOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Argumentos adicionais para instalar" Text="{Binding CustomArguments, Mode=TwoWay}" MaxLength="4096" IsSpellCheckEnabled="False" />
+                                                            <TextBox Visibility="{Binding PackageManager.Capabilities.OverrideArguments, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Argumentos de substituição do WinGet" PlaceholderText="Substituição do instalador (--override)" Text="{Binding OverrideArguments, Mode=TwoWay}" MaxLength="4096" IsSpellCheckEnabled="False" />
+                                                            <TextBox Visibility="{Binding IsUpdateOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Argumentos adicionais para atualizar" Text="{Binding UpdateArguments, Mode=TwoWay}" MaxLength="4096" IsSpellCheckEnabled="False" />
+                                                            <TextBox Visibility="{Binding IsUninstallOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" AutomationProperties.Name="Argumentos adicionais para desinstalar" Text="{Binding UninstallArguments, Mode=TwoWay}" MaxLength="4096" IsSpellCheckEnabled="False" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </TabViewItem>
+
+                                                <TabViewItem IsClosable="False" AutomationProperties.Name="Scripts" Visibility="{Binding IsInstallHooksOptionsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TabViewItem.Header>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <controls:WinUiIcon IconName="code_text" Width="20" Height="20" />
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="Scripts" FontSize="14" />
+                                                                <TextBlock Text="Pré e pós-instalação" FontSize="12" Opacity="0.7" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </TabViewItem.Header>
+                                                    <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing16_12}">
+                                                        <StackPanel Visibility="{Binding IsInstallHooksOptionsVisible, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="6">
+                                                            <TextBlock Text="Scripts desta operação" Style="{StaticResource AppDetailsBodyStrongStyle}" />
+                                                            <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" Text="Scripts locais do PowerShell. Executam como o usuário atual, sem elevação automática, antes/depois da operação selecionada. Cada script tem limite de cinco minutos." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                            <StackPanel Visibility="{Binding IsInstallOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="6">
+                                                                <TextBlock Text="Antes de instalar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script antes da instalação" Text="{Binding PreInstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <TextBlock Text="Depois de instalar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script depois da instalação" Text="{Binding PostInstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="RunInstallHooksCheckBox" IsChecked="{Binding RunInstallHooks, Mode=TwoWay}" Content="Executar na próxima instalação individual" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" IsChecked="{Binding AbortInstallOnPreScriptFailure, Mode=TwoWay}" Content="Cancelar a instalação se o script anterior falhar" />
+                                                            </StackPanel>
+                                                            <StackPanel Visibility="{Binding IsUpdateOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="6">
+                                                                <TextBlock Text="Antes de atualizar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script antes da atualização" Text="{Binding PreUpdateScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <TextBlock Text="Depois de atualizar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script depois da atualização" Text="{Binding PostUpdateScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" IsChecked="{Binding RunUpdateHooks, Mode=TwoWay}" Content="Executar na próxima atualização individual" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" IsChecked="{Binding AbortUpdateOnPreScriptFailure, Mode=TwoWay}" Content="Cancelar a atualização se o script anterior falhar" />
+                                                            </StackPanel>
+                                                            <StackPanel Visibility="{Binding IsUninstallOptionsOperation, Converter={StaticResource BoolToVisibilityConverter}}" Spacing="6">
+                                                                <TextBlock Text="Antes de desinstalar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script antes da desinstalação" Text="{Binding PreUninstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <TextBlock Text="Depois de desinstalar" Style="{StaticResource AppDetailsCaptionStyle}" />
+                                                                <TextBox AutomationProperties.Name="Script depois da desinstalação" Text="{Binding PostUninstallScript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="32768" MinHeight="{StaticResource AppDetailsSize72}" MaxHeight="120" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" IsChecked="{Binding RunUninstallHooks, Mode=TwoWay}" Content="Executar na próxima desinstalação individual" />
+                                                                <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" IsChecked="{Binding AbortUninstallOnPreScriptFailure, Mode=TwoWay}" Content="Cancelar a desinstalação se o script anterior falhar" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </TabViewItem>
+
+                                                <TabViewItem IsClosable="False" AutomationProperties.Name="Aplicativos" Visibility="{Binding IsCloseAppsOptionVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TabViewItem.Header>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <controls:WinUiIcon IconName="window_apps" Width="20" Height="20" />
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="Aplicativos" FontSize="14" />
+                                                                <TextBlock Text="Fechar antes da operação" FontSize="12" Opacity="0.7" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </TabViewItem.Header>
+                                                    <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing16_12}">
+                                                        <StackPanel Spacing="8">
+                                                            <TextBlock Text="Processos a fechar" Style="{StaticResource AppDetailsBodyStrongStyle}" />
+                                                            <TextBlock Text="Informe um nome de processo por linha (com ou sem .exe). O app tenta fechá-los normalmente; o encerramento forçado só ocorre quando selecionado." Style="{StaticResource AppDetailsCaptionStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                                            <TextBox AutomationProperties.Name="Processos a fechar antes da operação" Text="{Binding ProcessesToCloseText, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="NoWrap" MaxLength="4096" MinHeight="100" MaxHeight="180" IsSpellCheckEnabled="False" FontFamily="Consolas" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                                                            <CheckBox Style="{StaticResource AppDetailsCheckBoxStyle}" AutomationProperties.AutomationId="ForceCloseProcessesCheckBox" IsChecked="{Binding ForceCloseProcesses, Mode=TwoWay}" Content="Encerrar à força se o aplicativo não fechar" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </TabViewItem>
+                                            </TabView.TabItems>
+                                        </TabView>
+
+                                        <Border Background="{ThemeResource DetailsSurfaceBrush}" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing12_8}" Margin="{StaticResource AppDetailsSpacing0_0_0_8}" Visibility="{Binding IsCommandPreviewVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding PackageManager.CommandLabel}" Style="{StaticResource AppDetailsBodyStrongStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="{StaticResource AppDetailsSpacing0_0_0_4}" />
+                                                <TextBox Style="{StaticResource AppDetailsCodeBoxStyle}" x:Name="InstallCommandPreviewTextBox" AutomationProperties.AutomationId="InstallCommandPreviewTextBox" Text="{Binding InstallCommandPreviewTextBox}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" MinHeight="{StaticResource AppDetailsSize48}" MaxHeight="{StaticResource AppDetailsSize72}" Margin="{StaticResource AppDetailsSpacing0_0_0_8}" />
+                                                <Button Style="{StaticResource AppDetailsActionButtonStyle}" x:Name="CopyInstallCommandButton" AutomationProperties.AutomationId="CopyInstallCommandButton" IsEnabled="{Binding CopyInstallCommandButtonIsEnabled}" Content="Copiar comando" CornerRadius="{StaticResource AppControlCornerRadius}" Padding="{StaticResource AppDetailsSpacing12_4}" HorizontalAlignment="Left" Click="CopyInstallCommandButton_Click" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+
+                        <StackPanel x:Name="AppDetailsRightColumn" Grid.Column="2">
+                            
+                            <Border x:Name="ScreenshotsPanel" Visibility="{Binding IsScreenshotPanelVisible, Converter={StaticResource BoolToVisibilityConverter}}" controls:RoundedClip.IsEnabled="True"
+                                    Height="{StaticResource AppDetailsSize220}"
+                                    Margin="{StaticResource AppDetailsSpacing0_0_0_16}"
+                                    CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                                    Background="{ThemeResource DetailsSurfaceBrush}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="{StaticResource AppDetailsStroke1}">
+                                <Grid>
+                                    <Grid x:Name="ScreenshotsEmptyBanner"
+                                          Canvas.ZIndex="2"
+                                          Background="{ThemeResource DetailsScreenshotEmptyBrush}"
+                                          ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12"
+                                          Visibility="Visible">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Ajude a completar os detalhes: contribua com capturas de tela deste pacote."
+                                                   TextWrapping="Wrap"
+                                                   VerticalAlignment="Center"
+                                                   Margin="18,12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <Button Grid.Column="1"
+                                                x:Name="ContributeButton"
+                                                Content="Contribuir"
+                                                Style="{StaticResource AppDetailsActionButtonStyle}"
+                                                CornerRadius="{StaticResource AppControlCornerRadius}"
+                                                Padding="{StaticResource AppDetailsSpacing12_4}"
+                                                VerticalAlignment="Center"
+                                                Margin="0,12,18,12"
+                                                Tag="https://github.com/winprovision-services/WinProvision-Store"
+                                                Click="OpenLink_Click" />
+                                    </Grid>
+                                    <ProgressBar x:Name="ScreenshotLoadingBar"
+                                                 Width="{StaticResource AppDetailsSize56}"
+                                                 Height="{StaticResource AppDetailsSize4}"
+                                                 IsIndeterminate="True"
+                                                 HorizontalAlignment="Center"
+                                                 VerticalAlignment="Center"
+                                                 Visibility="Collapsed" />
+                                    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                        <FlipView x:Name="Gallery" MaxWidth="400" Height="190" ItemsSource="{Binding Screenshots}"
+                                                  SelectionChanged="Gallery_SelectionChanged"
+                                                  IsEnabled="True">
+                                            <FlipView.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <Button Padding="0" BorderThickness="0" Background="Transparent"
+                                                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                                            AutomationProperties.Name="Abrir captura de tela ampliada"
+                                                            Click="ScreenshotPreviewButton_Click">
+                                                        <Image Stretch="Uniform" conv:AsyncImage.SourceUrl="{Binding}" conv:AsyncImage.ImageKind="Screenshot"
+                                                               conv:AsyncImage.DecodePixelWidth="720" />
+                                                    </Button>
+                                                </DataTemplate>
+                                            </FlipView.ItemTemplate>
+                                        </FlipView>
+                                        <PipsPager x:Name="FlipViewPipsPager" HorizontalAlignment="Center"
+                                                   Margin="0,12,0,0"
+                                                   SelectedPageIndex="{Binding SelectedIndex, ElementName=Gallery, Mode=TwoWay}" />
+                                    </StackPanel>
+                                    <Button x:Name="PreviousScreenshotButton"
+                                            Width="36" Height="36"
+                                            Padding="0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Margin="8,0"
+                                            Background="{ThemeResource AppDetailsScreenshotCounterBrush}"
+                                            AutomationProperties.Name="Captura anterior"
+                                            ToolTipService.ToolTip="Captura anterior"
+                                            Visibility="Collapsed"
+                                            Click="PreviousScreenshotButton_Click">
+                                        <controls:WinUiIcon IconName="chevron_left" Width="16" Height="16" />
+                                    </Button>
+                                    <Button x:Name="NextScreenshotButton"
+                                            Width="36" Height="36"
+                                            Padding="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Margin="8,0"
+                                            Background="{ThemeResource AppDetailsScreenshotCounterBrush}"
+                                            AutomationProperties.Name="Próxima captura"
+                                            ToolTipService.ToolTip="Próxima captura"
+                                            Visibility="Collapsed"
+                                            Click="NextScreenshotButton_Click">
+                                        <controls:WinUiIcon IconName="chevron_right" Width="16" Height="16" />
+                                    </Button>
+                                </Grid>
+                            </Border>
+                            
+                            <StackPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}">
+                                    <TextBlock Text="ID do Pacote:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="PackageIdText" Text="{Binding PackageIdText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsManifestRowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding PackageManager.ManifestLabel}" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <HyperlinkButton x:Name="ManifestLink" AutomationProperties.AutomationId="ManifestLink" Visibility="{Binding IsManifestLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}" Tag="{Binding ManifestLinkTag}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+                                                        Click="OpenLink_Click">
+                                        <TextBlock x:Name="ManifestLinkText" Text="{Binding ManifestLinkText}"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline"
+                                                   TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_16}" Visibility="{Binding IsPackageVersionVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Versão:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="PackageVersionText" Text="{Binding PackageVersionText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsInstallerTypeRowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="Tipo de Instalador:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <TextBlock x:Name="InstallerTypeText" Text="{Binding InstallerTypeText}" Style="{StaticResource AppDetailsRowValueStyle}" />
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsInstallerUrlRowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="URL do Instalador :" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <HyperlinkButton x:Name="InstallerUrlLink" AutomationProperties.AutomationId="InstallerUrlLink" Tag="{Binding InstallerUrlLinkTag}" Visibility="{Binding IsInstallerUrlLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+                                                        Click="OpenLink_Click">
+                                        <TextBlock x:Name="InstallerUrlLinkText" Text="{Binding InstallerUrlLinkText}"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline"
+                                                   TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </controls:WrapPanel>
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsSha256RowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="SHA256 do Instalador:"
+                                               Style="{StaticResource AppDetailsRowLabelStyle}"
+                                               VerticalAlignment="Center" />
+                                    <Button x:Name="CopyInstallerSha256Button" AutomationProperties.AutomationId="CopyInstallerSha256Button"
+                                            IsEnabled="{Binding IsSha256CopyEnabled}" Click="CopyInstallerSha256Button_Click"
+                                            Padding="6,2" MinWidth="0" MinHeight="0" Margin="8,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            ToolTipService.ToolTip="Copiar SHA-256">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <controls:WinUiIcon IconName="copy" Width="16" Height="16"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="Copiar" Style="{StaticResource AppDetailsCaptionStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Button>
+                                </controls:WrapPanel>
+                                <TextBlock Style="{StaticResource AppDetailsCodeTextStyle}" x:Name="Sha256Text" Text="{Binding Sha256Text}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsSha256RowVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_16}" Visibility="{Binding IsInstallerDetailsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <HyperlinkButton x:Name="DownloadInstallerLink" AutomationProperties.AutomationId="DownloadInstallerLink" Visibility="{Binding IsDownloadInstallerLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}" Tag="{Binding DownloadInstallerLinkTag}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+                                                        Click="OpenLink_Click"
+                                                        Margin="{StaticResource AppDetailsSpacing0_0_8_0}">
+                                        <TextBlock Text="Baixar instalador"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline" />
+                                    </HyperlinkButton>
+                                    <TextBlock Style="{StaticResource AppDetailsCaptionStyle}" x:Name="InstallerSizeText" Text="{Binding InstallerSizeText}"
+
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </controls:WrapPanel>
+
+                                <TextBlock Text="Dependências:"
+                                           Style="{StaticResource AppDetailsRowLabelStyle}"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsDependenciesVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <TextBlock Style="{StaticResource AppDetailsBodyStyle}" x:Name="DependenciesText" Text="{Binding DependenciesText}"
+
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_16}"
+                                           Visibility="{Binding IsDependenciesVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <TextBlock Text="Notas de lançamento:"
+                                           Style="{StaticResource AppDetailsRowLabelStyle}"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsReleaseNotesVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                <TextBlock Style="{StaticResource AppDetailsBodyStyle}" x:Name="ReleaseNotesText" Text="{Binding ReleaseNotesText}"
+
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="{StaticResource AppDetailsSpacing0_0_0_4}"
+                                           Visibility="{Binding IsReleaseNotesVisible, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <controls:WrapPanel Margin="{StaticResource AppDetailsSpacing0_0_0_4}" Visibility="{Binding IsReleaseNotesUrlLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="URL das notas de lançamento:" Style="{StaticResource AppDetailsRowLabelStyle}" />
+                                    <HyperlinkButton x:Name="ReleaseNotesUrlLink" AutomationProperties.AutomationId="ReleaseNotesUrlLink" Tag="{Binding ReleaseNotesUrlLinkTag}" Visibility="{Binding IsReleaseNotesUrlLinkVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Style="{StaticResource AppDetailsInlineLinkStyle}"
+
+                                                        Click="OpenLink_Click">
+                                        <TextBlock x:Name="ReleaseNotesUrlLinkText" Text="{Binding ReleaseNotesUrlLinkText}"
+                                                   Foreground="{ThemeResource DetailsLinkBrush}"
+                                                   TextDecorations="Underline"
+                                                   TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </controls:WrapPanel>
+
+                            </StackPanel>
+
+                        </StackPanel>
+
+                    </Grid>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="WallpaperDetailsContent"
+                              Grid.Row="2"
+                              Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="{StaticResource AppDetailsSpacing24_8_24_24}">
+                    <Grid x:Name="WallpaperDetailsColumns">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="0" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{StaticResource AppDetailsColumnGap}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ContentControl x:Name="WallpaperOptionsHost" Grid.Column="0" />
+                        <StackPanel x:Name="WallpaperDetailsRightColumn" Grid.Column="2">
+                            <Border Height="{StaticResource AppDetailsSize220}"
+                                    Margin="{StaticResource AppDetailsSpacing0_0_0_16}"
+                                    CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                                    Background="{ThemeResource DetailsSurfaceBrush}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="{StaticResource AppDetailsStroke1}">
+                                <ContentControl x:Name="WallpaperPreviewHost" />
+                            </Border>
+                            <ContentControl x:Name="WallpaperGalleryHost" />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+            </Grid>
+        </Border>
+
+        <Grid x:Name="ScreenshotLightbox"
+              TabFocusNavigation="Cycle"
+              Canvas.ZIndex="10"
+              Background="{ThemeResource AppDetailsLightboxScrimBrush}"
+              Visibility="Collapsed"
+              Tapped="ScreenshotLightbox_Tapped">
+            <Border Margin="{StaticResource AppDetailsSpacing56}"
+                    MaxWidth="{StaticResource AppDetailsSize1500}"
+                    MaxHeight="{StaticResource AppDetailsSize1000}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource DetailsBackgroundBrush}"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="{StaticResource AppDetailsStroke1}"
+                    CornerRadius="{StaticResource AppOverlayCornerRadius}"
+                    Padding="{StaticResource AppDetailsSpacing12}"
+                    Tapped="Card_Tapped">
+                <Image x:Name="ScreenshotLightboxImage"
+                       Stretch="Uniform" />
+            </Border>
+            <Button x:Name="CloseScreenshotLightboxButton" AutomationProperties.AutomationId="CloseScreenshotLightboxButton"
+                       Width="{StaticResource AppDetailsSize60}"
+                       Height="{StaticResource AppDetailsSize60}"
+                       MinWidth="{StaticResource AppDetailsSize60}"
+                       MinHeight="{StaticResource AppDetailsSize60}"
+                       Padding="{StaticResource AppDetailsSpacing12}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Top"
+                       Margin="{StaticResource AppDetailsSpacing20}"
+                       AutomationProperties.Name="Fechar captura ampliada"
+                       ToolTipService.ToolTip="Fechar imagem"
+                       Click="CloseScreenshotLightboxButton_Click">
+                <controls:WinUiIcon IconName="dismiss" Width="20" Height="20" />
+            </Button>
+            <Button Width="{StaticResource AppDetailsSize44}"
+                       Height="{StaticResource AppDetailsSize44}"
+                       Padding="{StaticResource AppDetailsSpacing0}"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Center"
+                       Margin="{StaticResource AppDetailsSpacing12_0}"
+                       AutomationProperties.Name="Captura anterior"
+                               ToolTipService.ToolTip="Captura anterior"
+                       Click="PreviousScreenshotButton_Click">
+                <controls:WinUiIcon IconName="chevron_left" Width="20" Height="20" />
+            </Button>
+            <Button Width="{StaticResource AppDetailsSize44}"
+                       Height="{StaticResource AppDetailsSize44}"
+                       Padding="{StaticResource AppDetailsSpacing0}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       Margin="{StaticResource AppDetailsSpacing12_0}"
+                       AutomationProperties.Name="Próxima captura"
+                               ToolTipService.ToolTip="Próxima captura"
+                       Click="NextScreenshotButton_Click">
+                <controls:WinUiIcon IconName="chevron_right" Width="20" Height="20" />
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

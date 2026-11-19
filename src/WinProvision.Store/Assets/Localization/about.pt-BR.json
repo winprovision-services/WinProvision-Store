@@ -1,0 +1,16 @@
+{
+  "about.dialog.title": "Sobre o WinProvision Store",
+  "about.tab.overview": "Sobre",
+  "about.product.name": "WinProvision Store",
+  "about.product.subtitle": "Gerencie e provisione aplicativos no Windows com WinGet",
+  "about.product.description": "Pesquise aplicativos, confira versões e gerencie instalações e atualizações do WinGet em um só lugar.",
+  "about.version.line": "Você instalou a versão {value} do WinProvision Store",
+  "about.legal.title": "Aviso legal",
+  "about.legal.text": "O WinProvision Store não é afiliado, associado, autorizado, endossado ou patrocinado pela Microsoft Corporation nem pelo projeto WinGet. Microsoft e WinGet são marcas de seus respectivos titulares.",
+  "about.links.heading": "Links úteis",
+  "about.links.home": "Página inicial",
+  "about.links.repository": "Repositório",
+  "about.links.report": "Relatar problema ou solicitar recurso",
+  "about.close": "Fechar",
+  "about.links.failure": "Não foi possível abrir o link no navegador padrão"
+}

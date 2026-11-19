@@ -1,0 +1,50 @@
+Nome                                                  ID                                 Versão         Correspondência
+-----------------------------------------------------------------------------------------------------------------------------
+Google Chrome                                         Google.Chrome                      155.0.8059.40  Moniker: chrome
+Dichromate                                            Dichromate.Browser                 111.0.5563.65  Command: chrome
+Browser Bookmarks for PowerToys Command Palette       GOODJINC.CmdPalBrowserBookmarks    0.2.3          Tag: chrome
+DataLimiter                                           MichaelSam94.DataLimiter           0.3.2          Tag: chrome
+ClaudeToZenn                                          NuitsJp.ClaudeToZenn               0.0.19         Tag: chrome
+Electron                                              OpenJS.Electron.33                 33.4.11        Tag: chrome
+Electron                                              OpenJS.Electron.34                 34.5.8         Tag: chrome
+Electron                                              OpenJS.Electron.35                 35.7.5         Tag: chrome
+Electron                                              OpenJS.Electron.36                 36.9.5         Tag: chrome
+Electron                                              OpenJS.Electron.37                 37.10.3        Tag: chrome
+Electron                                              OpenJS.Electron.38                 38.8.6         Tag: chrome
+Electron                                              OpenJS.Electron.39                 39.8.10        Tag: chrome
+Electron                                              OpenJS.Electron.40                 40.10.6        Tag: chrome
+Electron                                              OpenJS.Electron.41                 41.10.7        Tag: chrome
+Electron                                              OpenJS.Electron.42                 42.11.13       Tag: chrome
+Electron                                              OpenJS.Electron.43                 43.7.10        Tag: chrome
+Electron                                              OpenJS.Electron.44                 44.7.0         Tag: chrome
+Browser Tamer                                         aloneguid.bt                       6.3.1          Tag: chrome
+ABDownloadManager                                     amir1376.ABDownloadManager         1.11.0         Tag: chrome
+TabBouncer                                            jacking75.TabBouncer               1.1.1          Tag: chrome
+Hindsight                                             obsidianforensics.HindsightGUI     2026.06        Tag: chrome
+AI Browser Toolkit                                    skssmd.AIBrowserToolkit            0.7.8          Tag: chrome
+BrowserDownloadsView                                  NirSoft.BrowserDownloadsView       1.51           Tag: Chrome
+115浏览器                                             115.115Chrome                      36.0.1         
+360极速浏览器                                         360.360Chrome                      23.0.1253.0    
+360 极速浏览器X                                       360.360Chrome.X                    23.1.1298.64   
+ChromeDriver                                          Chromium.ChromeDriver              155.0.8059.79  
+Google Chrome Beta                                    Google.Chrome.Beta                 156.0.8078.17  
+Google Chrome Beta (EXE)                              Google.Chrome.Beta.EXE             156.0.8078.17  
+Google Chrome Canary                                  Google.Chrome.Canary               157.0.8102.0   
+Google Chrome Dev                                     Google.Chrome.Dev                  157.0.8092.0   
+Google Chrome Dev (EXE)                               Google.Chrome.Dev.EXE              157.0.8092.0   
+Google Chrome (EXE)                                   Google.Chrome.EXE                  155.0.8059.40  
+Google Chrome OS Readiness Tool Bundle                Google.ChromeOSReadinessToolBundle 1.0.4.0        
+Chrome Remote Desktop Host                            Google.ChromeRemoteDesktopHost     154.0.8037.40  
+ICBCChromeExtension                                   ICBC.ICBCChromeExtension           1.2.0.0        
+ChromeCacheView                                       NirSoft.ChromeCacheView            2.52           
+Ginger Chrome                                         Saxo_Broko.GingerChrome            93.0.4529.0    
+winchrome                                             macchrome.winchrome                150.0.7871.225 
+xpchrome                                              weolar.xpchrome                    115.0.5790.136 
+Vision Teacher for Chromebooks Machine-Wide Installer Netop.VisionTeacher                1.7.6.0        
+IPTVnator                                             4gray.iptvnator                    0.24.0         Tag: chromeos
+Ventoy                                                Ventoy.Ventoy                      1.1.17         Tag: chromeos
+Google Updater                                        Google.GoogleUpdater               157.0.8089.0   Tag: google-chrome
+HirePilot                                             JuanPRG.HirePilot                  2.2.3          Tag: chrome-extension
+Inssist                                               SlashedIo.Inssist                  16.1.0         Tag: chrome-extension
+OpenAI Translator                                     yetone.OpenAITranslator            0.6.43         Tag: chrome-extension
+jellytoast                                            wolfgangwarehaus.jellytoast        0.2.1          Tag: chromecast

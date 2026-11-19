@@ -1,0 +1,13 @@
+<Page
+    x:Class="WinProvision.Store.Views.InstalledPackagesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:WinProvision.Store.Controls"
+    x:Name="InstalledRoot"
+    Background="Transparent"
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded"
+    FontFamily="{StaticResource StoreFontFamily}"
+    FontSize="13">
+    <controls:PackageScreen x:Name="Screen" Provider="{x:Bind ScreenProvider, Mode=OneWay}" />
+</Page>

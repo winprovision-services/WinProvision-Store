@@ -1,0 +1,1755 @@
+// WinProvisionApiService.cs
+// Cliente da API própria do catálogo v2 assinado.
+//
+using System;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Win32;
+using WinProvision.Core.Models;
+using WinProvision.Viper;
+using WinProvision.Elevation;
+
+namespace WinProvision.Core.Services;
+
+#region Snapshot interno do catálogo validado
+
+public sealed class CatalogIndex
+{
+    public int Schema { get; set; }
+    public DateTimeOffset GeneratedAt { get; set; }
+    public int Count { get; set; }
+    public List<CatalogIndexEntry> Packages { get; set; } = [];
+    public string CatalogDatabaseSha256 { get; set; } = string.Empty;
+    [JsonIgnore] internal bool RemoteRefreshSucceeded { get; set; }
+}
+
+public sealed class CatalogIndexEntry
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Publisher { get; set; } = "";
+    public string Version { get; set; } = "";
+    public string Source { get; set; } = "winget";
+    public List<string> Architectures { get; set; } = [];
+    public int InstallerCount { get; set; }
+    public string? DetailPath { get; set; }
+    public string? DetailSha256 { get; set; }
+    public string? IconUrl { get; set; }
+    public string? Description { get; set; }
+}
+
+public sealed record CatalogSourceHealth(
+    string Source,
+    bool Available,
+    int? AppCount,
+    DateTimeOffset? GeneratedUtc,
+    TimeSpan? ResponseTime,
+    string? Error);
+
+public sealed record CatalogApiHealth(
+    DateTimeOffset CheckedAt,
+    IReadOnlyList<CatalogSourceHealth> Sources);
+
+/// <summary>Modelo interno normalizado a partir do detalhe v2 assinado.</summary>
+public sealed class PackageManifest
+{
+    [JsonPropertyName("schemaVersion")] public int Schema { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("source")] public string Source { get; set; } = "winget";
+    [JsonPropertyName("installers")] public List<CatalogInstaller> Installers { get; set; } = [];
+    [JsonIgnore] public string? PublisherUrl { get; set; }
+    [JsonIgnore] public string? LicenseUrl { get; set; }
+    [JsonIgnore] public string? ReleaseNotesUrl { get; set; }
+    [JsonIgnore] public DateTimeOffset? ReleaseDate { get; set; }
+}
+
+/// <summary>Compatibilidade para consumidores antigos do modelo de instalador.</summary>
+public sealed class PackageInstaller : CatalogInstaller { }
+
+#endregion
+
+public enum WinProvisionInstallOutcome
+{
+    Success,
+    PackageNotFound,
+    NoCompatibleInstaller,
+    SilentInstallNotSupported,
+    DownloadFailed,
+    HashMismatch,
+    ExtractionFailed,
+    InstallProcessFailed,
+    ElevationCanceled,
+    InvalidManifest,
+    RequiresWinget
+}
+
+public sealed record WinProvisionInstallResult(
+    WinProvisionInstallOutcome Outcome,
+    int? ExitCode = null,
+    string? Message = null,
+    bool InstallerStarted = false,
+    [property: JsonIgnore] string? VerifiedProductCode = null);
+
+public sealed record WinProvisionInstallerCommand(string FileName, IReadOnlyList<string> Arguments);
+public sealed record WinProvisionUpdatePlan(UpgradablePackage InstalledPackage, PackageManifest Manifest, CatalogInstaller Installer);
+
+public static class WinProvisionInstallerCommandBuilder
+{
+    public static WinProvisionInstallerCommand Build(string installerPath, string? installerType, string? silentArgs)
+    {
+        string type = installerType?.Trim().ToLowerInvariant() ?? string.Empty;
+        bool isMsi = type is "msi" or "wixmsi"
+                     || Path.GetExtension(installerPath).Equals(".msi", StringComparison.OrdinalIgnoreCase);
+        string args = silentArgs?.Trim() ?? string.Empty;
+
+        if (isMsi)
+        {
+            string msiexec = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
+            return new WinProvisionInstallerCommand(msiexec,
+                new[] { "/i", installerPath }.Concat(WindowsArgumentParser.Parse(args)).ToArray());
+        }
+
+        return new WinProvisionInstallerCommand(installerPath, WindowsArgumentParser.Parse(args));
+    }
+}
+
+/// <summary>
+/// Cliente da API própria da WinProvision Store. Serve como:
+///  1) fallback direto quando o gerenciador de pacotes COM API falha;
+///  2) caminho primário quando a reelevação falha ou o processo já roda como SYSTEM
+///     (cenários em que a COM do gerenciador de pacotes não é viável).
+/// </summary>
+[SupportedOSPlatform("windows")]
+public sealed class WinProvisionApiService : IAsyncDisposable
+{
+    private readonly System.Threading.Lock _lifecycleGate = new();
+    private readonly CancellationTokenSource _lifetime = new();
+    private Task? _revalidationTask;
+    private bool _disposed;
+
+    public async ValueTask DisposeAsync()
+    {
+        Task? pending;
+        lock (_lifecycleGate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _lifetime.Cancel();
+            pending = _revalidationTask;
+        }
+        try
+        {
+            if (pending is not null) await pending.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (_ownsHttpClient) _http.Dispose();
+            _lifetime.Dispose();
+        }
+    }
+
+    private static readonly RequestRateLimitPolicy MetadataRateLimit = RequestRateLimitHandler.SharedPolicy;
+    private readonly HttpClient _http;
+    private readonly bool _ownsHttpClient;
+    private readonly CatalogV2Client _catalogV2Client;
+    private readonly string _cacheDir;
+    private readonly SemaphoreSlim _indexLock = new(1, 1);
+    private readonly SemaphoreSlim _manifestCacheLock = new(1, 1);
+    private readonly SemaphoreSlim _installRecordsLock = new(1, 1);
+    private readonly string _installRecordsPath;
+    private readonly OperationPreferencesService _operationPreferences;
+    private readonly IInstallerProcessStarter _installerProcessStarter;
+    private readonly CachedInstallerElevationInspector _installerElevationInspector;
+
+    private CatalogIndex? _indexCache;
+    private readonly ConcurrentDictionary<string, (CatalogV2App App, DateTimeOffset Expires)> _wingetApps = new(StringComparer.OrdinalIgnoreCase);
+    private bool _startupRevalidationScheduled;
+    private IReadOnlyDictionary<string, CatalogIndexEntry> _catalogEntriesById =
+        new Dictionary<string, CatalogIndexEntry>(StringComparer.OrdinalIgnoreCase);
+    // O índice local é servido imediatamente; os manifestos remotos são revalidados
+    // uma vez por sessão e os índices só baixam de novo quando o hash muda.
+    private static readonly TimeSpan MaxStaleCacheAge = TimeSpan.FromDays(30);
+    private static readonly TimeSpan UpdateIndexRefreshTimeout = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan UpdateDetailTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan UpdateDetailsTotalTimeout = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan UpdateExecutionRevalidationTimeout = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(12);
+    private const int MaxRequestAttempts = 4;
+    private const long MaxInstallerBytes = 4L * 1024 * 1024 * 1024;
+    private const long MaxInstallerCacheBytes = 2L * 1024 * 1024 * 1024;
+    private static readonly TimeSpan InstallerCacheRetention = TimeSpan.FromDays(30);
+    private static readonly SemaphoreSlim InstallerCacheGate = new(1, 1);
+
+    public WinProvisionApiService(HttpClient? http = null, string? cacheDir = null, string? installRecordsPath = null,
+        OperationPreferencesService? operationPreferences = null, IInstallerProcessStarter? installerProcessStarter = null,
+        IInstallerElevationInspector? installerElevationInspector = null, IInstallerInspectionStore? installerInspectionStore = null)
+    {
+        _operationPreferences = operationPreferences ?? new OperationPreferencesService();
+        _installerProcessStarter = installerProcessStarter ?? new InstallerProcessStarter();
+        _ownsHttpClient = http is null;
+        _http = http ?? new HttpClient(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            ConnectCallback = ViperHttpConnection.ConnectAsync,
+            ConnectTimeout = TimeSpan.FromSeconds(25),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            MaxConnectionsPerServer = 8
+        })
+        { Timeout = Timeout.InfiniteTimeSpan };
+        if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("WinProvisionStore/1.0");
+        _cacheDir = cacheDir ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinProvisionStore", "ApiCache");
+        _installerElevationInspector = new CachedInstallerElevationInspector(
+            installerElevationInspector ?? new InstallerElevationInspector(),
+            installerInspectionStore ?? new InstallerInspectionStore(Path.Combine(_cacheDir, "installer-inspection")));
+        _installRecordsPath = installRecordsPath ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinProvisionStore", "ApiInstalledPackages.json");
+        Directory.CreateDirectory(_cacheDir);
+        _catalogV2Client = new CatalogV2Client(_http, Path.Combine(_cacheDir, "catalog-v2"));
+    }
+
+    /// <summary>Detecta se o processo atual roda sob a conta SYSTEM (NT AUTHORITY\SYSTEM).</summary>
+    public static bool IsRunningAsSystem()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return identity.User?.IsWellKnown(System.Security.Principal.WellKnownSidType.LocalSystemSid) == true;
+    }
+
+    public async Task<CatalogIndex> GetIndexAsync(bool forceRefresh = false, CancellationToken ct = default,
+        bool requireRemote = false)
+    {
+        await _indexLock.WaitAsync(ct);
+        try
+        {
+            if (!forceRefresh && !requireRemote && _indexCache is not null)
+            {
+                ScheduleStartupRevalidation();
+                return _indexCache;
+            }
+            CatalogState state = await _catalogV2Client.RefreshAsync(ct).ConfigureAwait(false);
+            if (requireRemote && !_catalogV2Client.LastRefreshWasRemote)
+                throw new HttpRequestException("Não foi possível revalidar o catálogo v2 remoto; esta operação exige a geração atual.");
+            IReadOnlyList<AppEntry> apps = await _catalogV2Client.SearchAsync(null, 50000, ct).ConfigureAwait(false);
+            string databaseSha = state.RawCatalogSha256;
+            bool changed = !string.Equals(_indexCache?.CatalogDatabaseSha256, databaseSha, StringComparison.OrdinalIgnoreCase);
+            var index = new CatalogIndex
+            {
+                Schema = 4, GeneratedAt = DateTimeOffset.UtcNow, Count = apps.Count,
+                Packages = apps.Select(app => new CatalogIndexEntry
+                {
+                    Id = app.Id, Name = app.Name, Publisher = app.Publisher, Version = app.Version,
+                    Source = "winget", Architectures = app.Architectures, DetailPath = app.CatalogDetailPath,
+                    DetailSha256 = app.CatalogDetailSha256, IconUrl = IconService.ResolveCatalogMediaUrl(app, app.Media?.Icon, app.Media?.IconSha256),
+                    Description = app.Description, InstallerCount = app.Architectures.Count
+                }).ToList(),
+                CatalogDatabaseSha256 = databaseSha,
+                RemoteRefreshSucceeded = _catalogV2Client.LastRefreshWasRemote
+            };
+            _catalogEntriesById = index.Packages.ToDictionary(entry => CatalogEntryKey("winget", entry.Id), StringComparer.OrdinalIgnoreCase);
+            _indexCache = index;
+            if (changed) _wingetApps.Clear();
+            _startupRevalidationScheduled = true;
+            return index;
+        }
+        finally
+        {
+            _indexLock.Release();
+        }
+    }
+
+    private static bool IsCatalogReadFailure(Exception exception) => exception is HttpRequestException or IOException
+        or OperationCanceledException or JsonException or InvalidDataException or UnauthorizedAccessException
+        or Microsoft.Data.Sqlite.SqliteException or FormatException or OverflowException;
+
+    /// <summary>Verifica cada catálogo remoto individualmente.</summary>
+    public async Task<CatalogApiHealth> CheckCatalogHealthAsync(CancellationToken ct = default)
+    {
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            CatalogIndex index = await GetIndexAsync(forceRefresh: true, ct: ct, requireRemote: true).ConfigureAwait(false);
+            return new CatalogApiHealth(DateTimeOffset.UtcNow,
+                [new CatalogSourceHealth("WinGet", true, index.Count, index.GeneratedAt, clock.Elapsed, null)]);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (IsCatalogReadFailure(ex))
+        {
+            return new CatalogApiHealth(DateTimeOffset.UtcNow,
+                [new CatalogSourceHealth("WinGet", false, null, null, clock.Elapsed, ex.Message)]);
+        }
+    }
+
+    /// <summary>Remove os índices, detalhes e instaladores em cache local, sem tocar nos catálogos remotos.</summary>
+    public async Task ClearLocalCacheAsync(CancellationToken ct = default)
+    {
+        await ClearCatalogCacheAsync(ct).ConfigureAwait(false);
+        await ClearInstallerCacheAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task ClearCatalogCacheAsync(CancellationToken ct = default)
+    {
+        await _indexLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await _manifestCacheLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (Directory.Exists(_cacheDir))
+                    Directory.Delete(_cacheDir, recursive: true);
+                Directory.CreateDirectory(_cacheDir);
+                _indexCache = null;
+                _wingetApps.Clear();
+                    _catalogEntriesById = new Dictionary<string, CatalogIndexEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                _manifestCacheLock.Release();
+            }
+        }
+        finally
+        {
+            _indexLock.Release();
+        }
+
+    }
+
+    public async Task ClearInstallerCacheAsync(CancellationToken ct = default)
+    {
+        await InstallerCacheGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            string installerCacheDirectory = GetInstallerCacheDirectory();
+            if (Directory.Exists(installerCacheDirectory))
+                Directory.Delete(installerCacheDirectory, recursive: true);
+        }
+        finally
+        {
+            InstallerCacheGate.Release();
+        }
+    }
+
+    private void ScheduleStartupRevalidation()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_startupRevalidationScheduled || _disposed) return;
+            _startupRevalidationScheduled = true;
+            _revalidationTask = RevalidateIndexInBackgroundAsync();
+        }
+    }
+
+    private async Task RevalidateIndexInBackgroundAsync()
+    {
+        try
+        {
+            await GetIndexAsync(forceRefresh: true, _lifetime.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            WinProvision.Core.Services.CoreLog.Debug("[WinProvisionAPI] Revalidação do catálogo cancelada durante o encerramento.");
+        }
+        catch (Exception exception) { CoreLog.Warning(exception, "RevalidateCatalogIndex"); }
+    }
+
+    public async Task<PackageManifest?> GetPackageAsync(string id, CancellationToken ct = default,
+        string? source = null, string? version = null)
+    {
+        try { return await GetWingetPackageCoreAsync(id, ct, source, version).ConfigureAwait(false); }
+        catch (Exception exception) when (HasIntegrityFailure(exception))
+        {
+            ct.ThrowIfCancellationRequested();
+            await GetIndexAsync(forceRefresh: true, ct).ConfigureAwait(false);
+            return await GetWingetPackageCoreAsync(id, ct, source, version).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<PackageManifest?> GetWingetPackageCoreAsync(string id, CancellationToken ct,
+        string? source, string? version)
+    {
+        if (string.Equals(source, "msstore", StringComparison.OrdinalIgnoreCase)) return null;
+        await GetIndexAsync(ct: ct).ConfigureAwait(false);
+        if (!_catalogEntriesById.TryGetValue(CatalogEntryKey("winget", id), out var entry)) return null;
+        var summary = new AppEntry
+        {
+            Id = entry.Id, Source = "winget", Name = entry.Name, Version = entry.Version,
+            CatalogDetailPath = entry.DetailPath, CatalogDetailSha256 = entry.DetailSha256
+        };
+        return await _catalogV2Client.GetVersionDetailAsync(summary, version ?? entry.Version, ct).ConfigureAwait(false);
+    }
+
+    private static bool HasIntegrityFailure(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is InvalidDataException) return true;
+        return false;
+    }
+
+    private static string CatalogEntryKey(string source, string id) => $"{source}\0{id}";
+
+    internal static async Task<byte[]> ReadBoundedPayloadAsync(HttpContent content, int maximumBytes, CancellationToken token)
+    {
+        long? contentLength = content.Headers.ContentLength;
+        if (contentLength is { } declaredLength && declaredLength > maximumBytes)
+            throw new InvalidDataException($"A resposta JSON excede o limite de {maximumBytes} bytes.");
+        int initialCapacity = contentLength is { } capacity && capacity >= 0 && capacity <= int.MaxValue
+            ? (int)capacity : 0;
+        await using Stream input = await content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        using var payload = new MemoryStream(initialCapacity);
+        byte[] buffer = new byte[64 * 1024];
+        while (true)
+        {
+            int count = await input.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false);
+            if (count == 0) break;
+            if (payload.Length > maximumBytes - count)
+                throw new InvalidDataException($"A resposta JSON excede o limite de {maximumBytes} bytes.");
+            await payload.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
+        }
+        return payload.ToArray();
+    }
+    public static CatalogInstaller? PickInstaller(
+        PackageManifest manifest,
+        Architecture? preferred = null,
+        string? preferredScope = null)
+    {
+        var current = preferred ?? RuntimeInformation.OSArchitecture;
+        var order = current switch
+        {
+            Architecture.Arm64 => new[] { "arm64", "x64", "x86" },
+            Architecture.X64 => new[] { "x64", "x86" },
+            Architecture.Arm => new[] { "arm", "x86" },
+            _ => new[] { "x86" }
+        };
+
+        foreach (var arch in preferred.HasValue ? order.Take(1) : order)
+        {
+            // Dentro da mesma arquitetura, prefere um installer com silentSupported=true
+            // (ex.: pacote que publica tanto um .exe quanto um .zip pra mesma arch) —
+            // evita escolher por acaso um tipo que a API própria não sabe instalar sem
+            // interação quando existe alternativa silenciosa disponível.
+            var candidates = manifest.Installers
+                .Where(i => string.Equals(i.Architecture, arch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            candidates = PreferScope(candidates, preferredScope)
+                .OrderByDescending(i => i.SilentSupported)
+                .ToList();
+            if (candidates.Count > 0) return candidates[0];
+        }
+        // Um instalador sem arquitetura declarada ainda pode ser selecionado. Não escolha
+        // um binário marcado para uma arquitetura incompatível só por ser o único restante;
+        // o fallback gerenciador de pacotes sabe tratar manifests especiais e emulation melhor.
+        return PreferScope(manifest.Installers.Where(i => string.IsNullOrWhiteSpace(i.Architecture)
+                || string.Equals(i.Architecture, "neutral", StringComparison.OrdinalIgnoreCase)), preferredScope)
+            .OrderByDescending(i => i.SilentSupported)
+            .FirstOrDefault();
+    }
+
+    private static IEnumerable<CatalogInstaller> PreferScope(
+        IEnumerable<CatalogInstaller> installers,
+        string? preferredScope)
+    {
+        var available = installers.ToList();
+        string? target = preferredScope?.Trim().ToLowerInvariant() switch
+        {
+            "user" => "user",
+            "machine" or "system" => "machine",
+            _ => null
+        };
+        if (target is null)
+            return available;
+
+        var matching = available.Where(i => string.Equals(i.Scope, target, StringComparison.OrdinalIgnoreCase)).ToList();
+        return matching.Count > 0 ? matching : target == "user"
+            ? Enumerable.Empty<CatalogInstaller>()
+            : available.Where(i => string.IsNullOrWhiteSpace(i.Scope));
+    }
+
+    /// <summary>
+    /// Baixa e instala silenciosamente. Ponto de entrada único a ser chamado
+    /// pelas falhas reais da COM, pelo contexto de elevação ou pela ausência do pacote.
+    /// </summary>
+    public async Task<WinProvisionInstallResult> TryInstallAsync(
+        string packageId,
+        IProgress<string>? onLog = null,
+        CancellationToken ct = default,
+        string? preferredArchitecture = null,
+        string? preferredScope = null,
+        Action<InstallProgressUpdate>? onProgress = null,
+        string? source = null,
+        bool requiresElevation = false,
+        bool elevationProhibited = false,
+        PackageManifest? suppliedManifest = null,
+        string? requestedVersion = null,
+        bool recordInstall = true)
+    {
+        onLog?.Report($"[WinProvisionAPI] Consultando manifest de '{packageId}'...");
+        PackageManifest? manifest;
+        try
+        {
+            manifest = suppliedManifest ?? await GetPackageAsync(packageId, ct, source, requestedVersion).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or TaskCanceledException)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.DownloadFailed,
+                Message: $"Falha ao consultar o catálogo da API própria: {ex.Message}");
+        }
+
+        if (manifest is null)
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.PackageNotFound,
+                Message: $"Pacote '{packageId}' não encontrado na API própria.");
+
+        if (!string.Equals(manifest.Id, packageId, StringComparison.OrdinalIgnoreCase))
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                Message: "O manifesto retornado não corresponde ao pacote.");
+
+        if (string.Equals(manifest.Source, "msstore", StringComparison.OrdinalIgnoreCase))
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.RequiresWinget,
+                Message: "O pacote pertence à Microsoft Store e será instalado pela fonte oficial msstore do WinGet.");
+
+        if (manifest.Installers is null || manifest.Installers.Count == 0)
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                Message: "O manifesto não possui instaladores.");
+
+        var requestedArchitecture = preferredArchitecture?.Trim().ToLowerInvariant() switch
+        {
+            "x86" => Architecture.X86,
+            "x64" => Architecture.X64,
+            "arm64" => Architecture.Arm64,
+            "arm" => Architecture.Arm,
+            _ => (Architecture?)null
+        };
+        bool isSystem = IsRunningAsSystem();
+        string? effectiveScope = isSystem ? "machine" : preferredScope;
+        var installer = PickInstaller(manifest, requestedArchitecture, effectiveScope);
+        if (installer is null)
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.NoCompatibleInstaller,
+                Message: string.Equals(effectiveScope, "user", StringComparison.OrdinalIgnoreCase)
+                    ? $"'{packageId}' não possui uma variante compatível de escopo de usuário. A instalação não foi iniciada."
+                    : $"Nenhum installer compatível para '{packageId}'.");
+
+        if (isSystem && string.Equals(installer.Scope, "user", StringComparison.OrdinalIgnoreCase))
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.NoCompatibleInstaller,
+                Message: $"'{packageId}' só possui instalador de escopo de usuário. O processo está como SYSTEM e não deve instalar no perfil LocalSystem.");
+
+        if (!Uri.TryCreate(installer.Url, UriKind.Absolute, out var installerUri)
+            || installerUri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(installerUri.UserInfo))
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                Message: "O manifesto não contém uma URL HTTPS válida para o instalador.");
+
+        if (!IsValidSha256(installer.Sha256))
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                Message: "O manifesto não contém um SHA-256 válido; o instalador não será executado.");
+
+        InstallerSilentArgumentResolution silentResolution = CatalogInstallerOptions.ResolveSilent(installer);
+        if (silentResolution.RejectionReason is not null)
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                Message: silentResolution.RejectionReason);
+        bool interactiveInstall = silentResolution.Arguments is null && !installer.IsPortable;
+        if (interactiveInstall)
+            onLog?.Report("O catálogo não declara argumentos silenciosos para este instalador. Ele será iniciado de forma interativa e poderá exibir suas próprias telas.");
+
+        string extension = Path.GetExtension(installerUri.AbsolutePath);
+        string workingDirectory = Path.Combine(Path.GetTempPath(), "WinProvision", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workingDirectory);
+        var tempFile = Path.Combine(workingDirectory, SanitizeFileName(packageId) + extension);
+        // Só usado quando o instalador vem dentro de um zip (extraído aqui, apagado no final).
+        string? extractDir = null;
+        bool installerStarted = false;
+
+        try
+        {
+            string? cachedInstaller = await FindVerifiedInstallerCacheAsync(installer.Sha256, extension, ct)
+                .ConfigureAwait(false);
+            if (cachedInstaller is not null)
+            {
+                File.Copy(cachedInstaller, tempFile, overwrite: true);
+                onLog?.Report("[WinProvisionAPI] Instalador reutilizado do cache local após validação SHA-256.");
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.OwnApi));
+            }
+            else
+            {
+                onLog?.Report($"[WinProvisionAPI] Baixando {installer.Url}...");
+                await DownloadFileWithViperAsync(installer.Url, installer.Sha256, tempFile, onLog, onProgress, ct);
+
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Preparing, Method: WingetMethod.OwnApi));
+                onLog?.Report("[WinProvisionAPI] SHA-256 validado pelo Viper antes da publicação.");
+
+                await SaveVerifiedInstallerCacheAsync(tempFile, installer.Sha256, extension, onLog, ct)
+                    .ConfigureAwait(false);
+            }
+
+            if (installer.IsPortable)
+            {
+                onLog?.Report("[WinProvisionAPI] Instalando aplicativo portátil e criando atalho na Área de Trabalho...");
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Installing, Method: WingetMethod.OwnApi));
+                installerStarted = true;
+                try
+                {
+                    var portableResult = await InstallPortablePackageAsync(tempFile, packageId, installer, ct).ConfigureAwait(false);
+                    if (recordInstall && portableResult.Outcome == WinProvisionInstallOutcome.Success)
+                        await RememberApiInstallAsync(packageId, isPortable: true, CancellationToken.None).ConfigureAwait(false);
+                    return portableResult with { InstallerStarted = installerStarted };
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    return new WinProvisionInstallResult(WinProvisionInstallOutcome.InstallProcessFailed,
+                        ex.HResult, $"Não foi possível instalar o aplicativo portátil: {ex.Message}", InstallerStarted: installerStarted);
+                }
+            }
+
+            // O que de fato roda: o próprio arquivo baixado, ou (quando o pacote é um zip
+            // com instalador aninhado) o instalador extraído de dentro dele.
+            string runnablePath = tempFile;
+            string effectiveType = installer.Type ?? string.Empty;
+
+            if (installer.IsZipWithNestedInstaller)
+            {
+                onLog?.Report($"[WinProvisionAPI] Extraindo {installer.NestedInstallerFile} do pacote zip...");
+                extractDir = Path.Combine(workingDirectory, "extracted");
+
+                string? extractedPath;
+                try
+                {
+                    extractedPath = ExtractNestedInstaller(tempFile, extractDir, installer.NestedInstallerFile!);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+                {
+                    return new WinProvisionInstallResult(WinProvisionInstallOutcome.ExtractionFailed, Message: ex.Message);
+                }
+
+                if (extractedPath is null)
+                    return new WinProvisionInstallResult(WinProvisionInstallOutcome.ExtractionFailed,
+                        Message: $"'{installer.NestedInstallerFile}' não encontrado dentro do zip de '{packageId}'.");
+
+                runnablePath = extractedPath;
+                effectiveType = installer.NestedType ?? string.Empty;
+            }
+
+            WindowsInstallerInventory.PackageIdentity? msiIdentity = InstallerFamily(effectiveType) == "msi"
+                ? WindowsInstallerInventory.ReadPackageIdentity(runnablePath) : null;
+            string? verifiedProductCode = msiIdentity is not null && NumericVersionsEqual(msiIdentity.Version, manifest.Version)
+                ? msiIdentity.ProductCode : null;
+            onLog?.Report($"[WinProvisionAPI] Instalando formato {effectiveType} (silent source: {silentResolution.Source})...");
+            onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Installing, Method: WingetMethod.OwnApi));
+            CatalogInstaller policyInstaller = installer.Scope is null && effectiveScope is not null
+                ? new CatalogInstaller { Type = installer.Type, NestedType = installer.NestedType, Scope = effectiveScope, ElevationRequirement = installer.ElevationRequirement, Elevation = installer.Elevation }
+                : installer;
+            string? verifiedHash = string.Equals(runnablePath, tempFile, StringComparison.OrdinalIgnoreCase) ? installer.Sha256 : null;
+            int exitCode = await RunDownloadedInstallerAsync(packageId, manifest.Version, policyInstaller,
+                manifest.Schema >= 3, runnablePath, effectiveType, silentResolution.Arguments ?? string.Empty,
+                verifiedHash, ct, requiresElevation, () => installerStarted = true, () => installerStarted,
+                line => onLog?.Report(line), installer.Id).ConfigureAwait(false);
+
+            // Códigos padrão do Windows Installer/Burn mais os códigos de sucesso
+            // adicionais declarados no manifesto do gerenciador de pacotes.
+            var ok = InstallerExitCodes.IsSuccess(exitCode) || installer.SuccessCodes.Contains(exitCode);
+            if (ok && recordInstall)
+                await RememberApiInstallAsync(packageId, isPortable: false, CancellationToken.None).ConfigureAwait(false);
+            return ok
+                ? new WinProvisionInstallResult(WinProvisionInstallOutcome.Success, exitCode,
+                    InstallerStarted: installerStarted, VerifiedProductCode: verifiedProductCode)
+                : new WinProvisionInstallResult(WinProvisionInstallOutcome.InstallProcessFailed, exitCode,
+                    $"{InstallerExitCodes.Describe(exitCode)} Código {exitCode}.", InstallerStarted: installerStarted);
+        }
+        catch (ViperIntegrityException ex)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.HashMismatch,
+                Message: $"O catálogo do instalador está temporariamente desatualizado: o fornecedor já entrega bytes diferentes para a URL publicada. O arquivo foi descartado sem instalação; tente novamente após a próxima sincronização do catálogo. Detalhes: {ex.Message}",
+                InstallerStarted: installerStarted);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.DownloadFailed, Message: ex.Message,
+                InstallerStarted: installerStarted);
+        }
+        catch (TimeoutException ex)
+        {
+            return new WinProvisionInstallResult(installerStarted
+                    ? WinProvisionInstallOutcome.InstallProcessFailed : WinProvisionInstallOutcome.DownloadFailed,
+                Message: ex.Message, InstallerStarted: installerStarted);
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.ElevationCanceled,
+                ex.NativeErrorCode, "A solicitação de elevação foi cancelada.");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InstallProcessFailed,
+                ex.NativeErrorCode, $"Não foi possível iniciar o instalador: {ex.Message}", InstallerStarted: installerStarted);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new WinProvisionInstallResult(installerStarted
+                    ? WinProvisionInstallOutcome.InstallProcessFailed
+                    : WinProvisionInstallOutcome.DownloadFailed,
+                Message: "A operação excedeu o tempo limite.", InstallerStarted: installerStarted);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or UnauthorizedAccessException)
+        {
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.InstallProcessFailed,
+                ex.HResult, $"Não foi possível executar o instalador: {ex.Message}", InstallerStarted: installerStarted);
+        }
+        finally
+        {
+            TryDeleteDirectory(workingDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Extrai só o instalador aninhado (não o zip inteiro) para uma pasta temporária
+    /// dedicada. <paramref name="relativePath"/> vem tal como publicado no manifesto
+    /// (catálogo de pacotes usa "\" como separador); comparação por sufixo de caminho normalizado
+    /// tolera zips onde o entry vem prefixado por uma pasta-raiz extra.
+    /// </summary>
+    private static void ValidateArchive(ZipArchive archive)
+    {
+        if (archive.Entries.Count > 10_000)
+            throw new InvalidDataException("O ZIP excede o limite de arquivos.");
+        long remaining = MaxInstallerBytes;
+        foreach (ZipArchiveEntry entry in archive.Entries)
+        {
+            remaining -= entry.Length;
+            if (remaining < 0)
+                throw new InvalidDataException("O ZIP excede o limite de tamanho descompactado.");
+            if (((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000
+                || (entry.ExternalAttributes & (int)FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("O ZIP contém links não permitidos.");
+        }
+    }
+
+    private static string? ExtractNestedInstaller(string zipPath, string extractDir, string relativePath)
+    {
+        string normalizedTarget = relativePath.Replace('\\', '/').TrimStart('/');
+
+        using var archive = ZipFile.OpenRead(zipPath);
+        ValidateArchive(archive);
+        var entry = archive.Entries.FirstOrDefault(e =>
+                e.FullName.Replace('\\', '/').Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+            ?? archive.Entries.FirstOrDefault(e =>
+                e.FullName.Replace('\\', '/').EndsWith("/" + normalizedTarget, StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
+            return null;
+
+        Directory.CreateDirectory(extractDir);
+        string destination = Path.Combine(extractDir, Path.GetFileName(entry.FullName));
+        entry.ExtractToFile(destination, overwrite: true);
+        return destination;
+    }
+
+    /// <summary>
+    /// Remove um pacote previamente instalado por esta API. Primeiro executa o desinstalador
+    /// silencioso registrado, sem limpeza automática de resíduos. Os
+    /// portáteis só são removidos da pasta gerenciada da WinProvision Store.
+    /// </summary>
+    public async Task<bool?> UninstallAsync(
+        InstalledAppDetail app,
+        UninstallerEngineService uninstaller,
+        Action<string>? onStatus = null,
+        CancellationToken ct = default)
+    {
+        ApiInstallRecord? record = await FindApiInstallAsync(app.Id, ct).ConfigureAwait(false);
+        if (record is null)
+            return null; // Não foi instalado pelo método da API própria.
+        if (!record.IsPortable)
+            return null; // Aplicativos registrados seguem o fluxo comum de desinstalação.
+
+        onStatus?.Invoke("Tentando a desinstalação normal...");
+        bool success;
+        if (record.IsPortable)
+        {
+            // ZIP portátil não registra um desinstalador no Windows. A primeira etapa tenta
+            // remover só os atalhos do app; a remoção da pasta gerenciada é a etapa agressiva.
+            RemovePortableShortcuts(record.PackageId);
+            success = TryRemoveManagedPortableDirectory(record.PackageId);
+        }
+        else
+        {
+            success = await uninstaller.RunSilentUninstallAsync(app, ct).ConfigureAwait(false);
+        }
+
+        if (success)
+            await ForgetApiInstallAsync(record.PackageId, CancellationToken.None).ConfigureAwait(false);
+        return success;
+    }
+
+    private async Task RememberApiInstallAsync(string packageId, bool isPortable, CancellationToken ct)
+    {
+        await _installRecordsLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var records = await ReadInstallRecordsAsync(ct).ConfigureAwait(false);
+            records.RemoveAll(record => record.PackageId.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+            records.Add(new ApiInstallRecord(packageId, isPortable));
+            await WriteInstallRecordsAsync(records, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível salvar o registro da instalação: {ex.Message}");
+        }
+        finally
+        {
+            _installRecordsLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// A API própria só pode atualizar uma instalação que ela gerencia. Rodar seu
+    /// instalador sobre um pacote descoberto pelo gerenciador de pacotes pode criar uma segunda
+    /// instalação e deixar a versão original intacta.
+    /// </summary>
+    public async Task<bool> HasManagedInstallAsync(string packageId, CancellationToken ct = default) =>
+        await FindApiInstallAsync(packageId, ct).ConfigureAwait(false) is not null;
+
+    public async Task<bool> HasManagedInstallsAsync(CancellationToken ct = default)
+    {
+        await _installRecordsLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return (await ReadInstallRecordsAsync(ct).ConfigureAwait(false))
+                .Any(record => record is not null && !string.IsNullOrWhiteSpace(record.PackageId));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível conferir ownership para updates: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _installRecordsLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Descobre atualizações cruzando a identidade exata do inventário com o snapshot íntegro
+    /// do catálogo, independentemente do instalador original. O índice é lido uma vez; detalhes
+    /// só são buscados para alvos numericamente mais novos, com concorrência otimizada.
+    /// </summary>
+    public async Task<List<UpgradablePackage>> GetUpdatesAsync(
+        IReadOnlyCollection<UpgradablePackage> installedPackages,
+        CancellationToken ct = default,
+        bool refreshRemote = true)
+    {
+        ArgumentNullException.ThrowIfNull(installedPackages);
+        ct.ThrowIfCancellationRequested();
+        if (installedPackages.Count == 0)
+            return [];
+
+        // Uma consulta de rede por verificação manual; falha remota pode usar somente o
+        // snapshot local já verificado e ainda dentro da janela de stale definida pelo serviço.
+        CatalogIndex? index = await GetUpdateDiscoveryIndexAsync(refreshRemote, ct).ConfigureAwait(false);
+        if (index is null)
+            throw new HttpRequestException("Não foi possível consultar o catálogo WinProvision e não há índice local válido para comparar atualizações.");
+        var entries = index.Packages
+            .Where(entry => entry is not null && entry.Source.Equals("winget", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(entry => entry.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Mapear também por nome normalizado para permitir correspondência de aplicativos instalados via Registro
+        var entriesByName = entries.Values
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name))
+            .GroupBy(entry => NormalizeForMatching(entry.Name), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        var installedById = new Dictionary<string, List<UpgradablePackage>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var package in installedPackages)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(package.Id)
+                || !NormalizeManagedUpdateSource(package.Source).Equals("winget", StringComparison.Ordinal))
+                continue;
+
+            string id = package.Id;
+            // Se o ID não está no catálogo direto, tenta correlacionar pelo Nome (ex: apps desktop do Registro)
+            if (!entries.ContainsKey(id) && !string.IsNullOrWhiteSpace(package.Name))
+            {
+                string norm = NormalizeInstalledName(package.Name, package.CurrentVersion);
+                if (entriesByName.TryGetValue(norm, out var sameName))
+                {
+                    // Nomes compartilhados (Git.Git/plataforma do sistema.Git) podem ser resolvidos
+                    // pelo fabricante. Um fabricante ausente não desempata candidatos.
+                    string publisher = NormalizeForMatching(package.Publisher);
+                    var matchingPublisher = sameName.Where(entry => publisher.Length > 0
+                        && publisher == NormalizeForMatching(entry.Publisher)).ToList();
+                    if (matchingPublisher.Count == 1)
+                        id = matchingPublisher[0].Id;
+                    else if (matchingPublisher.Count == 0 && sameName.Count == 1
+                        && (publisher.Length == 0 || string.IsNullOrWhiteSpace(sameName[0].Publisher)))
+                        id = sameName[0].Id;
+                }
+            }
+
+            if (!installedById.TryGetValue(id, out var registrations))
+                installedById.Add(id, registrations = []);
+            registrations.Add(package);
+        }
+
+        var candidates = new List<(UpgradablePackage Installed, CatalogIndexEntry Entry)>();
+        foreach (var (id, registrations) in installedById)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!entries.TryGetValue(id, out var entry)) continue;
+            var installed = SelectUpdateInstallation(registrations, entry.Version);
+            if (installed is null
+                || !IsStrictlyNewerNumericVersion(installed.CurrentVersion, entry.Version))
+                continue;
+            candidates.Add((installed, entry));
+        }
+
+        if (candidates.Count == 0)
+            return [];
+
+        var offers = new System.Collections.Concurrent.ConcurrentBag<UpgradablePackage>();
+        using var detailScanTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        detailScanTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+        try
+        {
+            await Parallel.ForEachAsync(candidates,
+                new ParallelOptions { CancellationToken = detailScanTimeout.Token, MaxDegreeOfParallelism = 8 },
+                async (candidate, token) =>
+                {
+                    using var detailTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    detailTimeout.CancelAfter(UpdateDetailTimeout);
+                    try
+                    {
+                        // LoadVersionAsync valida caminho, identidade, versão e SHA-256 do
+                        // detalhe publicado antes de a oferta entrar na fila.
+                        PackageManifest? detail = await GetPackageAsync(candidate.Entry.Id, detailTimeout.Token,
+                            "winget", candidate.Entry.Version).ConfigureAwait(false);
+                        if (detail is null
+                            || !detail.Id.Equals(candidate.Entry.Id, StringComparison.OrdinalIgnoreCase)
+                            || !detail.Version.Equals(candidate.Entry.Version, StringComparison.Ordinal)
+                            || !detail.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+                            || detail.Installers is null || detail.Installers.Count == 0)
+                            return;
+
+                        CatalogInstaller? installer = PickUpdateInstaller(detail, candidate.Installed);
+                        if (installer is null)
+                            return;
+
+                        offers.Add(new UpgradablePackage
+                        {
+                            Id = candidate.Entry.Id,
+                            Name = !string.IsNullOrWhiteSpace(candidate.Entry.Name) ? candidate.Entry.Name : candidate.Installed.Name,
+                            CurrentVersion = candidate.Installed.CurrentVersion,
+                            AvailableVersion = detail.Version,
+                            Source = "winget",
+                            Publisher = !string.IsNullOrWhiteSpace(candidate.Entry.Publisher) ? candidate.Entry.Publisher : candidate.Installed.Publisher,
+                            Description = candidate.Entry.Description ?? candidate.Installed.Description ?? string.Empty,
+                            IconUrl = candidate.Entry.IconUrl ?? candidate.Installed.IconUrl ?? string.Empty,
+                            IsWinProvisionApiUpdate = true,
+                            WinProvisionApiAvailableVersion = detail.Version,
+                            InstalledScope = candidate.Installed.InstalledScope,
+                            InstalledArchitecture = candidate.Installed.InstalledArchitecture,
+                            InstalledRegistryId = candidate.Installed.InstalledRegistryId ?? candidate.Installed.Id,
+                            InstalledPublisher = candidate.Installed.InstalledPublisher ?? candidate.Installed.Publisher,
+                            InstalledInstallerType = candidate.Installed.InstalledInstallerType
+                        });
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException) when (detailTimeout.IsCancellationRequested)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Update detail timeout '{candidate.Entry.Id}'; mantendo as demais fontes.");
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or TaskCanceledException)
+                    {
+                        WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Update discovery isolou '{candidate.Entry.Id}': {ex.GetType().Name}: {ex.Message}");
+                    }
+                }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && detailScanTimeout.IsCancellationRequested)
+        {
+            WinProvision.Core.Services.CoreLog.Debug("[WinProvisionAPI] O limite total de detalhes foi atingido; usando as ofertas já verificadas.");
+        }
+
+        return offers.OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Compara apenas versões numéricas pontuadas; rótulos opacos não viram atualização.</summary>
+    public static bool IsStrictlyNewerNumericVersion(string? installed, string? candidate)
+    {
+        if (!TryParseStrictNumericVersion(installed, out var current)
+            || !TryParseStrictNumericVersion(candidate, out var available))
+            return false;
+        return available.CompareTo(current) > 0;
+    }
+
+    internal static bool NumericVersionsEqual(string? first, string? second) =>
+        TryParseStrictNumericVersion(first, out var left) && TryParseStrictNumericVersion(second, out var right)
+        && left == right;
+
+    internal static string NormalizeInstalledName(string name, string version)
+    {
+        string normalized = NormalizeForMatching(name);
+        string major = version.Split('.')[0];
+        // ARP names may include the installed major version ("PowerShell 7-x64").
+        // Strip it only when it agrees with the actual installed version.
+        return major.Length > 0 && major.All(char.IsAsciiDigit) && normalized.EndsWith(" " + major, StringComparison.Ordinal)
+            ? normalized[..^(major.Length + 1)] : normalized;
+    }
+
+    internal static UpgradablePackage? SelectUpdateInstallation(IReadOnlyList<UpgradablePackage> registrations, string? targetVersion = null)
+    {
+        if (registrations.Count == 1) return registrations[0];
+        if (registrations.Count == 0 || registrations.Any(item => string.IsNullOrWhiteSpace(item.InstalledArchitecture)
+                || string.IsNullOrWhiteSpace(item.InstalledScope))
+            || registrations.Select(item => item.InstalledScope).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1
+            || registrations.Select(item => item.InstalledArchitecture).Distinct(StringComparer.OrdinalIgnoreCase).Count() != registrations.Count)
+            return null;
+        // Parallel x86/x64 products are independent installations. Select the native
+        // product for this offer, never borrow the updated x86 version for an old x64 MSI.
+        string native = RuntimeInformation.OSArchitecture.ToString();
+        var preferred = registrations.SingleOrDefault(item => native.Equals(item.InstalledArchitecture, StringComparison.OrdinalIgnoreCase));
+        if (targetVersion is null || preferred is not null && IsStrictlyNewerNumericVersion(preferred.CurrentVersion, targetVersion))
+            return preferred;
+        var outdated = registrations.Where(item => IsStrictlyNewerNumericVersion(item.CurrentVersion, targetVersion)).ToList();
+        return outdated.Count == 1 ? outdated[0] : preferred;
+    }
+
+    internal static string NormalizeForMatching(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var s = text.Trim();
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*\((?:64-bit|32-bit|x64|x86|arm64|arm|x64\s+pt-BR|x86\s+pt-BR|pt-BR|en-US)[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"(?:\s+|-)(?:64-bit|32-bit|x64|x86|arm64|arm)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s+(?:version|v)?\s*\d+(?:\.\d+)+.*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var chars = s.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c) || c is '+' or '#' or '-').ToArray();
+        return string.Join(" ", new string(chars).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+    }
+
+    internal static string CompactIdentifier(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var chars = text.Where(char.IsLetterOrDigit).ToArray();
+        return new string(chars).ToLowerInvariant();
+    }
+
+    public async Task<WinProvisionUpdatePlan> PrepareUpdateAsync(UpgradablePackage installed,
+        string? requiredVersion = null, CancellationToken ct = default)
+    {
+        if (!NormalizeManagedUpdateSource(installed.Source).Equals("winget", StringComparison.Ordinal))
+            throw new InvalidOperationException("A WinProvision API não atualiza pacotes da Microsoft Store.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(UpdateExecutionRevalidationTimeout);
+        try
+        {
+            var index = await GetIndexAsync(forceRefresh: true, ct: timeout.Token, requireRemote: true).ConfigureAwait(false);
+            var entry = index.Packages.SingleOrDefault(item => item.Source == "winget"
+                && item.Id.Equals(installed.Id, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException("O aplicativo instalado não consta no catálogo WinProvision.");
+            if (!string.IsNullOrWhiteSpace(requiredVersion) && entry.Version != requiredVersion)
+                throw new InvalidOperationException($"O catálogo WinProvision oferece {entry.Version}, diferente do alvo {requiredVersion}. Recarregue as atualizações.");
+            if (!IsStrictlyNewerNumericVersion(installed.CurrentVersion, entry.Version))
+                throw new InvalidOperationException($"O catálogo WinProvision não oferece uma versão comprovadamente mais nova que {installed.CurrentVersion} (catálogo: {entry.Version}).");
+            var manifest = await GetPackageAsync(installed.Id, timeout.Token, "winget", entry.Version).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("O detalhe da versão não foi encontrado no catálogo WinProvision.");
+
+            var installer = PickUpdateInstaller(manifest, installed)
+                ?? throw new InvalidOperationException("O catálogo WinProvision não possui um instalador de atualização compatível com a instalação existente.");
+
+            if (string.IsNullOrWhiteSpace(installed.InstalledInstallerType))
+                installed.InstalledInstallerType = installer.Type;
+
+            // Supply only the selected installer so the execution cannot switch architecture,
+            // technology or scope after this preflight.
+            manifest.Installers = [installer];
+            return new WinProvisionUpdatePlan(installed, manifest, installer);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            throw new HttpRequestException("A preparação da atualização WinProvision excedeu o limite de tempo.");
+        }
+    }
+
+    internal static CatalogInstaller? PickUpdateInstaller(PackageManifest manifest, UpgradablePackage installed)
+    {
+        string family = InstallerFamily(installed.InstalledInstallerType);
+        var compatible = new PackageManifest
+        {
+            Installers = manifest.Installers.Where(item => !item.IsPortable && item.SilentSupported
+                && (family.Length == 0 || InstallerFamily(item.IsZipWithNestedInstaller ? item.NestedType : item.Type) == family)).ToList()
+        };
+        Architecture? architecture = installed.InstalledArchitecture?.ToLowerInvariant() switch
+        {
+            "x86" => Architecture.X86, "x64" => Architecture.X64,
+            "arm64" => Architecture.Arm64, "arm" => Architecture.Arm, _ => null
+        };
+        return PickInstaller(compatible, architecture, installed.InstalledScope);
+    }
+
+    private static string InstallerFamily(string? type) => type?.Trim().ToLowerInvariant() switch
+    {
+        "msi" or "wix" or "wixmsi" => "msi",
+        "exe" or "inno" or "nullsoft" or "nsis" or "burn" => "exe",
+        null or "" or "unknown" => "",
+        var value => value
+    };
+
+    /// <summary>
+    /// Revalida no R2 a oferta imediatamente antes de instalar. Cache local não é prova
+    /// suficiente para iniciar uma atualização: indisponibilidade remota deve falhar fechado.
+    /// </summary>
+    public async Task<bool> IsCurrentRemoteUpdateTargetAsync(
+        string packageId,
+        string targetVersion,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(targetVersion))
+            return false;
+        using var remoteTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        remoteTimeout.CancelAfter(UpdateExecutionRevalidationTimeout);
+        CatalogIndex index;
+        try
+        {
+            index = await GetIndexAsync(forceRefresh: true, ct: remoteTimeout.Token, requireRemote: true)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && remoteTimeout.IsCancellationRequested)
+        {
+            throw new HttpRequestException("O catálogo WinProvision excedeu o limite de tempo de revalidação.");
+        }
+        var entry = index.Packages.FirstOrDefault(item =>
+            item.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+            && item.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+        if (entry is null || !entry.Version.Equals(targetVersion, StringComparison.Ordinal))
+            return false;
+
+        PackageManifest? detail;
+        try
+        {
+            detail = await GetPackageAsync(packageId, remoteTimeout.Token, "winget", targetVersion)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && remoteTimeout.IsCancellationRequested)
+        {
+            throw new HttpRequestException("O detalhe da versão excedeu o limite de tempo de revalidação.");
+        }
+        return detail is not null
+            && detail.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)
+            && detail.Source.Equals("winget", StringComparison.OrdinalIgnoreCase)
+            && detail.Version.Equals(targetVersion, StringComparison.Ordinal)
+            && detail.Installers is { Count: > 0 };
+    }
+
+    private async Task<CatalogIndex?> GetUpdateDiscoveryIndexAsync(bool refreshRemote, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(UpdateIndexRefreshTimeout);
+        try
+        {
+            CatalogIndex index = await GetIndexAsync(forceRefresh: refreshRemote, ct: timeout.Token).ConfigureAwait(false);
+            if (refreshRemote && index.RemoteRefreshSucceeded || IsRecentUpdateIndex(index))
+                return index;
+            return await TryLoadCachedUpdateIndexAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or InvalidDataException or OperationCanceledException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] R2 indisponível/timeout durante discovery: {ex.GetType().Name}: {ex.Message}");
+            return await TryLoadCachedUpdateIndexAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<CatalogIndex?> TryLoadCachedUpdateIndexAsync(CancellationToken ct)
+    {
+        if (_indexCache is not null && IsRecentUpdateIndex(_indexCache)) return _indexCache;
+        await _indexLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_indexCache is not null && IsRecentUpdateIndex(_indexCache)) return _indexCache;
+            try
+            {
+                CatalogState state = await _catalogV2Client.RefreshAsync(ct).ConfigureAwait(false);
+                IReadOnlyList<AppEntry> apps = await _catalogV2Client.SearchAsync(null, 50000, ct).ConfigureAwait(false);
+                _indexCache = new CatalogIndex
+                {
+                    Schema = 4, GeneratedAt = DateTimeOffset.UtcNow, Count = apps.Count,
+                    Packages = apps.Select(app => new CatalogIndexEntry
+                    {
+                        Id = app.Id, Name = app.Name, Publisher = app.Publisher, Version = app.Version,
+                        Source = "winget", Architectures = app.Architectures, DetailPath = app.CatalogDetailPath,
+                        DetailSha256 = app.CatalogDetailSha256,
+                        IconUrl = IconService.ResolveCatalogMediaUrl(app, app.Media?.Icon, app.Media?.IconSha256),
+                        Description = app.Description, InstallerCount = app.Architectures.Count
+                    }).ToList(),
+                    CatalogDatabaseSha256 = state.CatalogSha256
+                };
+                _catalogEntriesById = _indexCache.Packages.ToDictionary(entry => CatalogEntryKey("winget", entry.Id), StringComparer.OrdinalIgnoreCase);
+                return _indexCache;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception exception) when (IsCatalogReadFailure(exception))
+            {
+                CoreLog.Debug($"[WinProvisionAPI] Banco v2 validado indisponível para updates offline: {exception.Message}");
+                return null;
+            }
+        }
+        finally { _indexLock.Release(); }
+    }
+
+    private static bool IsRecentUpdateIndex(CatalogIndex index)
+    {
+        TimeSpan age = DateTimeOffset.UtcNow - index.GeneratedAt;
+        return age >= TimeSpan.Zero && age <= MaxStaleCacheAge;
+    }
+
+    private static bool TryParseStrictNumericVersion(string? value, out Version version)
+    {
+        version = null!;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        string text = value.Trim();
+        string[] parts = text.Split('.');
+        if (parts.Length is < 2 or > 4 || parts.Any(part => part.Length == 0 || !part.All(char.IsAsciiDigit)))
+            return false;
+        string normalized = string.Join('.', parts.Concat(Enumerable.Repeat("0", 4 - parts.Length)));
+        if (!Version.TryParse(normalized, out var parsed)) return false;
+        version = parsed;
+        return true;
+    }
+
+    private static string NormalizeManagedUpdateSource(string? source) =>
+        string.IsNullOrWhiteSpace(source) || string.Equals(source.Trim(), "winget", StringComparison.OrdinalIgnoreCase)
+            ? "winget" : source.Trim();
+
+    private async Task<ApiInstallRecord?> FindApiInstallAsync(string packageId, CancellationToken ct)
+    {
+        await _installRecordsLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return (await ReadInstallRecordsAsync(ct).ConfigureAwait(false))
+                .FirstOrDefault(record => record.PackageId.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível ler o registro de instalações: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            _installRecordsLock.Release();
+        }
+    }
+
+    private async Task ForgetApiInstallAsync(string packageId, CancellationToken ct)
+    {
+        await _installRecordsLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var records = await ReadInstallRecordsAsync(ct).ConfigureAwait(false);
+            records.RemoveAll(record => record.PackageId.Equals(packageId, StringComparison.OrdinalIgnoreCase));
+            await WriteInstallRecordsAsync(records, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível atualizar o registro da instalação: {ex.Message}");
+        }
+        finally
+        {
+            _installRecordsLock.Release();
+        }
+    }
+
+    private async Task<List<ApiInstallRecord>> ReadInstallRecordsAsync(CancellationToken ct)
+    {
+        if (!File.Exists(_installRecordsPath))
+            return [];
+        await using var stream = File.OpenRead(_installRecordsPath);
+        return await WinProvision.Core.Services.AotJson.DeserializeAsync<List<ApiInstallRecord>>(stream, cancellationToken: ct)
+            .ConfigureAwait(false) ?? [];
+    }
+
+    private async Task WriteInstallRecordsAsync(List<ApiInstallRecord> records, CancellationToken ct)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_installRecordsPath)!);
+        await AtomicFile.WriteAllTextAsync(_installRecordsPath, WinProvision.Core.Services.AotJson.Serialize(records), ct).ConfigureAwait(false);
+    }
+
+    private static bool TryRemoveManagedPortableDirectory(string packageId)
+    {
+        string root = Path.GetFullPath(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinProvisionStore", "PortablePackages"));
+        string directory = Path.GetFullPath(Path.Combine(root, SanitizeFileName(packageId)));
+        if (!directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || !Directory.Exists(directory))
+            return !Directory.Exists(directory);
+
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Não foi possível remover o pacote portátil: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static void RemovePortableShortcuts(string packageId)
+    {
+        string packageDirectory = Path.GetFullPath(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinProvisionStore", "PortablePackages", SanitizeFileName(packageId))) + Path.DirectorySeparatorChar;
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        if (!Directory.Exists(desktop)) return;
+
+        foreach (string shortcutPath in Directory.EnumerateFiles(desktop, "*.lnk"))
+        {
+            try
+            {
+                using var shortcut = new ShellShortcut();
+                string target = shortcut.ReadTarget(shortcutPath);
+                if (!string.IsNullOrWhiteSpace(target) && Path.GetFullPath(target).StartsWith(packageDirectory, StringComparison.OrdinalIgnoreCase))
+                    File.Delete(shortcutPath);
+            }
+            catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                WinProvision.Core.Services.CoreLog.Debug($"[WinProvisionAPI] Ignorando atalho portátil inválido: {ex.Message}");
+            }
+        }
+    }
+
+    internal sealed record ApiInstallRecord(string PackageId, bool IsPortable);
+
+    private static async Task<WinProvisionInstallResult> InstallPortablePackageAsync(
+        string downloadedPath,
+        string packageId,
+        CatalogInstaller installer,
+        CancellationToken ct)
+    {
+        string portableRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WinProvisionStore", "PortablePackages");
+        Directory.CreateDirectory(portableRoot);
+
+        string installName = SanitizeFileName(packageId);
+        string destination = Path.Combine(portableRoot, installName);
+        string staging = Path.Combine(portableRoot, $".{installName}.staging-{Guid.NewGuid():N}");
+        string backup = Path.Combine(portableRoot, $".{installName}.backup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+
+        bool movedExisting = false;
+        try
+        {
+            string relativeExe;
+            if (string.Equals(installer.Type, "zip", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(installer.NestedInstallerFile))
+                    return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                        Message: "O pacote portátil ZIP não declara o EXE em NestedInstallerFiles.");
+
+                using (var archive = ZipFile.OpenRead(downloadedPath))
+                {
+                    ValidateArchive(archive);
+                    archive.ExtractToDirectory(staging, overwriteFiles: false);
+                }
+                relativeExe = installer.NestedInstallerFile;
+            }
+            else
+            {
+                string extension = Path.GetExtension(downloadedPath);
+                string fileName = SanitizeFileName(installer.PortableCommandAlias ?? packageId) + extension;
+                File.Copy(downloadedPath, Path.Combine(staging, fileName), overwrite: true);
+                relativeExe = fileName;
+            }
+
+            relativeExe = relativeExe.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            string stagingRoot = Path.GetFullPath(staging) + Path.DirectorySeparatorChar;
+            string executablePath = Path.GetFullPath(Path.Combine(staging, relativeExe));
+            if (!executablePath.StartsWith(stagingRoot, StringComparison.OrdinalIgnoreCase)
+                || !File.Exists(executablePath)
+                || !string.Equals(Path.GetExtension(executablePath), ".exe", StringComparison.OrdinalIgnoreCase))
+                return new WinProvisionInstallResult(WinProvisionInstallOutcome.InvalidManifest,
+                    Message: "O executável portátil declarado não foi encontrado dentro do ZIP.");
+
+            ct.ThrowIfCancellationRequested();
+            if (Directory.Exists(destination))
+            {
+                Directory.Move(destination, backup);
+                movedExisting = true;
+            }
+
+            try
+            {
+                Directory.Move(staging, destination);
+            }
+            catch
+            {
+                if (movedExisting && !Directory.Exists(destination))
+                    Directory.Move(backup, destination);
+                throw;
+            }
+
+            string installedExe = Path.Combine(destination, relativeExe);
+            string shortcutName = SanitizeFileName(installer.PortableCommandAlias
+                ?? Path.GetFileNameWithoutExtension(installedExe));
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            Directory.CreateDirectory(desktop);
+            try
+            {
+                CreateDesktopShortcut(installedExe, shortcutName);
+            }
+            catch
+            {
+                TryDeleteDirectory(destination);
+                if (movedExisting && Directory.Exists(backup))
+                {
+                    Directory.Move(backup, destination);
+                    movedExisting = false;
+                }
+                throw;
+            }
+
+            if (movedExisting) TryDeleteDirectory(backup);
+            return new WinProvisionInstallResult(WinProvisionInstallOutcome.Success, 0,
+                $"Aplicativo portátil instalado em '{destination}' e atalho criado na Área de Trabalho.");
+        }
+        finally
+        {
+            TryDeleteDirectory(staging);
+            if (movedExisting && Directory.Exists(backup) && !Directory.Exists(destination))
+                Directory.Move(backup, destination);
+        }
+    }
+
+    private static void CreateDesktopShortcut(string targetPath, string shortcutName)
+    {
+        using var shortcut = new ShellShortcut();
+        shortcut.Save(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), shortcutName + ".lnk"),
+            targetPath, $"Atalho para {shortcutName}");
+    }
+
+    /// <summary>Baixa ou reutiliza um instalador verificado, sem executá-lo.</summary>
+    public async Task DownloadVerifiedInstallerAsync(CatalogInstaller installer, string destination,
+        Action<InstallProgressUpdate>? onProgress = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(installer);
+        if (!Uri.TryCreate(installer.Url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(uri.UserInfo) || !IsValidSha256(installer.Sha256))
+            throw new InvalidDataException("O instalador não possui URL HTTPS e SHA-256 válidos.");
+        destination = Path.GetFullPath(destination);
+        if (File.Exists(destination)) throw new IOException("O destino do instalador já existe.");
+        string extension = Path.GetExtension(uri.AbsolutePath);
+        string? cached = await FindVerifiedInstallerCacheAsync(installer.Sha256!, extension, ct).ConfigureAwait(false);
+        await PublishInstallerAsync(destination, async (staging, token) =>
+        {
+            if (cached is not null)
+            {
+                await using var input = new FileStream(cached, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.Asynchronous);
+                await using var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous);
+                await input.CopyToAsync(output, token).ConfigureAwait(false);
+            }
+            else await DownloadFileWithViperAsync(uri.AbsoluteUri, installer.Sha256!, staging, null, null, token).ConfigureAwait(false);
+            if (cached is not null && !await VerifySha256Async(staging, installer.Sha256!, token).ConfigureAwait(false))
+                throw new InvalidDataException("O SHA-256 do instalador difere do manifesto.");
+            if (cached is null)
+                await SaveVerifiedInstallerCacheAsync(staging, installer.Sha256!, extension, null, token).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
+    }
+
+    internal static async Task PublishInstallerAsync(string destination,
+        Func<string, CancellationToken, Task> prepare, CancellationToken token)
+    {
+        string staging = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await prepare(staging, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            File.Move(staging, destination, false);
+        }
+        finally { TryDeleteFile(staging); }
+    }
+
+    private async Task DownloadFileWithViperAsync(
+        string url,
+        string sha256,
+        string destination,
+        IProgress<string>? onLog,
+        Action<InstallProgressUpdate>? onProgress,
+        CancellationToken ct)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(uri.UserInfo) || !IsValidSha256(sha256))
+            throw new InvalidDataException("O instalador não possui URL HTTPS e SHA-256 válidos.");
+        using var downloadSlot = await OperationLimits.Downloads.EnterAsync(ct).ConfigureAwait(false);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(DownloadTimeout);
+        int parallel = _operationPreferences.Load().ParallelDownloads;
+        int connections = ConnectionsPerDownload(parallel);
+        await using var viper = new ViperEngine(new ViperOptions
+        {
+            MaxConcurrentDownloads = 1,
+            ConnectionsPerFile = connections,
+            MaxConnectionsPerHost = connections,
+            MaxConnections = connections,
+            MaxFileSize = MaxInstallerBytes,
+            Resume = false
+        });
+        onLog?.Report($"Download Viper: até {connections} conexões para este arquivo.");
+        var progress = new CallbackProgress<ViperProgress>(value =>
+        {
+            if (value.Phase == ViperPhase.Completed)
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Downloading, 100, WingetMethod.OwnApi));
+            else if (value.Phase is ViperPhase.Downloading or ViperPhase.Verifying)
+            {
+                double? percent = value.TotalBytes is > 0
+                    ? Math.Clamp(value.DownloadedBytes * 100d / value.TotalBytes.Value, 0, 99.99)
+                    : null;
+                onProgress?.Invoke(new InstallProgressUpdate(InstallProgressPhase.Downloading, percent, WingetMethod.OwnApi));
+            }
+        });
+        await viper.DownloadAsync(new ViperRequest(uri, Path.GetFullPath(destination)) { Sha256 = sha256 }, progress, timeout.Token)
+            .ConfigureAwait(false);
+    }
+
+    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
+
+    internal static int ConnectionsPerDownload(int parallelDownloads) =>
+        Math.Clamp(24 / Math.Clamp(parallelDownloads, 1, 8), 1, 16);
+
+    private static string GetInstallerCacheDirectory() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "WinProvision", "InstallerCache");
+
+    private static string GetInstallerCachePath(string sha256, string extension) => Path.Combine(
+        GetInstallerCacheDirectory(), sha256.ToLowerInvariant() + extension.ToLowerInvariant());
+
+    private static async Task<string?> FindVerifiedInstallerCacheAsync(
+        string sha256, string extension, CancellationToken ct)
+    {
+        string path = GetInstallerCachePath(sha256, extension);
+        await InstallerCacheGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (!File.Exists(path)) return null;
+            if (DateTime.UtcNow - File.GetLastWriteTimeUtc(path) > InstallerCacheRetention
+                || !await VerifySha256Async(path, sha256, ct).ConfigureAwait(false))
+            {
+                TryDeleteFile(path);
+                return null;
+            }
+
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            return path;
+        }
+        catch (IOException)
+        {
+            TryDeleteFile(path);
+            return null;
+        }
+        finally
+        {
+            InstallerCacheGate.Release();
+        }
+    }
+
+    private static async Task SaveVerifiedInstallerCacheAsync(
+        string sourcePath, string sha256, string extension, IProgress<string>? onLog, CancellationToken ct)
+    {
+        var fileInfo = new FileInfo(sourcePath);
+        if (!fileInfo.Exists || fileInfo.Length <= 0 || fileInfo.Length > MaxInstallerCacheBytes)
+        {
+            onLog?.Report("[WinProvisionAPI] Instalador fora do limite do cache; será removido ao fim desta instalação.");
+            return;
+        }
+
+        string directory = GetInstallerCacheDirectory();
+        string destination = GetInstallerCachePath(sha256, extension);
+        await InstallerCacheGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            Directory.CreateDirectory(directory);
+            await AtomicFile.WriteAsync(destination, async (output, token) =>
+            {
+                await using var input = File.OpenRead(sourcePath);
+                await input.CopyToAsync(output, token).ConfigureAwait(false);
+            }, ct).ConfigureAwait(false);
+            File.SetLastWriteTimeUtc(destination, DateTime.UtcNow);
+
+            var files = new DirectoryInfo(directory).EnumerateFiles()
+                .Where(file => !file.Name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(file => file.LastWriteTimeUtc)
+                .ToList();
+            long totalBytes = files.Sum(file => file.Length);
+            DateTime expiry = DateTime.UtcNow - InstallerCacheRetention;
+            foreach (var cachedFile in files)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (cachedFile.FullName.Equals(destination, StringComparison.OrdinalIgnoreCase)) continue;
+                if (cachedFile.LastWriteTimeUtc >= expiry && totalBytes <= MaxInstallerCacheBytes) continue;
+                try
+                {
+                    long length = cachedFile.Length;
+                    cachedFile.Delete();
+                    totalBytes -= length;
+                }
+                catch (IOException exception)
+                {
+                    CoreLog.Warning(exception, "PruneInstallerCacheFile");
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    CoreLog.Warning(exception, "PruneInstallerCacheFile");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            onLog?.Report($"[WinProvisionAPI] Cache do instalador indisponível; seguindo com a instalação: {ex.Message}");
+        }
+        finally
+        {
+            InstallerCacheGate.Release();
+        }
+    }
+
+    private static async Task<bool> VerifySha256Async(string filePath, string expectedHex, CancellationToken ct)
+    {
+        await using var stream = File.OpenRead(filePath);
+        var hash = await SHA256.HashDataAsync(stream, ct);
+        var actualHex = Convert.ToHexString(hash);
+        return string.Equals(actualHex, expectedHex, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Only the own-API path calls this after download and successful SHA-256 verification.
+    internal async Task<int> RunDownloadedInstallerAsync(string packageId, string version, CatalogInstaller installer,
+        bool useResolvedState, string filePath, string installerType, string silentArgs, string? verifiedSha256,
+        CancellationToken ct, bool callerRequiresElevation = false, Action? onStarted = null,
+        Func<bool>? hasStarted = null, Action<string>? onLog = null, string? installerId = null)
+    {
+        ct.ThrowIfCancellationRequested();
+        ResolvedInstallerElevation state = InstallerElevationResolver.Resolve(installer, useResolvedState);
+        bool prohibitedConflictEvidence = state.Prohibited
+            && (state.Decision == "required" || state.Reason.StartsWith("conflict:", StringComparison.Ordinal));
+        InstallerElevationInspection? inspection = null;
+        if (state.Decision == "unknown" && state.Source is not ("declared" or "scope"))
+        {
+            // A nested installer has no individual catalog hash. Do not key its evidence by the ZIP hash.
+            inspection = IsValidSha256(verifiedSha256)
+                ? await _installerElevationInspector.InspectAsync(filePath, verifiedSha256!, ct, installerType).ConfigureAwait(false)
+                : InstallerElevationInspection.Unknown("no-verified-installer-hash", false);
+            state = InstallerElevationResolver.ApplyInspection(state, inspection);
+        }
+        ct.ThrowIfCancellationRequested();
+        bool prohibitedConflict = state.Prohibited && (prohibitedConflictEvidence || callerRequiresElevation || state.RequiresElevation
+            || state.Reason.StartsWith("conflict:", StringComparison.Ordinal));
+        bool elevate = !state.Prohibited && (callerRequiresElevation || state.RequiresElevation);
+        var data = new InstallerElevationLogData(packageId, version, installerId ?? installer.Id, state.Source,
+            state.Decision, prohibitedConflict ? "conflict:elevationProhibited-blocked-required" : state.Reason, inspection?.Signals ?? [], inspection?.FromStorage ?? false,
+            state.Prohibited, elevate, callerRequiresElevation);
+        CoreLog.Information("InstallerElevation", "Decisão de elevação do instalador baixado.",
+            JsonSerializer.SerializeToElement(data, InstallerInspectionJsonContext.Default.InstallerElevationLogData));
+        if (prohibitedConflict)
+            CoreLog.Information("InstallerElevation", "InstallerElevationConflict: elevationProhibited bloqueou uma solicitação de elevação.",
+                JsonSerializer.SerializeToElement(data, InstallerInspectionJsonContext.Default.InstallerElevationLogData));
+        LogProhibitedElevationIfNeeded(packageId, version, installerId ?? installer.Id, state, elevate, callerRequiresElevation, inspection);
+        return await RunInstallerWithElevationRetryAsync(filePath, installerType, silentArgs, ct, elevate,
+            onStarted, hasStarted, onLog, verifiedSha256, allow740Retry: state.Decision == "unknown" && !state.Prohibited).ConfigureAwait(false);
+    }
+
+    internal async Task<int> RunInstallerWithElevationRetryAsync(string filePath, string installerType, string silentArgs,
+        CancellationToken ct, bool requiresElevation, Action? onStarted = null, Func<bool>? hasStarted = null, Action<string>? onLog = null,
+        string? expectedSha256 = null, bool allow740Retry = true)
+    {
+        ct.ThrowIfCancellationRequested();
+        var command = WinProvisionInstallerCommandBuilder.Build(filePath, installerType, silentArgs);
+        if (requiresElevation)
+            return await _installerProcessStarter.StartElevatedAsync(command.FileName, command.Arguments, ct, onStarted,
+                onLog, Path.GetFullPath(command.FileName).Equals(Path.GetFullPath(filePath), StringComparison.OrdinalIgnoreCase)
+                    ? expectedSha256 : null).ConfigureAwait(false);
+        try
+        {
+            return await _installerProcessStarter.StartDirectAsync(command.FileName, command.Arguments, ct, onStarted).ConfigureAwait(false);
+        }
+        catch (System.ComponentModel.Win32Exception exception) when (exception.NativeErrorCode == 740)
+        {
+            if (!allow740Retry) throw;
+            if (hasStarted?.Invoke() == true) throw;
+            onLog?.Invoke("O instalador solicitou privilégios administrativos (erro 740); tentando novamente pelo executor elevado do WinProvision.");
+            return await _installerProcessStarter.StartElevatedAsync(command.FileName, command.Arguments, ct, onStarted,
+                onLog, Path.GetFullPath(command.FileName).Equals(Path.GetFullPath(filePath), StringComparison.OrdinalIgnoreCase)
+                    ? expectedSha256 : null).ConfigureAwait(false);
+        }
+    }
+
+    internal static void LogProhibitedElevationIfNeeded(string packageId, string version, string? installerId,
+        ResolvedInstallerElevation state, bool willElevate, bool callerRequestedElevation = false,
+        InstallerElevationInspection? inspection = null)
+    {
+        if (!state.Prohibited || !willElevate) return;
+        string reason = state.RequiresElevation ? state.Reason : callerRequestedElevation ? "caller-requested" : state.Reason;
+        var data = new InstallerElevationLogData(packageId, version, installerId, state.Source, state.Decision,
+            reason, inspection?.Signals ?? [], inspection?.FromStorage ?? false, true, willElevate, callerRequestedElevation);
+        CoreLog.Information("InstallerElevation", $"id={packageId}; version={version}; installerId={installerId}; reason={reason}",
+            JsonSerializer.SerializeToElement(data, InstallerInspectionJsonContext.Default.InstallerElevationLogData));
+    }
+
+    private static bool IsRunningElevated()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return new System.Security.Principal.WindowsPrincipal(identity)
+            .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+    }
+
+    private static bool IsValidSha256([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        string safe = new(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray());
+        safe = safe.Trim().TrimEnd('.');
+        if (safe.Length > 72) safe = safe[..72];
+        return string.IsNullOrWhiteSpace(safe) ? "WinProvisionPackage" : safe;
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        { CoreLog.Warning(exception, "InstallerTemporaryFileCleanup"); }
+    }
+
+    private static void TryDeleteDirectory(string? path)
+    {
+        if (path is null) return;
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        { CoreLog.Warning(exception, "InstallerTemporaryFileCleanup"); }
+    }
+}

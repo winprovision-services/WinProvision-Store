@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "file": "Assets/Icons/winget.svg",
+      "author": "PantheraLeo1359531; baseada em arte da Microsoft",
+      "license": "Expat/MIT License",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Windows_Package_Manager_logo.svg",
+      "licenseUrl": "https://github.com/microsoft/winget-cli/blob/master/LICENSE"
+    },
+    {
+      "file": "Assets/Icons/winget.png",
+      "author": "Renderização local de Assets/Icons/winget.svg; adaptação de recorte pelo WinProvision Store",
+      "license": "Mesma licença e atribuição da arte de origem (Expat/MIT License)",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Windows_Package_Manager_logo.svg",
+      "licenseUrl": "https://github.com/microsoft/winget-cli/blob/master/LICENSE"
+    }
+  ]
+}

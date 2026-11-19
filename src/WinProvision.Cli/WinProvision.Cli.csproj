@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <MicrosoftManagementDeployment-FactoryLinkage>none</MicrosoftManagementDeployment-FactoryLinkage>
+    <AssemblyName>winprovision</AssemblyName>
+    <Product>WinProvision Store</Product>
+    <Company>WinProvision Store</Company>
+    <Title>WinProvision Store</Title>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
+    <CsWinRTAotWarningLevel>2</CsWinRTAotWarningLevel>
+    <Version>1.0.10</Version>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.aot.lock.json</NuGetLockFilePath>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" PrivateAssets="build;buildTransitive;contentFiles;analyzers" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" PrivateAssets="build;buildTransitive;contentFiles;analyzers" />
+    <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    <ProjectReference Include="../WinProvision.Core/WinProvision.Core.csproj" SetTargetFramework="TargetFramework=net10.0-windows" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../WinProvision.PackageManagement/WinProvision.PackageManagement.csproj" />
+    <ProjectReference Include="../WinProvision.Providers.WinGet.Com/WinProvision.Providers.WinGet.Com.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../WinProvision.Store/Services/PackageInstallOptionsService.cs" Link="Shared/PackageInstallOptionsService.cs" />
+    <Compile Include="../WinProvision.Store/Services/ApplicationPreferencesService.cs" Link="Shared/ApplicationPreferencesService.cs" />
+    <Compile Include="../WinProvision.Store/Services/InstallationPreferencesService.cs" Link="Shared/InstallationPreferencesService.cs" />
+    <Compile Include="../WinProvision.Store/Services/WindowsAppNotificationService.cs" Link="Shared/WindowsAppNotificationService.cs" />
+    <Compile Include="../WinProvision.Store/Services/ToastMessageService.cs" Link="Shared/ToastMessageService.cs" />
+    <Compile Include="../WinProvision.Store/Services/ToastMessageItem.cs" Link="Shared/ToastMessageItem.cs" />
+    <EmbeddedResource Include="../WinProvision.Store/Assets/Notifications/notification-policy.json" LogicalName="WinProvision.Store.Assets.Notifications.notification-policy.json" />
+  </ItemGroup>
+  <Target Name="IncludeWinGetMetadata" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(MicrosoftManagementDeployment-WinMDPath)">
+        <RelativePath>Microsoft.Management.Deployment.winmd</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>
